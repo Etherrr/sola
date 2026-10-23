@@ -29,3 +29,11 @@ The `next.config.ts` now uses `output: 'export'` and trailing-slash URLs. `npm s
 - Authorized visits work on iOS/desktop, with visible SIMULATED notices, functional lessons and no signatures or wallet prompts.
 - Access revocation and rollback tested. Review privacy/security expectations before exposing any real wallet data.
 - No real DeFi connector code on this branch.
+
+## Current deployment (2026-10-23 update)
+The steps above describe the original plan. Current state:
+- The preview is deployed on Cloudflare Pages and served at **https://app.solacapitalpartners.com**, behind the same Cloudflare Access application (email allowlist) as the `*.pages.dev` hosts. The allowlist is not recorded in this public repository.
+- The Pages **production branch** is `feat/edu-01-network-journey`, not `main`. `main` is not deployed. A push to that branch deploys to the branded domain.
+- The WordPress site is unchanged by this repository. DNS for the app host is a single CNAME on the external WordPress DNS.
+- Rollback: use the Pages **Rollback** action on an earlier successful production deployment (the previous production build is retained), or detach the app hostname. Changing the production branch setting alone does not restore earlier content. Access protection should stay in place either way.
+- Still untested: Access coverage of any future server (Functions) routes. The app has none today.
