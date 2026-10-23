@@ -23,7 +23,22 @@ const KNOWN_JOSE = new Set([
 ]);
 const KNOWN_CLAIMS = new Set(['aud', 'iss', 'exp', 'nbf']);
 
-class KeyFetchError extends Error {}
+class KeyFetchError extends Error {
+  constructor(readonly sub: string) {
+    super(sub);
+  }
+}
+
+/** Fixed sub-categories for a failed key fetch; never the raw error text. */
+function fetchSub(e: unknown): string {
+  const m = e instanceof Error ? e.message : '';
+  if (m === 'deadline') return 'timeout';
+  if (m === 'certs too large') return 'too_large';
+  if (m === 'certs') return 'http_status';
+  if (m === 'cooldown') return 'cooldown';
+  if (e instanceof SyntaxError) return 'parse';
+  return 'fetch_error';
+}
 
 /** Returns null when the token is valid, else a finite reason category (never a token or claim value). */
 export async function checkAccessJwt(
@@ -41,8 +56,8 @@ export async function checkAccessJwt(
       try {
         keys = await fetchKeys(cfg.teamDomain);
         if (!keys.some((k) => k.kid === header.kid)) keys = await fetchKeys(cfg.teamDomain, true); // rotation: one throttled refresh
-      } catch {
-        throw new KeyFetchError();
+      } catch (e) {
+        throw new KeyFetchError(fetchSub(e));
       }
       return createLocalJWKSet({ keys: keys as JWK[] })(header, {
         payload: '',
@@ -59,7 +74,7 @@ export async function checkAccessJwt(
     });
     return null;
   } catch (e) {
-    if (e instanceof KeyFetchError) return 'key_fetch_failed';
+    if (e instanceof KeyFetchError) return `key_fetch_failed:${e.sub}`;
     const code = (e as { code?: unknown }).code;
     const claim = (e as { claim?: unknown }).claim;
     if (typeof code === 'string' && KNOWN_JOSE.has(code)) {
@@ -111,7 +126,8 @@ export function makeKeyFetcher(
     const run = (async () => {
       const r = await fetchImpl(`https://${teamDomain}/cdn-cgi/access/certs`, {
         signal: ctl.signal,
-        redirect: 'error',
+        // workerd rejects redirect:'error'; with 'manual' a 3xx is returned and treated as a failed fetch (r.ok is false).
+        redirect: 'manual',
       });
       if (!r.ok || !r.body) throw new Error('certs');
       const reader = r.body.getReader();

@@ -477,7 +477,7 @@ describe('key fetcher limits', () => {
     t += 5 * H;
     await expect(f('t.example')).rejects.toThrow();
   });
-  it('rejects oversize certs, caps keys at 10, refuses redirects', async () => {
+  it('rejects oversize certs, caps keys at 10, treats redirects as failures', async () => {
     await expect(
       makeKeyFetcher(
         (async () =>
@@ -493,7 +493,15 @@ describe('key fetcher limits', () => {
     await makeKeyFetcher(
       (async (_u: string, i: RequestInit) => ((init = i), certsRes([]))) as unknown as typeof fetch,
     )('a.example');
-    expect(init?.redirect).toBe('error');
+    expect(init?.redirect).toBe('manual'); // workerd does not support 'error'
+    const redir = makeKeyFetcher(
+      (async () =>
+        new Response(null, {
+          status: 302,
+          headers: { location: 'https://evil.example/' },
+        })) as unknown as typeof fetch,
+    );
+    await expect(redir('c.example')).rejects.toThrow();
   });
   it('times out a hung fetch and a stalled body', async () => {
     const hung = makeKeyFetcher(
@@ -655,7 +663,7 @@ describe('auth diagnostics: config validation and finite reasons', () => {
       throw new Error('down');
     };
     expect(await checkAccessJwt(await s.sign(good()), cfg, down as never, now)).toBe(
-      'key_fetch_failed',
+      'key_fetch_failed:fetch_error',
     );
     expect(await checkAccessJwt(await s.sign(good()), cfg, keys, now)).toBeNull();
   });
@@ -679,6 +687,35 @@ describe('auth diagnostics: config validation and finite reasons', () => {
       expect(text).toMatch(/auth_reject:jose_ERR_JWT_EXPIRED:exp/);
     } finally {
       console.warn = orig;
+    }
+  });
+});
+
+describe('key fetch failure sub-categories', () => {
+  it('maps failures to a fixed set, never raw error text', async () => {
+    const cfg = { teamDomain: TEAM, aud: AUD };
+    const s = await signer();
+    const tok = await s.sign(good());
+    const now = Math.floor(NOW.getTime() / 1000);
+    const mk = (f: () => Promise<Response>) =>
+      makeKeyFetcher(f as unknown as typeof fetch, Date.now, 50);
+    const cases: [() => Promise<Response>, string][] = [
+      [() => new Promise(() => {}), 'key_fetch_failed:timeout'],
+      [async () => new Response('no', { status: 500 }), 'key_fetch_failed:http_status'],
+      [async () => new Response(null, { status: 302 }), 'key_fetch_failed:http_status'],
+      [async () => new Response('{not json'), 'key_fetch_failed:parse'],
+      [async () => new Response(new Uint8Array(40 * 1024)), 'key_fetch_failed:too_large'],
+      [
+        async () => {
+          throw new Error('secret-host-details');
+        },
+        'key_fetch_failed:fetch_error',
+      ],
+    ];
+    for (const [f, want] of cases) {
+      const got = await checkAccessJwt(tok, cfg, mk(f), now);
+      expect(got).toBe(want);
+      expect(got).not.toContain('secret');
     }
   });
 });
