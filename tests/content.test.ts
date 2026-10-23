@@ -49,7 +49,10 @@ describe('learning and safety boundaries', () => {
       /window\.(ethereum|solana)|eth_requestAccounts|signTransaction|signMessage|sendTransaction|fetch\s*\(/,
     );
     const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
-    expect(Object.keys(pkg.dependencies).sort()).toEqual(['next', 'react', 'react-dom']);
+    // jose (MIT, no dependencies, exact-pinned) verifies Access JWTs on the server only.
+    expect(Object.keys(pkg.dependencies).sort()).toEqual(['jose', 'next', 'react', 'react-dom']);
+    expect(pkg.dependencies.jose).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(source).not.toMatch(/from 'jose'/);
   });
   it('keeps server-only API code out of the browser bundle directories', () => {
     function files(dir: string): string[] {

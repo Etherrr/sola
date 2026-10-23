@@ -578,3 +578,27 @@ describe('browser response validation', () => {
     for (const b of bad) expect(parseApiSuccess(b)).toBeNull();
   });
 });
+
+describe('response headers', () => {
+  it('sets no-store, nosniff, no-referrer, noindex, no-embedding on success and on errors', async () => {
+    const s = await signer();
+    const ok = await handleResolve(post(valid, await s.sign(good())), ENV, deps(s.keys));
+    const bad = await handleResolve(post(valid, null), ENV, deps(s.keys));
+    expect(ok.status).toBe(200);
+    expect(bad.status).toBe(401);
+    for (const r of [ok, bad]) {
+      expect(r.headers.get('cache-control')).toBe('no-store');
+      expect(r.headers.get('x-content-type-options')).toBe('nosniff');
+      expect(r.headers.get('referrer-policy')).toBe('no-referrer');
+      expect(r.headers.get('x-robots-tag')).toMatch(/noindex/);
+      expect(r.headers.get('content-security-policy')).toMatch(/frame-ancestors 'none'/);
+    }
+  });
+  it('rejects HS256 tokens signed with the public key material and unsigned tokens', async () => {
+    const s = await signer();
+    const hs = await s.sign(good(), 'k1', 'HS256');
+    const none = (await s.sign(good(), 'k1', 'none')).split('.').slice(0, 2).join('.') + '.';
+    for (const t of [hs, none])
+      expect((await handleResolve(post(valid, t), ENV, deps(s.keys))).status).toBe(401);
+  });
+});

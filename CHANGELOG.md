@@ -4,6 +4,7 @@ Document **material, user-visible, architecture, security, or process changes**.
 
 ## Unreleased
 
+- DATA-02 round 3: Access JWT verification now uses `jose` 6.2.13 (exact-pinned, MIT, no dependencies, server only; RS256, issuer, audience, exp, crit handled by the library) with our own bounded key fetcher kept (jose has no failure cooldown or response cap). API responses add referrer-policy, noindex, CSP frame-ancestors none and CORP. Still fixture-only, default off.
 - DATA-02 hardening and slice 2: bounded request body (Content-Length precheck plus streamed 2 KB cap, stream errors return contract JSON), exact JSON media type, Access key fetch with 3 s deadline, 32 KB cap, 10-key cap, 1 h cache, one rate-limited refresh on unknown kid, no redirects, last-good keys on failure, 8 KB JWT cap, `crit` rejected. `/track` now has a SIMULATED fixture lookup form (same-origin POST only; no provider call). Hardening round 2: stale key ceiling 6 h then fail closed, 60 s attempt cooldown that also covers failures, one in-flight key fetch, 3 s body-read deadline (408), hung key fetch answers 401. The browser validates the whole response (mode/simulated must agree, decimals, totals, wallet equals the address asked) and never shows an unexpected answer as a wallet; feature-off 503 reads as switched off. Still fixture-only, default off, no rate limiter.
 
 ### v0.2 EDU-02 security decision lab (2026-10-23, stacked on EDU-01 and unmerged PR #3)

@@ -30,6 +30,10 @@ const HEADERS = {
   'content-type': 'application/json; charset=utf-8',
   'cache-control': 'no-store',
   'x-content-type-options': 'nosniff',
+  'referrer-policy': 'no-referrer',
+  'x-robots-tag': 'noindex, nofollow',
+  'content-security-policy': "default-src 'none'; frame-ancestors 'none'",
+  'cross-origin-resource-policy': 'same-origin',
 };
 const reply = (status: number, body: unknown, extra: Record<string, string> = {}) =>
   new Response(JSON.stringify(body), { status, headers: { ...HEADERS, ...extra } });
