@@ -56,6 +56,13 @@ export function Navigation() {
               {link.label}
             </Link>
           ))}
+          <a
+            className="nav-return"
+            href="https://solacapitalpartners.com/"
+            rel="noopener noreferrer"
+          >
+            ← Sola Capital Partners
+          </a>
         </nav>
         <span className="preview-tag">v0.1 · PREVIEW</span>
       </div>

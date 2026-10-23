@@ -8,6 +8,7 @@ Document **material, user-visible, architecture, security, or process changes**.
 - Added `docs/BASE-01_BASELINE.md`: recorded the actual repository and Cloudflare baseline, including failed docs-branch builds and unverified Functions/Access coverage.
 - Added a shared mode marker (SIMULATED, LIVE · CACHED, LIVE · REFRESHED, STALE, INCOMPLETE) with text and symbol; the demo notice now uses it.
 - Renamed navigation to Explore demo, Track an address and Learn DeFi. Added `/track`, an honest placeholder that reads no live data and sends nothing.
+- Added a return link to https://solacapitalpartners.com/ in the header and footer (opens the marketing site; leaves the app).
 - Added design tokens (spacing, motion, focus ring). No live data, dependencies, wallet access or deployment changes.
 
 ### v0.1.1 — static free-hosting preparation (2026-10-23)
