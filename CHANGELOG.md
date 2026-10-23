@@ -4,6 +4,17 @@ Document **material, user-visible, architecture, security, or process changes**.
 
 ## Unreleased
 
+### V3.1 app consistency (2026-10-23, stacked on EDU-01 and unmerged PR #3)
+- Added the corporate gold and purple monogram as the favicon, Apple touch icon and header brand mark (replacing the CSS "S"). Assets are the images already published on solacapitalpartners.com.
+- Renamed the nav item and page title for `/track` to "Address lookup" with a "soon" marker, because lookup is off in this preview.
+- Footer now carries the corporate wording "Content is informational and is not investment advice" plus a simulation-specific line: figures in this preview are simulated, not market data. The existing educational and no-custody notice is kept.
+- Recorded the canonical protected preview domain in the docs: the app is served at app.solacapitalpartners.com behind Cloudflare Access, from the Pages production branch `feat/edu-01-network-journey` (not main). Rollback: use the Pages Rollback action on the previous successful production deployment, or revert this commit.
+- No new dependencies, routes, wallet access, data sources or Access changes. Still static, simulated and read-only.
+
+### v0.2 EDU-01 network journey (2026-10-23, stacked on DES-01 and unmerged PR #3)
+- Added `/learn/network-journey`: a fully simulated Ethereum transfer between fictional people with play, pause, step, scrub and replay, a live status line, a worked fee example and the same journey as text.
+- Keyboard and reduced-motion behaviour tested; no wallet, network call or live data. Facts follow ethereum.org transaction, gas and finality pages; fee example is arithmetic only.
+
 ### v0.2 DES-01 and BASE-01 (2026-10-23, stacked on unmerged PR #3)
 - Added `docs/BASE-01_BASELINE.md`: recorded the actual repository and Cloudflare baseline, including failed docs-branch builds and unverified Functions/Access coverage.
 - Added a shared mode marker (SIMULATED, LIVE · CACHED, LIVE · REFRESHED, STALE, INCOMPLETE) with text and symbol; the demo notice now uses it.

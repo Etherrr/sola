@@ -1,6 +1,6 @@
 import { PageIntro, ActionLink } from '@/components/ui';
 import { ModeMarker } from '@/components/mode-marker';
-export const metadata = { title: 'Track an address' };
+export const metadata = { title: 'Address lookup (coming next)' };
 export default function Track() {
   return (
     <div className="page-container">
