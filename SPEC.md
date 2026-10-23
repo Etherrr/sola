@@ -25,11 +25,11 @@ Sola Lens is an independently deployed, **read-only, non-custodial** DeFi learni
 | Gate | Deliverable | Exit condition |
 | --- | --- | --- |
 | v0.1 preview | app shell, welcome, learning, wallet selector, quizzes, demo | demo explicitly simulated; mobile and keyboard QA; no wallet libraries needed |
-| v0.2 watch-only beta | Ethereum + Solana public-address validation, provider adapters, balances and selected DeFi positions | reconciled fixture results, price/debt correctness, rate limits, failure states and provider disclosures |
+| v0.2 watch-only beta (staged) | v0.2.0 Ethereum public-address balances; v0.2.1 optional public-account wallet discovery; v0.2.2 Solana and selected DeFi positions after separate review | staged gates, provider/position coverage disclosed, accurate fixture reconciliation, abuse controls, security review |
 | v0.3 optional connectivity | public-account discovery from supported providers, expanded risk and contextual lessons | no signing or transactions; wallet compatibility matrix; security review |
 | v1.0 launch | resilient hosted app and approved WordPress launcher | owner accepts privacy, legal, reliability, security, design, rollback and monitoring gates |
 
-No release date, API vendor, or wallet compatibility should be assumed until tested.
+See [docs/V0_2_BUILD_SCOPE.md](docs/V0_2_BUILD_SCOPE.md) for the detailed Cloudflare and immersive-learning implementation sequence. No release date, API vendor, or wallet compatibility should be assumed until tested.
 
 ## Explicit exclusions
 Trading, swaps, transaction simulation presented as real, approvals, signatures, private-key or seed-phrase entry, custody, user deposits, managed accounts, investor onboarding, personalized financial advice, performance guarantees, comprehensive tax reporting and universal protocol coverage.
