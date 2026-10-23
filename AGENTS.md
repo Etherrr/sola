@@ -12,6 +12,9 @@
 7. Prefer established, maintained libraries and minimal dependencies; disclose third-party costs/licensing and privacy effects before adoption.
 8. Report verified results separately from assumptions and untested work.
 
+## Current development milestone
+For Sola Lens v0.2, read [docs/V0_2_BUILD_SCOPE.md](docs/V0_2_BUILD_SCOPE.md) before writing code. Treat v0.2.0 address-only Ethereum, v0.2.1 optional public-account wallet discovery and v0.2.2 Solana/protocol positions as **separate approval gates**. Reconcile the existing deployed Cloudflare branch and open PR #3 first. Do not assume static Next.js output can handle server routes: use reviewed Cloudflare Pages Functions with edge-side secrets when approved. Keep the WordPress launch link off.
+
 ## Web-app / GitHub agent
 Owner: Next.js Sola Lens only. Read [docs/APP_SCOPE.md](docs/APP_SCOPE.md).
 - Implement in phases (preview → watch-only → optional connectors → reviewed launch), not in one giant PR.

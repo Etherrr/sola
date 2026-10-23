@@ -9,6 +9,8 @@ Refer to [../SPEC.md](../SPEC.md) for product decisions and [../AGENTS.md](../AG
 - GitHub Actions lint/typecheck/tests/build and protected preview deployment.
 - Server-side provider credentials and rate limiting when live APIs arrive. Client must not access provider secrets.
 
+**Current v0.2 execution addendum:** [V0_2_BUILD_SCOPE.md](V0_2_BUILD_SCOPE.md) sequences Ethereum-only live address lookup, optional EIP-6963 MetaMask account discovery, and later Solana/protocol coverage as **separate PR and release gates**. The existing static Next.js export remains static; dynamic read-only endpoints should be implemented as Cloudflare Pages Functions when approved. Do not require all APP-02 capabilities at once or silently imply full DeFi net-worth coverage.
+
 ## Work packages
 ### APP-01: scaffold and UX (v0.1 preview)
 - Welcome with experienced/new/demo paths, accessible mobile nav, shared branded components, error/empty/loading states.
