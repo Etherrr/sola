@@ -26,3 +26,8 @@ Document **material, user-visible, architecture, security, or process changes**.
 ### Not changed
 
 - No WordPress content, DNS, running application, blockchain integrations, or production deployments.
+
+## 2026-10-23 — v0.2 implementation scope (documentation only)
+
+- Added `docs/V0_2_BUILD_SCOPE.md` detailing immersive onboarding, staged live Ethereum public-address tracking, later MetaMask discovery and Solana positions, Cloudflare Pages Functions, financial data validation, security and release gates.
+- Linked the staged plan from README, SPEC, APP_SCOPE and AGENTS. No application code, wallet connections, credentials, Cloudflare deployments, WordPress site or DNS were changed by this documentation update.
