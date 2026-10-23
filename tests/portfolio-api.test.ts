@@ -13,7 +13,7 @@ import {
 } from '../server/portfolio/handler';
 import { mockProvider } from '../server/portfolio/provider';
 
-const TEAM = 'team.example.cloudflareaccess.com';
+const TEAM = 'team-example.cloudflareaccess.com';
 const AUD = 'aud123';
 const ENV: Env = { PORTFOLIO_API_ENABLED: 'true', ACCESS_TEAM_DOMAIN: TEAM, ACCESS_AUD: AUD };
 const A = (last: string) => '0x' + '1'.repeat(39) + last;
@@ -477,7 +477,7 @@ describe('key fetcher limits', () => {
     t += 5 * H;
     await expect(f('t.example')).rejects.toThrow();
   });
-  it('rejects oversize certs, caps keys at 10, refuses redirects', async () => {
+  it('rejects oversize certs, caps keys at 10, treats redirects as failures', async () => {
     await expect(
       makeKeyFetcher(
         (async () =>
@@ -493,7 +493,15 @@ describe('key fetcher limits', () => {
     await makeKeyFetcher(
       (async (_u: string, i: RequestInit) => ((init = i), certsRes([]))) as unknown as typeof fetch,
     )('a.example');
-    expect(init?.redirect).toBe('error');
+    expect(init?.redirect).toBe('manual'); // workerd does not support 'error'
+    const redir = makeKeyFetcher(
+      (async () =>
+        new Response(null, {
+          status: 302,
+          headers: { location: 'https://evil.example/' },
+        })) as unknown as typeof fetch,
+    );
+    await expect(redir('c.example')).rejects.toThrow();
   });
   it('times out a hung fetch and a stalled body', async () => {
     const hung = makeKeyFetcher(
@@ -600,5 +608,114 @@ describe('response headers', () => {
     const none = (await s.sign(good(), 'k1', 'none')).split('.').slice(0, 2).join('.') + '.';
     for (const t of [hs, none])
       expect((await handleResolve(post(valid, t), ENV, deps(s.keys))).status).toBe(401);
+  });
+});
+
+import { checkAccessJwt, isValidTeamHost } from '../server/portfolio/access';
+
+describe('auth diagnostics: config validation and finite reasons', () => {
+  const cfg = { teamDomain: TEAM, aud: AUD };
+  it('accepts only a bare Access team host', () => {
+    expect(isValidTeamHost('sola-lens-preview-pages.cloudflareaccess.com')).toBe(true);
+    for (const bad of [
+      'https://team.cloudflareaccess.com',
+      'team.cloudflareaccess.com/',
+      'team.cloudflareaccess.com:443',
+      'team.cloudflareaccess.com/cdn-cgi',
+      'evil.example.com',
+      'a.b.cloudflareaccess.com.evil.com',
+      ' team.cloudflareaccess.com',
+      '',
+    ])
+      expect(isValidTeamHost(bad)).toBe(false);
+  });
+  it('a malformed team host is a 503 config error, not a 401 for everyone', async () => {
+    const s = await signer();
+    const r = await handleResolve(
+      post(valid, await s.sign(good())),
+      { ...ENV, ACCESS_TEAM_DOMAIN: `https://${TEAM}` },
+      deps(s.keys),
+    );
+    expect(r.status).toBe(503);
+    expect((await r.json()).error.code).toBe('not_configured');
+  });
+  it('returns finite reason categories and never token or claim values', async () => {
+    const s = await signer();
+    const keys = deps(s.keys).fetchKeys;
+    const now = Math.floor(NOW.getTime() / 1000);
+    const secret = 'super-secret-audience-value';
+    const cases: [string | null, string][] = [
+      [null, 'missing_assertion'],
+      ['x'.repeat(9000), 'token_too_large'],
+      [await s.sign(good({ exp: 1 })), 'jose_ERR_JWT_EXPIRED:exp'],
+      [await s.sign(good({ aud: [secret] })), 'jose_ERR_JWT_CLAIM_VALIDATION_FAILED:aud'],
+      [
+        await s.sign(good({ iss: `https://${secret}` })),
+        'jose_ERR_JWT_CLAIM_VALIDATION_FAILED:iss',
+      ],
+    ];
+    for (const [tok, want] of cases) {
+      const got = await checkAccessJwt(tok, cfg, keys, now);
+      expect(got).toBe(want);
+      expect(got).not.toContain(secret);
+    }
+    const down = async () => {
+      throw new Error('down');
+    };
+    expect(await checkAccessJwt(await s.sign(good()), cfg, down as never, now)).toBe(
+      'key_fetch_failed:fetch_error',
+    );
+    expect(await checkAccessJwt(await s.sign(good()), cfg, keys, now)).toBeNull();
+  });
+  it('logs each category at most once a minute and logs no private values', async () => {
+    const s = await signer();
+    const lines: unknown[][] = [];
+    const orig = console.warn;
+    console.warn = (...a: unknown[]) => void lines.push(a);
+    try {
+      let t = Date.parse('2030-01-01T00:00:00Z');
+      const d = deps(s.keys, { now: () => new Date(t) });
+      const jwt = await s.sign(good({ exp: 1 }));
+      for (let i = 0; i < 20; i++) await handleResolve(post(valid, jwt), ENV, d);
+      expect(lines.length).toBe(1);
+      t += 61_000;
+      await handleResolve(post(valid, jwt), ENV, { ...d, now: () => new Date(t) });
+      expect(lines.length).toBe(2);
+      const text = JSON.stringify(lines);
+      expect(text).not.toContain(jwt.slice(0, 20));
+      expect(text).not.toContain('0x');
+      expect(text).toMatch(/auth_reject:jose_ERR_JWT_EXPIRED:exp/);
+    } finally {
+      console.warn = orig;
+    }
+  });
+});
+
+describe('key fetch failure sub-categories', () => {
+  it('maps failures to a fixed set, never raw error text', async () => {
+    const cfg = { teamDomain: TEAM, aud: AUD };
+    const s = await signer();
+    const tok = await s.sign(good());
+    const now = Math.floor(NOW.getTime() / 1000);
+    const mk = (f: () => Promise<Response>) =>
+      makeKeyFetcher(f as unknown as typeof fetch, Date.now, 50);
+    const cases: [() => Promise<Response>, string][] = [
+      [() => new Promise(() => {}), 'key_fetch_failed:timeout'],
+      [async () => new Response('no', { status: 500 }), 'key_fetch_failed:http_status'],
+      [async () => new Response(null, { status: 302 }), 'key_fetch_failed:http_status'],
+      [async () => new Response('{not json'), 'key_fetch_failed:parse'],
+      [async () => new Response(new Uint8Array(40 * 1024)), 'key_fetch_failed:too_large'],
+      [
+        async () => {
+          throw new Error('secret-host-details');
+        },
+        'key_fetch_failed:fetch_error',
+      ],
+    ];
+    for (const [f, want] of cases) {
+      const got = await checkAccessJwt(tok, cfg, mk(f), now);
+      expect(got).toBe(want);
+      expect(got).not.toContain('secret');
+    }
   });
 });
