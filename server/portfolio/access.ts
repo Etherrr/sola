@@ -5,18 +5,45 @@ export type AccessConfig = { teamDomain: string; aud: string };
 export type Jwk = { kid: string; kty: string; n: string; e: string; alg?: string };
 export type KeyFetcher = (teamDomain: string, forceRefresh?: boolean) => Promise<Jwk[]>;
 
-export async function verifyAccessJwt(
+const TEAM_HOST = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.cloudflareaccess\.com$/;
+/** A bare Access team host only: no scheme, slash, port or path. */
+export const isValidTeamHost = (v: string) => TEAM_HOST.test(v);
+
+const KNOWN_JOSE = new Set([
+  'ERR_JWT_EXPIRED',
+  'ERR_JWT_CLAIM_VALIDATION_FAILED',
+  'ERR_JWT_INVALID',
+  'ERR_JWS_INVALID',
+  'ERR_JWS_SIGNATURE_VERIFICATION_FAILED',
+  'ERR_JOSE_ALG_NOT_ALLOWED',
+  'ERR_JOSE_NOT_SUPPORTED',
+  'ERR_JWKS_NO_MATCHING_KEY',
+  'ERR_JWKS_MULTIPLE_MATCHING_KEYS',
+  'ERR_JWKS_INVALID',
+]);
+const KNOWN_CLAIMS = new Set(['aud', 'iss', 'exp', 'nbf']);
+
+class KeyFetchError extends Error {}
+
+/** Returns null when the token is valid, else a finite reason category (never a token or claim value). */
+export async function checkAccessJwt(
   token: string | null,
   cfg: AccessConfig,
   fetchKeys: KeyFetcher,
   nowSec = Math.floor(Date.now() / 1000),
-): Promise<boolean> {
+): Promise<string | null> {
+  if (!token) return 'missing_assertion';
+  if (token.length > 8192) return 'token_too_large';
   try {
-    if (!token || token.length > 8192) return false;
     // Signature, alg, exp/nbf, issuer, audience and `crit` handling are done by jose.
     const getKey = async (header: JWSHeaderParameters) => {
-      let keys = await fetchKeys(cfg.teamDomain);
-      if (!keys.some((k) => k.kid === header.kid)) keys = await fetchKeys(cfg.teamDomain, true); // rotation: one throttled refresh
+      let keys: Jwk[];
+      try {
+        keys = await fetchKeys(cfg.teamDomain);
+        if (!keys.some((k) => k.kid === header.kid)) keys = await fetchKeys(cfg.teamDomain, true); // rotation: one throttled refresh
+      } catch {
+        throw new KeyFetchError();
+      }
       return createLocalJWKSet({ keys: keys as JWK[] })(header, {
         payload: '',
         signature: '',
@@ -30,10 +57,26 @@ export async function verifyAccessJwt(
       currentDate: new Date(nowSec * 1000),
       requiredClaims: ['exp'],
     });
-    return true;
-  } catch {
-    return false;
+    return null;
+  } catch (e) {
+    if (e instanceof KeyFetchError) return 'key_fetch_failed';
+    const code = (e as { code?: unknown }).code;
+    const claim = (e as { claim?: unknown }).claim;
+    if (typeof code === 'string' && KNOWN_JOSE.has(code)) {
+      const c = typeof claim === 'string' && KNOWN_CLAIMS.has(claim) ? `:${claim}` : '';
+      return `jose_${code}${c}`;
+    }
+    return 'verify_failed';
   }
+}
+
+export async function verifyAccessJwt(
+  token: string | null,
+  cfg: AccessConfig,
+  fetchKeys: KeyFetcher,
+  nowSec = Math.floor(Date.now() / 1000),
+): Promise<boolean> {
+  return (await checkAccessJwt(token, cfg, fetchKeys, nowSec)) === null;
 }
 
 const MAX_CERTS_BYTES = 32 * 1024;

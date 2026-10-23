@@ -1,6 +1,6 @@
 import { concatBytes } from './bytes';
 import { parseResolveRequest, MAX_BODY_BYTES, type ResolveResponse } from './contract';
-import { verifyAccessJwt, fetchAccessKeys, type KeyFetcher } from './access';
+import { checkAccessJwt, fetchAccessKeys, isValidTeamHost, type KeyFetcher } from './access';
 import { mockProvider, type PortfolioProvider } from './provider';
 
 export type Env = {
@@ -87,18 +87,33 @@ async function readAll(
 }
 
 /** Gate every request: kill switch, then Access JWT (never trust an email header). Fails closed. */
+const lastLogged = new Map<string, number>();
+/** At most one log line per category per minute per isolate, so rejections cannot amplify log volume. */
+function logOnce(category: string, nowMs: number) {
+  const last = lastLogged.get(category);
+  if (last !== undefined && nowMs - last < 60_000) return;
+  lastLogged.set(category, nowMs);
+  console.warn(category);
+}
+
 async function gate(req: Request, env: Env, d: Deps, requestId: string): Promise<Response | null> {
   if (env.PORTFOLIO_API_ENABLED !== 'true')
     return err(503, 'disabled', 'This feature is switched off.', requestId);
   if (!env.ACCESS_TEAM_DOMAIN || !env.ACCESS_AUD)
     return err(503, 'not_configured', 'Access verification is not configured.', requestId);
-  const ok = await verifyAccessJwt(
+  if (!isValidTeamHost(env.ACCESS_TEAM_DOMAIN)) {
+    logOnce('auth_config:team_host_invalid', d.now().getTime());
+    return err(503, 'not_configured', 'Access verification is not configured.', requestId);
+  }
+  const reason = await checkAccessJwt(
     req.headers.get('cf-access-jwt-assertion'),
     { teamDomain: env.ACCESS_TEAM_DOMAIN, aud: env.ACCESS_AUD },
     d.fetchKeys,
     Math.floor(d.now().getTime() / 1000),
   );
-  return ok ? null : err(401, 'unauthorized', 'Authentication required.', requestId);
+  if (reason === null) return null;
+  logOnce(`auth_reject:${reason}`, d.now().getTime()); // finite category only: no token, claim value, email or address
+  return err(401, 'unauthorized', 'Authentication required.', requestId);
 }
 
 export async function handleResolve(
