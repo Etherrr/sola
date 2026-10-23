@@ -16,6 +16,7 @@ const routes = [
   '/learn',
   '/learn/addresses',
   '/learn/risks',
+  '/learn/security-lab',
   '/settings',
 ];
 test('all routes render, remain responsive, and pass WCAG automated checks', async ({ page }) => {
@@ -165,4 +166,24 @@ test('key screens reflow at narrow and tablet widths', async ({ page }) => {
       ).toBe(true);
     }
   }
+});
+
+test('security decision lab: choices reveal consequences in place, with no text entry', async ({
+  page,
+}) => {
+  await page.goto('/learn/security-lab');
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  await expect(page.locator('input:not([type="radio"]), textarea')).toHaveCount(0);
+  const seed = page.getByRole('group', { name: /Support asks for your recovery phrase/ });
+  const check = seed.getByRole('button', { name: 'Check my choice' });
+  await expect(check).toBeDisabled();
+  await seed.getByRole('radio', { name: /Type the phrase quickly/ }).check();
+  await check.click();
+  await expect(seed.getByRole('status')).toContainText('A RISKY CHOICE');
+  await expect(seed.getByRole('status')).toContainText('Never type your recovery phrase');
+  await seed.getByRole('button', { name: 'Try again' }).click();
+  await seed.getByRole('radio', { name: /Close it, tell no one/ }).check();
+  await check.click();
+  await expect(seed.getByRole('status')).toContainText('A SAFER CHOICE');
+  await expect(page.getByText('1 of 4 scenarios answered')).toBeVisible();
 });

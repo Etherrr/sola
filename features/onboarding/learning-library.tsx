@@ -35,6 +35,15 @@ export function LearningLibrary() {
           <p>Follow one pretend ETH transfer from approval to finality. Pause, step or scrub.</p>
           <span className="card-link">Try the scene →</span>
         </Link>
+        <Link className="journey-card" href="/learn/security-lab">
+          <span className="eyebrow">INTERACTIVE · SIMULATED</span>
+          <h2>Security decision lab</h2>
+          <p>
+            Four made-up prompts: connect, recovery phrase, spending approval and a look-alike link.
+            See the consequence of each choice.
+          </p>
+          <span className="card-link">Try the lab →</span>
+        </Link>
       </div>
     </>
   );
