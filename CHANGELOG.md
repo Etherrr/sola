@@ -4,6 +4,12 @@ Document **material, user-visible, architecture, security, or process changes**.
 
 ## Unreleased
 
+### v0.1.1 — static free-hosting preparation (2026-10-23)
+- Configured Next.js static export and trailing-slash output for Cloudflare Pages Free.
+- Added local static file server, exported-route checks, Cloudflare static security headers and access-wall runbook.
+- Kept all real wallet, DeFi and backend functionality out of scope. No hosted deployment or DNS changes.
+
+
 ### v0.1.1 — protected preview preparation (2026-10-23)
 - Added a Vercel hosting protection, private QA, access verification and rollback runbook.
 - No hosted deployment, app functionality, wallet integrations, DNS or WordPress configuration has been changed.
