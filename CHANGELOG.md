@@ -3,10 +3,20 @@
 Document **material, user-visible, architecture, security, or process changes**. Use dates and an Unreleased section. Do not record future work as completed.
 
 ## Unreleased
-- No application implementation or production changes.
+
+### 2026-10-23 — Sola Lens v0.1 preview
+
+- Added a pinned Next.js App Router, React, and TypeScript scaffold; responsive Sola navy/gold/violet welcome screen, navigation, and all APP-01 routes.
+- Added beginner and experienced entry points, six learning modules and quizzes, wallet decision guide, network education, and a simulated Solana swap walkthrough.
+- Added deterministic simulated portfolio, asset/position/risk views, exact-cent accounting, debt subtraction, receipt deduplication, and explicit unknown-price/coverage disclosures.
+- Added optional browser-local lesson progress with clearing and blocked-storage fallback; loading, error, empty, and missing-page states.
+- Added lint/typecheck/unit/build and desktop/mobile browser/accessibility CI checks, preview security headers, and implementation/source-review documentation.
+- Updated README with executable setup and verification commands. No wallet integrations, real addresses, API providers, WordPress changes, DNS changes, deployments, or merges.
 
 ## 2026-10-22 — Documentation bootstrap
+
 ### Added
+
 - Repository README linking to shared product and operations references.
 - `SPEC.md` describing Sola Lens purpose, staged releases, user journeys, security boundaries and exclusions.
 - `AGENTS.md` for consistent engineering and WordPress agent behavior.
@@ -14,4 +24,5 @@ Document **material, user-visible, architecture, security, or process changes**.
 - `docs/OPERATIONS.md` documenting branch/review/release/rollback process.
 
 ### Not changed
+
 - No WordPress content, DNS, running application, blockchain integrations, or production deployments.

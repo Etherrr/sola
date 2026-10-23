@@ -1,0 +1,50 @@
+import { describe, expect, it } from 'vitest';
+import { lessons } from '../content/lessons';
+import { parseProgress } from '../lib/progress';
+import { officialLinks } from '../lib/official-links';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
+describe('learning and safety boundaries', () => {
+  it('has six complete educational modules with valid quiz answers', () => {
+    expect(lessons).toHaveLength(6);
+    for (const lesson of lessons) {
+      expect(lesson.sections.length).toBeGreaterThanOrEqual(3);
+      expect(lesson.answers[lesson.correct]).toBeTruthy();
+      expect(lesson.explanation.length).toBeGreaterThan(30);
+    }
+  });
+  it('validates and deduplicates untrusted local progress', () => {
+    expect(parseProgress(null)).toEqual([]);
+    expect(parseProgress('{broken')).toEqual([]);
+    expect(parseProgress('{}')).toEqual([]);
+    expect(parseProgress('["security","security","unknown",1,null]')).toEqual(['security']);
+  });
+  it('links only to the reviewed official HTTPS allowlist', () => {
+    expect(officialLinks.map((link) => new URL(link.url).hostname)).toEqual([
+      'metamask.io',
+      'nu.fi',
+      'onekey.so',
+      'www.ledger.com',
+      'jup.ag',
+      'ethereum.org',
+    ]);
+    expect(officialLinks.every((link) => link.url.startsWith('https://'))).toBe(true);
+  });
+  it('keeps wallet libraries and signing/lookup operations out of application code', () => {
+    function files(dir: string): string[] {
+      return readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
+        entry.isDirectory() ? files(join(dir, entry.name)) : [join(dir, entry.name)],
+      );
+    }
+    const source = ['app', 'components', 'features', 'lib']
+      .flatMap(files)
+      .filter((file) => /\.(ts|tsx)$/.test(file))
+      .map((file) => readFileSync(file, 'utf8'))
+      .join('\n');
+    expect(source).not.toMatch(
+      /window\.(ethereum|solana)|eth_requestAccounts|signTransaction|signMessage|sendTransaction|fetch\s*\(/,
+    );
+    const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
+    expect(Object.keys(pkg.dependencies).sort()).toEqual(['next', 'react', 'react-dom']);
+  });
+});
