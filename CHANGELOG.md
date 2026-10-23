@@ -4,6 +4,9 @@ Document **material, user-visible, architecture, security, or process changes**.
 
 ## Unreleased
 
+### v0.2 DATA-01 provider evaluation (2026-10-23, docs only, stacked on unmerged PR #3)
+- Added `docs/PROVIDER_EVALUATION.md` comparing Alchemy, Zerion and direct RPC plus CoinGecko Demo from public documentation and keyless public calls. No provider is selected or integrated, no keys or accounts were created, and the sample-wallet reconciliation is recorded as incomplete.
+
 ### v0.1.1 — static free-hosting preparation (2026-10-23)
 - Configured Next.js static export and trailing-slash output for Cloudflare Pages Free.
 - Added local static file server, exported-route checks, Cloudflare static security headers and access-wall runbook.
