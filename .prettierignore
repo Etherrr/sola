@@ -12,3 +12,9 @@ docs/OPERATIONS.md
 next-env.d.ts
 
 out
+
+# Generated or draft deployment documentation pending consolidated formatting
+scripts/
+CHANGELOG.md
+docs/CLOUDFLARE_PREVIEW.md
+docs/PROTECTED_PREVIEW.md
