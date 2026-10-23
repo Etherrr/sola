@@ -1509,3 +1509,115 @@ code {
     transition: none !important;
   }
 }
+
+/* EDU-02 security decision lab (simulated; radios and buttons only, no text entry) */
+.lab {
+  display: grid;
+  gap: 20px;
+  margin-bottom: 24px;
+}
+.lab-card {
+  margin: 0;
+  min-width: 0;
+  padding: 20px 22px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-light);
+  display: grid;
+  gap: 14px;
+}
+.lab-card legend {
+  float: left;
+  width: 100%;
+  display: grid;
+  gap: 2px;
+  padding: 0;
+}
+.lab-card legend + * {
+  clear: both;
+}
+.lab-title {
+  font-size: 1.15rem;
+  color: var(--text);
+}
+.lab-seen {
+  border-left: 3px solid var(--gold);
+  padding: 4px 16px;
+  background: rgba(255, 255, 255, 0.03);
+}
+.lab-seen ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+}
+.lab-q {
+  margin: 0;
+  font-weight: 600;
+}
+.lab-options {
+  display: grid;
+  gap: 8px;
+}
+.lab-option {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.lab-option:hover {
+  border-color: var(--gold);
+}
+.lab-option input {
+  margin-top: 4px;
+  accent-color: var(--gold);
+  flex: 0 0 auto;
+}
+.lab-option:has(input:focus-visible) {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+.lab-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.lab-actions button:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 3px;
+}
+.lab-result {
+  min-height: 0;
+}
+.lab-outcome {
+  border-left: 3px solid var(--gold);
+  padding: 8px 18px;
+  background: rgba(255, 255, 255, 0.03);
+}
+.lab-outcome p {
+  margin: 6px 0;
+}
+.lab-outcome.verdict-safer {
+  border-left-color: #3fbf7f;
+}
+.lab-outcome.verdict-risky {
+  border-left-color: #e06c5f;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .lab-outcome {
+    animation: lab-in var(--motion-slow, 0.3s) ease-out;
+  }
+}
+@keyframes lab-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}

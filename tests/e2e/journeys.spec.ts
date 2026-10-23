@@ -16,6 +16,7 @@ const routes = [
   '/learn',
   '/learn/addresses',
   '/learn/risks',
+  '/learn/security-lab',
   '/settings',
 ];
 test('all routes render, remain responsive, and pass WCAG automated checks', async ({ page }) => {
@@ -165,4 +166,73 @@ test('key screens reflow at narrow and tablet widths', async ({ page }) => {
       ).toBe(true);
     }
   }
+});
+
+test('security decision lab: choices reveal consequences in place, with no text entry', async ({
+  page,
+}) => {
+  await page.goto('/learn/security-lab');
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  await expect(page.locator('input:not([type="radio"]), textarea')).toHaveCount(0);
+  const seed = page.getByRole('group', { name: /Support asks for your recovery phrase/ });
+  const check = seed.getByRole('button', { name: 'Check my choice' });
+  await expect(check).toBeDisabled();
+  await seed.getByRole('radio', { name: /Type the phrase quickly/ }).check();
+  await check.click();
+  await expect(seed.getByRole('status')).toContainText('A RISKY CHOICE');
+  await expect(seed.getByRole('status')).toContainText('Never type your recovery phrase');
+  await seed.getByRole('button', { name: 'Try again' }).click();
+  await seed.getByRole('radio', { name: /Close it, tell no one/ }).check();
+  await check.click();
+  await expect(seed.getByRole('status')).toContainText('A SAFER CHOICE');
+  await expect(page.getByText('1 of 4 scenarios answered')).toBeVisible();
+});
+
+test('security decision lab: every outcome, keyboard use, retry, axe on revealed state, no requests or storage', async ({
+  page,
+}) => {
+  const external: string[] = [];
+  page.on('request', (r) => {
+    const u = new URL(r.url());
+    if (u.hostname !== '127.0.0.1' && u.hostname !== 'localhost') external.push(r.url());
+  });
+  await page.goto('/learn/security-lab');
+  const before = await page.evaluate(() => JSON.stringify({ ...localStorage }));
+  const expected: Record<string, string[]> = {
+    'A site asks to connect': ['IT DEPENDS', 'A SAFER CHOICE', 'A RISKY CHOICE'],
+    'Support asks for your recovery phrase': ['A RISKY CHOICE', 'A RISKY CHOICE', 'A SAFER CHOICE'],
+    'An unlimited spending approval': ['A RISKY CHOICE', 'IT DEPENDS', 'A SAFER CHOICE'],
+    'A giveaway link with a strange web address': [
+      'A RISKY CHOICE',
+      'A SAFER CHOICE',
+      'IT DEPENDS',
+    ],
+  };
+  for (const [title, verdicts] of Object.entries(expected)) {
+    const group = page.getByRole('group', { name: new RegExp(title) });
+    for (let i = 0; i < verdicts.length; i++) {
+      await group.getByRole('radio').nth(i).check();
+      await group.getByRole('button', { name: 'Check my choice' }).click();
+      await expect(group.getByRole('status')).toContainText(verdicts[i]!);
+      await expect(group.getByRole('status')).toContainText('Safer habit');
+      if (i < verdicts.length - 1) await group.getByRole('button', { name: 'Try again' }).click();
+    }
+  }
+  await expect(page.getByText('4 of 4 scenarios answered')).toBeVisible();
+  await page.waitForTimeout(600); // let the reveal animation finish before measuring contrast
+  const results = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'])
+    .analyze();
+  expect(results.violations).toEqual([]);
+  // keyboard: select with arrow keys and activate with Space and Enter
+  const seed = page.getByRole('group', { name: /Support asks for your recovery phrase/ });
+  await seed.getByRole('button', { name: 'Try again' }).click();
+  await expect(seed.getByRole('radio').first()).toBeFocused();
+  await page.keyboard.press('Space');
+  await page.keyboard.press('Tab');
+  await expect(seed.getByRole('button', { name: 'Check my choice' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(seed.getByRole('status')).toContainText('A RISKY CHOICE');
+  expect(external).toEqual([]);
+  expect(await page.evaluate(() => JSON.stringify({ ...localStorage }))).toBe(before);
 });
