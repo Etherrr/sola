@@ -32,3 +32,8 @@ Recorded 2026-10-23 from read-only checks of GitHub and the Cloudflare dashboard
 ## Consequence for this work
 
 Every push to a non-production branch can start an automatic preview build. These branches contain simulated content only. No live-data endpoint, provider key or wallet permission is included.
+
+## Export configuration check and status
+
+- Verified by reading `next.config.ts` at both commits: `main` (c3396bf) and PR #4 (7bb3761) have no `output: 'export'`. PR #3 adds it, so the docs-branch build failure is explained by the missing export configuration. Locally, branches stacked on PR #3 build and write `out/`, and `npm run verify:export` passes. No Cloudflare build of these branches has run, and `main` and PR #4 are unchanged.
+- BASE-01 status: partial. Still open: build of these branches on Cloudflare, signed-out checks of new preview aliases and deep links, Functions coverage by Access, and protected screenshots of a deployed copy. Private hostnames are held by the owner.
