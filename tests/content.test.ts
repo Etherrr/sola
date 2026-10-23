@@ -47,4 +47,17 @@ describe('learning and safety boundaries', () => {
     const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
     expect(Object.keys(pkg.dependencies).sort()).toEqual(['next', 'react', 'react-dom']);
   });
+  it('keeps server-only API code out of the browser bundle directories', () => {
+    function files(dir: string): string[] {
+      return readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
+        entry.isDirectory() ? files(join(dir, entry.name)) : [join(dir, entry.name)],
+      );
+    }
+    const source = ['app', 'components', 'features', 'lib']
+      .flatMap(files)
+      .filter((file) => /\.(ts|tsx)$/.test(file))
+      .map((file) => readFileSync(file, 'utf8'))
+      .join('\n');
+    expect(source).not.toMatch(/from\s+['"][^'"]*(server\/|functions\/)/);
+  });
 });

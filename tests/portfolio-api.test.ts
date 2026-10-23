@@ -1,0 +1,308 @@
+import { describe, expect, it } from 'vitest';
+import { keccak256Utf8 } from '../server/portfolio/keccak';
+import { checkEvmAddress, toChecksumAddress } from '../server/portfolio/address';
+import { formatUnits, valueUsd } from '../server/portfolio/units';
+import { parseResolveRequest } from '../server/portfolio/contract';
+import {
+  handleHealth,
+  handleNetworks,
+  handleResolve,
+  defaultDeps,
+  type Deps,
+  type Env,
+} from '../server/portfolio/handler';
+import { mockProvider } from '../server/portfolio/provider';
+
+const TEAM = 'team.example.cloudflareaccess.com';
+const AUD = 'aud123';
+const ENV: Env = { PORTFOLIO_API_ENABLED: 'true', ACCESS_TEAM_DOMAIN: TEAM, ACCESS_AUD: AUD };
+const A = (last: string) => '0x' + '1'.repeat(39) + last;
+const enc = (o: unknown) => Buffer.from(JSON.stringify(o)).toString('base64url');
+
+async function signer() {
+  const kp = await crypto.subtle.generateKey(
+    {
+      name: 'RSASSA-PKCS1-v1_5',
+      modulusLength: 2048,
+      publicExponent: new Uint8Array([1, 0, 1]),
+      hash: 'SHA-256',
+    },
+    true,
+    ['sign', 'verify'],
+  );
+  const jwk = (await crypto.subtle.exportKey('jwk', kp.publicKey)) as {
+    n: string;
+    e: string;
+    kty: string;
+  };
+  const sign = async (payload: Record<string, unknown>, kid = 'k1', alg = 'RS256') => {
+    const head = enc({ alg, kid, typ: 'JWT' });
+    const body = enc(payload);
+    const sig = await crypto.subtle.sign(
+      'RSASSA-PKCS1-v1_5',
+      kp.privateKey,
+      new TextEncoder().encode(`${head}.${body}`),
+    );
+    return `${head}.${body}.${Buffer.from(sig).toString('base64url')}`;
+  };
+  return { sign, keys: [{ kid: 'k1', kty: 'RSA', n: jwk.n, e: jwk.e }] };
+}
+const NOW = new Date('2026-10-23T12:00:00Z');
+const good = (over: Record<string, unknown> = {}) => ({
+  iss: `https://${TEAM}`,
+  aud: [AUD],
+  exp: Math.floor(NOW.getTime() / 1000) + 600,
+  ...over,
+});
+const deps = (keys: unknown[], over: Partial<Deps> = {}): Deps => ({
+  ...defaultDeps(),
+  fetchKeys: async () => keys as never,
+  now: () => NOW,
+  id: () => 'req-1',
+  ...over,
+});
+const post = (body: unknown, jwt: string | null, headers: Record<string, string> = {}) =>
+  new Request('https://app.example/api/v1/portfolio/resolve', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      ...(jwt ? { 'cf-access-jwt-assertion': jwt } : {}),
+      ...headers,
+    },
+    body: typeof body === 'string' ? body : JSON.stringify(body),
+  });
+const valid = { network: 'ethereum', addresses: [A('2')], currency: 'USD' };
+
+describe('keccak and EIP-55 addresses', () => {
+  it('matches known keccak-256 vectors', () => {
+    expect(keccak256Utf8('')).toBe(
+      'c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470',
+    );
+    expect(keccak256Utf8('abc')).toBe(
+      '4e03657aea45a94fc7d47ba826c8d667c0d1e6e33a64a036ec44f58fa12d6c45',
+    );
+  });
+  it('matches the EIP-55 reference addresses', () => {
+    for (const a of [
+      '0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed',
+      '0xfB6916095ca1df60bB79Ce92cE3Ea74c37c5d359',
+      '0xdbF03B407c01E7cD3CBea99509d93f8DDDC8C6FB',
+      '0xD1220A0cf47c7B9Be7A2E6BA89F429762e7b9aDb',
+    ])
+      expect(toChecksumAddress(a.slice(2))).toBe(a);
+  });
+  it('rejects bad format, bad checksum; accepts lowercase', () => {
+    expect(checkEvmAddress('0x123')).toEqual({ ok: false, reason: 'format' });
+    expect(checkEvmAddress(42)).toEqual({ ok: false, reason: 'format' });
+    expect(checkEvmAddress('0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAEd')).toEqual({
+      ok: false,
+      reason: 'checksum',
+    });
+    expect(checkEvmAddress('0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed')).toEqual({
+      ok: true,
+      address: '0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed',
+    });
+  });
+});
+
+describe('units', () => {
+  it('formats and values with bigint only', () => {
+    expect(formatUnits(1_500_000_000_000_000_000n, 18)).toBe('1.5');
+    expect(formatUnits(0n, 18)).toBe('0');
+    expect(formatUnits(1n, 18)).toBe('0.000000000000000001');
+    expect(valueUsd(10n ** 30n, 6, '1')).toBe('1000000000000000000000000');
+    expect(valueUsd(1_234_560_000n, 6, '1')).toBe('1234.56');
+    expect(valueUsd(1n, 18, '2000')).toBe('0');
+  });
+});
+
+describe('request contract', () => {
+  it('validates, dedupes and canonicalizes', () => {
+    const r = parseResolveRequest(
+      JSON.stringify({ ...valid, addresses: [A('2'), A('2').toUpperCase().replace('0X', '0x')] }),
+    );
+    expect(r.ok && r.value.addresses.length).toBe(1);
+  });
+  it.each([
+    ['not json', 400, 'bad_json'],
+    ['[]', 400, 'bad_shape'],
+    [JSON.stringify({ ...valid, network: 'solana' }), 400, 'unsupported_network'],
+    [JSON.stringify({ ...valid, currency: 'EUR' }), 400, 'unsupported_currency'],
+    [JSON.stringify({ ...valid, addresses: [] }), 400, 'bad_addresses'],
+    [
+      JSON.stringify({ ...valid, addresses: Array.from({ length: 6 }, (_, i) => A(String(i))) }),
+      400,
+      'too_many_addresses',
+    ],
+    [JSON.stringify({ ...valid, addresses: ['vitalik.eth'] }), 400, 'bad_address'],
+    [JSON.stringify({ ...valid, rpcUrl: 'http://x' }), 400, 'unknown_field'],
+    [JSON.stringify({ ...valid, pad: 'x'.repeat(3000) }), 413, 'body_too_large'],
+  ])('rejects %#', (body, status, code) => {
+    const r = parseResolveRequest(body as string);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect([r.status, r.code]).toEqual([status, code]);
+  });
+});
+
+describe('endpoint security and behavior', () => {
+  it('is off unless explicitly enabled, and fails closed without Access config', async () => {
+    const s = await signer();
+    const jwt = await s.sign(good());
+    expect((await handleResolve(post(valid, jwt), {}, deps(s.keys))).status).toBe(503);
+    expect(
+      (await handleResolve(post(valid, jwt), { PORTFOLIO_API_ENABLED: 'true' }, deps(s.keys)))
+        .status,
+    ).toBe(503);
+    expect(
+      (
+        await handleResolve(
+          post(valid, jwt),
+          { ...ENV, PORTFOLIO_API_ENABLED: 'false' },
+          deps(s.keys),
+        )
+      ).status,
+    ).toBe(503);
+  });
+  it('rejects missing, forged, expired, wrong-audience, wrong-issuer, wrong-kid and none-alg tokens', async () => {
+    const s = await signer();
+    const other = await signer();
+    const cases: (string | null)[] = [
+      null,
+      'garbage',
+      await other.sign(good()), // signed by a different key, same kid
+      await s.sign(good({ exp: 1 })),
+      await s.sign(good({ aud: ['nope'] })),
+      await s.sign(good({ iss: 'https://evil.example' })),
+      await s.sign(good(), 'unknown-kid'),
+      await s.sign(good(), 'k1', 'none'),
+    ];
+    for (const jwt of cases) {
+      const r = await handleResolve(post(valid, jwt), ENV, deps(s.keys));
+      expect(r.status).toBe(401);
+    }
+    // an email header alone is not authentication
+    expect(
+      (
+        await handleResolve(
+          post(valid, null, { 'cf-access-authenticated-user-email': 'a@b.c' }),
+          ENV,
+          deps(s.keys),
+        )
+      ).status,
+    ).toBe(401);
+  });
+  it('limits methods, content type, and origin', async () => {
+    const s = await signer();
+    const jwt = await s.sign(good());
+    const d = deps(s.keys);
+    expect(
+      (await handleResolve(new Request('https://app.example/api/v1/portfolio/resolve'), ENV, d))
+        .status,
+    ).toBe(405);
+    expect(
+      (await handleResolve(post('x', jwt, { 'content-type': 'text/plain' }), ENV, d)).status,
+    ).toBe(415);
+    expect(
+      (await handleResolve(post(valid, jwt, { origin: 'https://evil.example' }), ENV, d)).status,
+    ).toBe(403);
+    expect(
+      (
+        await handleHealth(
+          new Request('https://app.example/api/v1/health', { method: 'POST' }),
+          ENV,
+          d,
+        )
+      ).status,
+    ).toBe(405);
+  });
+  it('returns a simulated, no-store, schema-complete answer for a valid authenticated request', async () => {
+    const s = await signer();
+    const r = await handleResolve(
+      post({ ...valid, addresses: [A('2'), A('3')] }, await s.sign(good())),
+      ENV,
+      deps(s.keys),
+    );
+    expect(r.status).toBe(200);
+    expect(r.headers.get('cache-control')).toBe('no-store');
+    const b = await r.json();
+    expect(b).toMatchObject({
+      schemaVersion: 1,
+      mode: 'mock',
+      simulated: true,
+      chainId: 1,
+      provider: 'mock-fixtures',
+    });
+    expect(b.warnings[0]).toMatch(/SIMULATED/);
+    expect(b.totals.unpricedAssetCount).toBe(1); // the mystery token
+    expect(
+      b.wallets[1].assets.find((a: { symbol: string }) => a.symbol === 'MYST').value,
+    ).toBeNull();
+    expect(b.totals.note).toMatch(/not total net worth/);
+  });
+  it('covers empty, large and partial fixtures without inventing data', async () => {
+    const s = await signer();
+    const jwt = await s.sign(good());
+    const empty = await (
+      await handleResolve(post({ ...valid, addresses: [A('0')] }, jwt), ENV, deps(s.keys))
+    ).json();
+    expect(empty.wallets[0].assets).toEqual([]);
+    expect(empty.totals.recognizedPricedSubtotalUsd).toBeNull();
+    const big = await (
+      await handleResolve(post({ ...valid, addresses: [A('4')] }, jwt), ENV, deps(s.keys))
+    ).json();
+    expect(big.wallets[0].assets[0].amount).toBe('1000000000000000000000000');
+    const part = await (
+      await handleResolve(post({ ...valid, addresses: [A('5')] }, jwt), ENV, deps(s.keys))
+    ).json();
+    expect(part.partial).toBe(true);
+  });
+  it('maps provider failures to 429/503/504 and never substitutes data', async () => {
+    const s = await signer();
+    const jwt = await s.sign(good());
+    const status = async (last: string) =>
+      handleResolve(post({ ...valid, addresses: [A(last)] }, jwt), ENV, deps(s.keys));
+    const e = await status('e');
+    expect(e.status).toBe(429);
+    expect(e.headers.get('retry-after')).toBe('30');
+    expect((await status('f')).status).toBe(503);
+    expect((await status('d')).status).toBe(504);
+    const slow = { ...mockProvider, fetchWallets: () => new Promise<never>(() => {}) };
+    expect(
+      (await handleResolve(post(valid, jwt), ENV, deps(s.keys, { provider: slow, timeoutMs: 20 })))
+        .status,
+    ).toBe(504);
+    const body = await (await status('f')).json();
+    expect(body.wallets).toBeUndefined();
+  });
+  it('does not put addresses or tokens in error bodies or console logs', async () => {
+    const s = await signer();
+    const logs: unknown[] = [];
+    const orig = [console.log, console.error, console.warn];
+    console.log = console.error = console.warn = (...a: unknown[]) => void logs.push(a);
+    try {
+      const r = await handleResolve(
+        post({ ...valid, addresses: ['0xNOTANADDRESS'] }, await s.sign(good())),
+        ENV,
+        deps(s.keys),
+      );
+      expect(JSON.stringify(await r.json())).not.toContain('NOTANADDRESS');
+    } finally {
+      [console.log, console.error, console.warn] = orig;
+    }
+    expect(logs).toEqual([]);
+  });
+  it('health and networks are gated and reveal nothing private', async () => {
+    const s = await signer();
+    const d = deps(s.keys);
+    const jwt = await s.sign(good());
+    const get = (p: string, j: string | null) =>
+      new Request('https://app.example' + p, {
+        headers: j ? { 'cf-access-jwt-assertion': j } : {},
+      });
+    expect((await handleHealth(get('/api/v1/health', null), ENV, d)).status).toBe(401);
+    const h = await (await handleHealth(get('/api/v1/health', jwt), ENV, d)).json();
+    expect(Object.keys(h).sort()).toEqual(['mode', 'requestId', 'status']);
+    const n = await (await handleNetworks(get('/api/v1/networks', jwt), ENV, d)).json();
+    expect(n.networks).toEqual([{ id: 'ethereum', chainId: 1, status: 'mock' }]);
+  });
+});

@@ -9,3 +9,4 @@ output/
 !.env.example
 *.tsbuildinfo
 .DS_Store
+.wrangler/

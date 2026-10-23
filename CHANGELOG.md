@@ -61,3 +61,9 @@ Document **material, user-visible, architecture, security, or process changes**.
 ### Not changed
 
 - No WordPress content, DNS, running application, blockchain integrations, or production deployments.
+
+### DATA-02 scaffold (2026-10-23, local branch, not released)
+- Added Cloudflare Pages Functions `POST /api/v1/portfolio/resolve`, `GET /api/v1/health`, `GET /api/v1/networks` under `functions/api/v1/`, with server-only code in `server/portfolio/` and `public/_routes.json` limiting Functions to `/api/*`.
+- Fixture provider only: every response is marked `mode: "mock"`, `simulated: true` and carries a SIMULATED warning. No blockchain is read, no provider, key or secret is used, nothing is stored.
+- The API is off unless `PORTFOLIO_API_ENABLED` is `true`, and fails closed without a valid Cloudflare Access JWT (RS256 signature, issuer, audience, expiry). It adds no UI and the existing static pages are unchanged.
+- Rollback: revert this commit group. Not deployed.

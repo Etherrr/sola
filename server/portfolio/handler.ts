@@ -1,0 +1,182 @@
+import { parseResolveRequest, type ResolveResponse } from './contract';
+import { verifyAccessJwt, fetchAccessKeys, type KeyFetcher } from './access';
+import { mockProvider, type PortfolioProvider } from './provider';
+
+export type Env = {
+  PORTFOLIO_API_ENABLED?: string;
+  ACCESS_TEAM_DOMAIN?: string;
+  ACCESS_AUD?: string;
+};
+export type Deps = {
+  provider: PortfolioProvider;
+  fetchKeys: KeyFetcher;
+  now: () => Date;
+  id: () => string;
+  timeoutMs: number;
+};
+
+export const defaultDeps = (): Deps => ({
+  provider: mockProvider,
+  fetchKeys: fetchAccessKeys,
+  now: () => new Date(),
+  id: () => crypto.randomUUID(),
+  timeoutMs: 8000,
+});
+
+const HEADERS = {
+  'content-type': 'application/json; charset=utf-8',
+  'cache-control': 'no-store',
+  'x-content-type-options': 'nosniff',
+};
+const reply = (status: number, body: unknown, extra: Record<string, string> = {}) =>
+  new Response(JSON.stringify(body), { status, headers: { ...HEADERS, ...extra } });
+const err = (
+  status: number,
+  code: string,
+  message: string,
+  requestId: string,
+  extra: Record<string, string> = {},
+) => reply(status, { error: { code, message }, requestId }, extra);
+
+/** Gate every request: kill switch, then Access JWT (never trust an email header). Fails closed. */
+async function gate(req: Request, env: Env, d: Deps, requestId: string): Promise<Response | null> {
+  if (env.PORTFOLIO_API_ENABLED !== 'true')
+    return err(503, 'disabled', 'This feature is switched off.', requestId);
+  if (!env.ACCESS_TEAM_DOMAIN || !env.ACCESS_AUD)
+    return err(503, 'not_configured', 'Access verification is not configured.', requestId);
+  const ok = await verifyAccessJwt(
+    req.headers.get('cf-access-jwt-assertion'),
+    { teamDomain: env.ACCESS_TEAM_DOMAIN, aud: env.ACCESS_AUD },
+    d.fetchKeys,
+    Math.floor(d.now().getTime() / 1000),
+  );
+  return ok ? null : err(401, 'unauthorized', 'Authentication required.', requestId);
+}
+
+export async function handleResolve(
+  req: Request,
+  env: Env,
+  d: Deps = defaultDeps(),
+): Promise<Response> {
+  const requestId = d.id();
+  if (req.method !== 'POST')
+    return err(405, 'method_not_allowed', 'Use POST.', requestId, { allow: 'POST' });
+  const blocked = await gate(req, env, d, requestId);
+  if (blocked) return blocked;
+  if (!(req.headers.get('content-type') ?? '').toLowerCase().startsWith('application/json'))
+    return err(415, 'unsupported_media_type', 'Send application/json.', requestId);
+  const origin = req.headers.get('origin');
+  if (origin && origin !== new URL(req.url).origin)
+    return err(403, 'bad_origin', 'Cross-origin requests are not allowed.', requestId);
+  const parsed = parseResolveRequest(await req.text());
+  if (!parsed.ok) return err(parsed.status, parsed.code, parsed.message, requestId);
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), d.timeoutMs);
+  let result;
+  try {
+    result = await Promise.race([
+      d.provider.fetchWallets(parsed.value.addresses, ctl.signal),
+      new Promise<never>((_, rej) =>
+        ctl.signal.addEventListener('abort', () => rej(new Error('timeout'))),
+      ),
+    ]);
+  } catch {
+    return err(
+      504,
+      'provider_timeout',
+      'The data source took too long. No data was substituted.',
+      requestId,
+    );
+  } finally {
+    clearTimeout(timer);
+  }
+  if (!result.ok) {
+    if (result.kind === 'rate_limited')
+      return err(
+        429,
+        'rate_limited',
+        'The data source is rate limiting. Try again later.',
+        requestId,
+        { 'retry-after': '30' },
+      );
+    if (result.kind === 'timeout')
+      return err(
+        504,
+        'provider_timeout',
+        'The data source took too long. No data was substituted.',
+        requestId,
+      );
+    if (result.kind === 'bad_response')
+      return err(
+        502,
+        'provider_bad_response',
+        'The data source returned an unusable answer.',
+        requestId,
+      );
+    return err(
+      503,
+      'provider_unavailable',
+      'The data source is unavailable. No data was substituted.',
+      requestId,
+    );
+  }
+  let subtotal: bigint | null = null; // micro-USD
+  let unpriced = 0;
+  for (const w of result.wallets)
+    for (const a of w.assets) {
+      if (a.value === null) unpriced++;
+      else {
+        const [i, f = ''] = a.value.split('.');
+        subtotal = (subtotal ?? 0n) + BigInt(i! + f.padEnd(6, '0'));
+      }
+    }
+  const fmt = (v: bigint) => `${v / 1_000_000n}.${(v % 1_000_000n).toString().padStart(6, '0')}`;
+  const body: ResolveResponse = {
+    schemaVersion: 1,
+    requestId,
+    generatedAt: d.now().toISOString(),
+    observedAt: result.observedAt,
+    provider: result.provider,
+    chainId: 1,
+    mode: result.simulated ? 'mock' : 'live',
+    simulated: result.simulated,
+    wallets: result.wallets,
+    totals: {
+      recognizedPricedSubtotalUsd: subtotal === null ? null : fmt(subtotal),
+      unpricedAssetCount: unpriced,
+      note: 'Wallet balances only: DeFi deposits, staking, debts, LP claims and other positions may be missing; the subtotal is not total net worth.',
+    },
+    partial: result.wallets.some((w) => w.partial),
+    warnings: result.simulated ? ['SIMULATED fixture data. Not read from any blockchain.'] : [],
+  };
+  return reply(200, body);
+}
+
+export async function handleHealth(
+  req: Request,
+  env: Env,
+  d: Deps = defaultDeps(),
+): Promise<Response> {
+  const requestId = d.id();
+  if (req.method !== 'GET')
+    return err(405, 'method_not_allowed', 'Use GET.', requestId, { allow: 'GET' });
+  const blocked = await gate(req, env, d, requestId);
+  if (blocked) return blocked;
+  return reply(200, { status: 'ok', mode: d.provider.simulated ? 'mock' : 'live', requestId });
+}
+
+export async function handleNetworks(
+  req: Request,
+  env: Env,
+  d: Deps = defaultDeps(),
+): Promise<Response> {
+  const requestId = d.id();
+  if (req.method !== 'GET')
+    return err(405, 'method_not_allowed', 'Use GET.', requestId, { allow: 'GET' });
+  const blocked = await gate(req, env, d, requestId);
+  if (blocked) return blocked;
+  return reply(200, {
+    networks: [{ id: 'ethereum', chainId: 1, status: d.provider.simulated ? 'mock' : 'live' }],
+    requestId,
+  });
+}
