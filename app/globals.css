@@ -1621,3 +1621,28 @@ code {
     transform: none;
   }
 }
+
+.track input[type='text'],
+.track input:not([type]) {
+  display: block;
+  width: 100%;
+  max-width: 36rem;
+  min-height: 44px;
+  margin: 0.4rem 0;
+  padding: 0.6rem 0.75rem;
+  font: inherit;
+  font-size: 1rem;
+  color: var(--text, inherit);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 8px;
+}
+.track input:focus-visible {
+  outline: 3px solid var(--gold, #d6b96d);
+  outline-offset: 2px;
+}
+
+.track .addr,
+.track .fine {
+  overflow-wrap: anywhere;
+}

@@ -14,9 +14,17 @@ describe('mode markers', () => {
     expect(new Set(labels).size).toBe(5);
     for (const m of Object.values(MODES)) expect(m.text.length).toBeGreaterThan(20);
   });
-  it('keeps the Track page honest: no input, no network call, no live claim', () => {
+  it('keeps the Track flow honest: simulated labels, no live claim, no direct provider call', () => {
     const page = readFileSync('app/track/page.tsx', 'utf8');
-    expect(page).not.toMatch(/<input|<form|fetch\s*\(|LIVE_/);
-    expect(page).toMatch(/not switched on/);
+    const form = readFileSync('features/portfolio/track-form.tsx', 'utf8');
+    const client = readFileSync('features/portfolio/api-client.ts', 'utf8');
+    expect(page).not.toMatch(/fetch\s*\(|LIVE_/);
+    expect(page).toMatch(/simulated/i);
+    expect(page).toMatch(/Live data stays off/);
+    expect(form).not.toMatch(/fetch\s*\(|localStorage|sessionStorage|document\.cookie/);
+    expect(form).toMatch(
+      /not a blockchain|not read from a blockchain|Nothing was read from a blockchain/,
+    );
+    expect(client).not.toMatch(/https?:\/\//); // same-origin only, no provider URL
   });
 });

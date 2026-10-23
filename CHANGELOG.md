@@ -4,6 +4,9 @@ Document **material, user-visible, architecture, security, or process changes**.
 
 ## Unreleased
 
+- DATA-02 round 3: Access JWT verification now uses `jose` 6.2.13 (exact-pinned, MIT, no dependencies, server only; RS256, issuer, audience, exp, crit handled by the library) with our own bounded key fetcher kept (jose has no failure cooldown or response cap). API responses add referrer-policy, noindex, CSP frame-ancestors none and CORP. Still fixture-only, default off.
+- DATA-02 hardening and slice 2: bounded request body (Content-Length precheck plus streamed 2 KB cap, stream errors return contract JSON), exact JSON media type, Access key fetch with 3 s deadline, 32 KB cap, 10-key cap, 1 h cache, one rate-limited refresh on unknown kid, no redirects, last-good keys on failure, 8 KB JWT cap, `crit` rejected. `/track` now has a SIMULATED fixture lookup form (same-origin POST only; no provider call). Hardening round 2: stale key ceiling 6 h then fail closed, 60 s attempt cooldown that also covers failures, one in-flight key fetch, 3 s body-read deadline (408), hung key fetch answers 401. The browser validates the whole response (mode/simulated must agree, decimals, totals, wallet equals the address asked) and never shows an unexpected answer as a wallet; feature-off 503 reads as switched off. Still fixture-only, default off, no rate limiter.
+
 ### v0.2 EDU-02 security decision lab (2026-10-23, stacked on EDU-01 and unmerged PR #3)
 - Added `/learn/security-lab/`: four invented, simulated prompts (a connection request, a request for a recovery phrase, an unlimited spending approval and a look-alike giveaway link). Each choice reveals its consequence and a safer habit in place, with Ethereum-specific wording and ethereum.org sources.
 - Radios and buttons only: no text entry and no wallet access. Scenario answers are not stored or sent anywhere; the answered count lasts for the visit only. (Normal page hosting and the external source links are unchanged.)
@@ -61,3 +64,9 @@ Document **material, user-visible, architecture, security, or process changes**.
 ### Not changed
 
 - No WordPress content, DNS, running application, blockchain integrations, or production deployments.
+
+### DATA-02 scaffold (2026-10-23, local branch, not released)
+- Added Cloudflare Pages Functions `POST /api/v1/portfolio/resolve`, `GET /api/v1/health`, `GET /api/v1/networks` under `functions/api/v1/`, with server-only code in `server/portfolio/` and `public/_routes.json` limiting Functions to `/api/*`.
+- Fixture provider only: every response is marked `mode: "mock"`, `simulated: true` and carries a SIMULATED warning. No blockchain is read, no provider, key or secret is used, nothing is stored.
+- The API is off unless `PORTFOLIO_API_ENABLED` is `true`, and fails closed without a valid Cloudflare Access JWT (RS256 signature, issuer, audience, expiry). It adds no UI and the existing static pages are unchanged.
+- Rollback: revert this commit group. Not deployed.

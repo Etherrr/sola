@@ -36,15 +36,35 @@ describe('learning and safety boundaries', () => {
         entry.isDirectory() ? files(join(dir, entry.name)) : [join(dir, entry.name)],
       );
     }
+    // The single approved network call is a same-origin POST to our own read-only API.
+    const API_CLIENT = join('features', 'portfolio', 'api-client.ts');
+    const source = ['app', 'components', 'features', 'lib']
+      .flatMap(files)
+      .filter((file) => /\.(ts|tsx)$/.test(file) && file !== API_CLIENT)
+      .map((file) => readFileSync(file, 'utf8'))
+      .join('\n');
+    expect(readFileSync(API_CLIENT, 'utf8').match(/fetch\s*\(/g)).toHaveLength(1);
+    expect(readFileSync(API_CLIENT, 'utf8')).toMatch(/fetch\('\/api\/v1\/portfolio\/resolve'/);
+    expect(source).not.toMatch(
+      /window\.(ethereum|solana)|eth_requestAccounts|signTransaction|signMessage|sendTransaction|fetch\s*\(/,
+    );
+    const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
+    // jose (MIT, no dependencies, exact-pinned) verifies Access JWTs on the server only.
+    expect(Object.keys(pkg.dependencies).sort()).toEqual(['jose', 'next', 'react', 'react-dom']);
+    expect(pkg.dependencies.jose).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(source).not.toMatch(/from 'jose'/);
+  });
+  it('keeps server-only API code out of the browser bundle directories', () => {
+    function files(dir: string): string[] {
+      return readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
+        entry.isDirectory() ? files(join(dir, entry.name)) : [join(dir, entry.name)],
+      );
+    }
     const source = ['app', 'components', 'features', 'lib']
       .flatMap(files)
       .filter((file) => /\.(ts|tsx)$/.test(file))
       .map((file) => readFileSync(file, 'utf8'))
       .join('\n');
-    expect(source).not.toMatch(
-      /window\.(ethereum|solana)|eth_requestAccounts|signTransaction|signMessage|sendTransaction|fetch\s*\(/,
-    );
-    const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
-    expect(Object.keys(pkg.dependencies).sort()).toEqual(['next', 'react', 'react-dom']);
+    expect(source).not.toMatch(/from\s+['"][^'"]*(server\/|functions\/)/);
   });
 });

@@ -29,12 +29,20 @@ export const MODES = {
 export type Mode = keyof typeof MODES;
 
 /** Persistent mode marker. Meaning is carried by text and a symbol, never by colour alone. */
-export function ModeMarker({ mode, note }: { mode: Mode; note?: string }) {
+export function ModeMarker({
+  mode,
+  note,
+  context,
+}: {
+  mode: Mode;
+  note?: string;
+  context?: string;
+}) {
   const m = MODES[mode];
   return (
     <aside
       className={`mode-marker mode-${mode.toLowerCase().replace('_', '-')}`}
-      aria-label={`Data mode: ${m.label}`}
+      aria-label={`Data mode: ${m.label}${context ? ` (${context})` : ''}`}
     >
       <span className="badge">
         <span aria-hidden="true">{m.symbol} </span>

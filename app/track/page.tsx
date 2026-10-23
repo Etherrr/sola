@@ -1,25 +1,27 @@
 import { PageIntro, ActionLink } from '@/components/ui';
 import { ModeMarker } from '@/components/mode-marker';
-export const metadata = { title: 'Address lookup (coming next)' };
+import { TrackForm } from '@/features/portfolio/track-form';
+export const metadata = { title: 'Address lookup (simulated)' };
 export default function Track() {
   return (
     <div className="page-container">
-      <PageIntro eyebrow="WATCH-ONLY · COMING NEXT" title="Track a public address.">
+      <PageIntro eyebrow="WATCH-ONLY · SIMULATED" title="Track a public address.">
         <p>
-          Soon you will be able to paste a public Ethereum address and see wallet balances, clearly
-          separated from the demo. Live lookup is not switched on in this preview, so nothing on
-          this page reads a blockchain or sends an address anywhere.
+          Paste a public Ethereum address to try the lookup flow. For now the results come from
+          fixed simulated examples inside this app, not from a blockchain, so no real balances are
+          shown. Live data stays off until it is separately approved.
         </p>
       </PageIntro>
       <ModeMarker
         mode="SIMULATED"
-        note="This preview shows no live data. The demo portfolio and lessons are fully simulated."
+        note="Results here are simulated fixtures. No live data, no wallet, nothing is signed."
       />
+      <TrackForm />
       <section className="notice" aria-labelledby="track-promise">
-        <h2 id="track-promise">What it will and will not do</h2>
+        <h2 id="track-promise">What it does and does not do</h2>
         <ul>
           <li>
-            It will read public balances only. It will never ask for a seed phrase, private key or
+            It reads public addresses only. It never asks for a seed phrase, private key or
             signature.
           </li>
           <li>A pasted address is observed, not proven to be yours.</li>
