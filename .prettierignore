@@ -1,0 +1,12 @@
+.next
+node_modules
+output
+playwright-report
+test-results
+package-lock.json
+AGENTS.md
+SPEC.md
+docs/APP_SCOPE.md
+docs/WORDPRESS_SCOPE.md
+docs/OPERATIONS.md
+next-env.d.ts

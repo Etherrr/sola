@@ -1,15 +1,15 @@
 # Sola — Sola Capital & Sola Lens
 
-This repository is the shared **engineering handoff and future source-code home** for Sola Lens, the proposed read-only DeFi portfolio and learning web application.
+This repository is the shared **engineering handoff and source-code home** for Sola Lens, the proposed read-only DeFi portfolio and learning web application.
 
-**Status (2026-10-22): documentation-only bootstrap.** No application, wallet integration, API, or deployment has been implemented by this commit.
+**Status (2026-10-23): Sola Lens v0.1 local preview implemented.** Next.js/TypeScript application, learning journeys, and simulated portfolio. No real wallet integration, blockchain API, or deployment.
 
 ## Two separate products
 
-| Surface | Role | Owner lane |
-| --- | --- | --- |
-| [solacapitalpartners.com](https://solacapitalpartners.com) | Existing WordPress corporate, markets, insights, and projects website | WordPress agent |
-| `app.solacapitalpartners.com` | Proposed standalone Sola Lens onboarding, learning, and read-only portfolio app | Web-app/GitHub agent |
+| Surface                                                    | Role                                                                            | Owner lane           |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------- | -------------------- |
+| [solacapitalpartners.com](https://solacapitalpartners.com) | Existing WordPress corporate, markets, insights, and projects website           | WordPress agent      |
+| `app.solacapitalpartners.com`                              | Proposed standalone Sola Lens onboarding, learning, and read-only portfolio app | Web-app/GitHub agent |
 
 The domain remains managed through WordPress. The proposed `app` subdomain may point to a separate host after approval. **Do not change live DNS or enable the WordPress launch link during documentation/setup.**
 
@@ -28,7 +28,7 @@ The domain remains managed through WordPress. The proposed `app` subdomain may p
 - **App v0.2 — Watch-only beta:** real public-address lookup, Ethereum/Solana coverage with tested provider adapters, transparent incomplete-data states.
 - **App v0.3 — Connections & analysis:** optional public-account discovery, supported DeFi positions and risk analytics; no signing.
 - **App v1.0 — Public launch:** only after technical, editorial, privacy and owner review.
-- **WordPress V3.0:** independent research-led site release; Sola Lens is described as *In Development* and its launch flag remains off until app approval.
+- **WordPress V3.0:** independent research-led site release; Sola Lens is described as _In Development_ and its launch flag remains off until app approval.
 
 ## Rules of engagement
 
@@ -39,4 +39,33 @@ The domain remains managed through WordPress. The proposed `app` subdomain may p
 - Scope changes require updated docs and `CHANGELOG.md`.
 - Once initialized, implement features in small branches and PRs; no automatic production releases.
 
-The repository will gain development scripts and setup commands when the actual web application is scaffolded. Do not copy imagined commands into this README beforehand.
+## Local development
+
+Use Node.js 24 LTS and npm. Dependencies are pinned in `package-lock.json`.
+
+```sh
+npm ci
+npm run dev
+```
+
+Open `http://127.0.0.1:3000`. For the production-mode local preview, run `npm run build` then `npm run start`. Both servers bind only to loopback by default. No environment variables, provider credentials, database, or wallet extension are required.
+
+```sh
+npm run check                 # lint, typecheck, unit tests, production build
+npx playwright install chromium
+npm run test:e2e              # desktop + mobile Chromium against production build
+npx prettier --check app components features content lib tests
+npm audit
+```
+
+Browser tests start a local production server if one is not already running. CI installs Chromium and runs the same checks. No workflow deploys the app.
+
+## Preview features
+
+- Welcome screen with beginner, experienced, and demo entry points.
+- Six modules with knowledge checks; wallet decision guide; network field notes; simulated swap walkthrough.
+- Simulated assets, DeFi positions, and risk views. Every portfolio view carries a SIMULATED notice, fixed fixture reference, coverage limits, and unknown-price warning.
+- Opt-in browser-local lesson progress and clear controls in Settings; no analytics or user accounts.
+- All routes in [APP_SCOPE](docs/APP_SCOPE.md) plus `/learn/addresses` and `/learn/risks`.
+
+See [implementation notes](docs/IMPLEMENTATION.md) for architecture, provisional design tokens, dependency licenses, privacy, checks, limitations, and rollback. Hosted preview access control and owner review are separate gates; this change does not deploy or activate the WordPress launch link.
