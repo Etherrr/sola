@@ -68,4 +68,6 @@ Browser tests start a local production server if one is not already running. CI 
 - Opt-in browser-local lesson progress and clear controls in Settings; no analytics or user accounts.
 - All routes in [APP_SCOPE](docs/APP_SCOPE.md) plus `/learn/addresses` and `/learn/risks`.
 
+For restricted hosting, use [the protected preview runbook](docs/PROTECTED_PREVIEW.md). No Vercel deployment is live or verified yet.
+
 See [implementation notes](docs/IMPLEMENTATION.md) for architecture, provisional design tokens, dependency licenses, privacy, checks, limitations, and rollback. Hosted preview access control and owner review are separate gates; this change does not deploy or activate the WordPress launch link.
