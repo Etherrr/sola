@@ -12,8 +12,8 @@ export function SecurityLab() {
       <p className="mode-marker mode-simulated" role="note">
         <span className="badge">◇ SIMULATED</span>
         <span>
-          Invented prompts for practice. No wallet is used. Your answers are not typed, saved or
-          sent anywhere.
+          Invented prompts for practice. No wallet is used. Your answers stay in this page’s memory
+          only: they are not typed, saved or sent anywhere.
         </span>
       </p>
       <h2 id="lab-title">Four decisions, with the consequence shown right here</h2>
@@ -68,8 +68,12 @@ export function SecurityLab() {
                 <button
                   className="button secondary"
                   type="button"
-                  onClick={() => {
+                  onClick={(e) => {
+                    const card = e.currentTarget.closest('fieldset');
                     setRevealed((r) => ({ ...r, [s.id]: false }));
+                    requestAnimationFrame(() =>
+                      card?.querySelector<HTMLInputElement>('input[type="radio"]')?.focus(),
+                    );
                     setPicked((p) => {
                       const next = { ...p };
                       delete next[s.id];

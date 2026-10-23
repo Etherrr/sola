@@ -45,7 +45,7 @@ export const SCENARIOS: Scenario[] = [
         label: 'Reject it and use the tracker by pasting a public address instead',
         verdict: 'safer',
         outcome:
-          'Pasting an address means no wallet permission prompt and no wallet connection, so the site cannot ask your wallet for anything. It is not private, though: the tracker still sees the address you paste and can look up its public history.',
+          'A watch-only lookup by pasted address does not require granting the site wallet access, and pasting an address grants no connection permission. A site can still start a prompt later. It is not private, though: the tracker still sees the address you paste and can look up its public history.',
       },
       {
         id: 'connect-blind',
@@ -115,9 +115,9 @@ export const SCENARIOS: Scenario[] = [
       {
         id: 'allow-exact',
         label: 'Edit the amount down to what this swap needs, if your wallet allows it',
-        verdict: 'safer',
+        verdict: 'depends',
         outcome:
-          'Limiting the approval to the amount you need cuts the risk. Some wallets let you set a custom amount. You may pay the approval fee again next time, which is the trade for lower exposure.',
+          'A limited approval caps how much of that token the contract can move, which is better than unlimited. It does not make an unfamiliar site or contract safe: the amount you approve can still be taken if the contract is malicious. It makes sense only after you have checked the site and the contract address through a source you trust. You may also pay the approval fee again next time.',
       },
       {
         id: 'allow-reject',
@@ -128,7 +128,7 @@ export const SCENARIOS: Scenario[] = [
       },
     ],
     saferAction:
-      'Approve only what you need, avoid unlimited approvals on unproven sites, and review and revoke old approvals from time to time. Revoking also costs a network fee.',
+      'Check the site and contract first. Approve only what you need, avoid unlimited approvals on unproven sites, and review and revoke old approvals from time to time. Revoking also costs a network fee.',
   },
   {
     id: 'domain',
