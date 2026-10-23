@@ -48,7 +48,7 @@ npm ci
 npm run dev
 ```
 
-Open `http://127.0.0.1:3000`. For the production-mode local preview, run `npm run build` then `npm run start`. Both servers bind only to loopback by default. No environment variables, provider credentials, database, or wallet extension are required.
+Open `http://127.0.0.1:3000`. For the exported static local preview, run `npm run build` then `npm run start`. The static server binds only to loopback by default. No environment variables, provider credentials, database, or wallet extension are required.
 
 ```sh
 npm run check                 # lint, typecheck, unit tests, production build
@@ -58,7 +58,7 @@ npx prettier --check app components features content lib tests
 npm audit
 ```
 
-Browser tests start a local production server if one is not already running. CI installs Chromium and runs the same checks. No workflow deploys the app.
+Browser tests start the local static-export server if one is not already running. CI installs Chromium and runs the same checks. No workflow deploys the app.
 
 ## Preview features
 
@@ -67,5 +67,7 @@ Browser tests start a local production server if one is not already running. CI 
 - Simulated assets, DeFi positions, and risk views. Every portfolio view carries a SIMULATED notice, fixed fixture reference, coverage limits, and unknown-price warning.
 - Opt-in browser-local lesson progress and clear controls in Settings; no analytics or user accounts.
 - All routes in [APP_SCOPE](docs/APP_SCOPE.md) plus `/learn/addresses` and `/learn/risks`.
+
+For the **free static preview**, use [Cloudflare Pages deployment and access guidance](docs/CLOUDFLARE_PREVIEW.md). The earlier [Vercel plan](docs/PROTECTED_PREVIEW.md) is retained for reference but is not the selected free-testing path. No protected deployment has been verified.
 
 See [implementation notes](docs/IMPLEMENTATION.md) for architecture, provisional design tokens, dependency licenses, privacy, checks, limitations, and rollback. Hosted preview access control and owner review are separate gates; this change does not deploy or activate the WordPress launch link.

@@ -5,6 +5,7 @@ import reactHooks from 'eslint-plugin-react-hooks';
 export default defineConfig([
   globalIgnores([
     '.next/**',
+    'out/**',
     'node_modules/**',
     'output/**',
     'playwright-report/**',
