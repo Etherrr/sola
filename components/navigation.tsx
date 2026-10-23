@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 const links = [
   { href: '/portfolio', label: 'Explore demo' },
-  { href: '/track', label: 'Track an address' },
+  { href: '/track', label: 'Address lookup · soon' },
   { href: '/explore', label: 'Explore' },
   { href: '/learn', label: 'Learn DeFi' },
   { href: '/settings', label: 'Settings' },
@@ -16,9 +16,7 @@ export function Navigation() {
     <header className="site-header">
       <div className="header-inner">
         <Link className="brand" href="/" aria-label="Sola Lens home" onClick={() => setOpen(false)}>
-          <span className="brand-symbol" aria-hidden="true">
-            S
-          </span>
+          <span className="brand-symbol" aria-hidden="true" />
           <span>
             SOLA <span className="brand-lens">LENS</span>
             <small>BY SOLA CAPITAL</small>

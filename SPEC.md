@@ -6,7 +6,7 @@ Sola Lens is an independently deployed, **read-only, non-custodial** DeFi learni
 
 ## Surfaces
 - **WordPress (solacapitalpartners.com):** public company pages, markets, insights, research, Projects/Sola Lens status, contact; preserves the separate V2.3→V3.0 public-site roadmap.
-- **Sola Lens (proposed app.solacapitalpartners.com):** onboarding, learning, address-based observation, optional public-account wallet discovery and analytics. Separate code, host, runtime and sessions.
+- **Sola Lens (app.solacapitalpartners.com, protected preview):** onboarding, learning, address-based observation, optional public-account wallet discovery and analytics. Separate code, host, runtime and sessions.
 
 ## Required journeys
 1. **Experienced:** open portal → choose public-address entry or (later) wallet account discovery → validate network/address → show supported assets, debt and protocol positions, timestamps and warnings. No signature required.

@@ -6,10 +6,10 @@ This repository is the shared **engineering handoff and source-code home** for S
 
 ## Two separate products
 
-| Surface                                                    | Role                                                                            | Owner lane           |
-| ---------------------------------------------------------- | ------------------------------------------------------------------------------- | -------------------- |
-| [solacapitalpartners.com](https://solacapitalpartners.com) | Existing WordPress corporate, markets, insights, and projects website           | WordPress agent      |
-| `app.solacapitalpartners.com`                              | Proposed standalone Sola Lens onboarding, learning, and read-only portfolio app | Web-app/GitHub agent |
+| Surface                                                    | Role                                                                                     | Owner lane           |
+| ---------------------------------------------------------- | ---------------------------------------------------------------------------------------- | -------------------- |
+| [solacapitalpartners.com](https://solacapitalpartners.com) | Existing WordPress corporate, markets, insights, and projects website                    | WordPress agent      |
+| `app.solacapitalpartners.com`                              | Protected-preview standalone Sola Lens onboarding, learning, and read-only portfolio app | Web-app/GitHub agent |
 
 The domain remains managed through WordPress. The proposed `app` subdomain may point to a separate host after approval. **Do not change live DNS or enable the WordPress launch link during documentation/setup.**
 

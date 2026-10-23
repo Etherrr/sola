@@ -30,6 +30,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
               Learning preview · Educational information only.
               <br />
               No financial advice, custody, or performance guarantees.
+              <br />
+              Content is informational and is not investment advice. Simulated figures in this
+              preview are not market data.
             </p>
             <span>
               <a href="https://solacapitalpartners.com/" rel="noopener noreferrer">
