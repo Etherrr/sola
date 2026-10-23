@@ -1,3 +1,4 @@
+/* global process, URL, console */
 import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { resolve, sep, extname } from 'node:path';
