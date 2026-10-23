@@ -1,3 +1,4 @@
+/* global console */
 import { stat, readFile } from 'node:fs/promises';
 const routes=['/','/start/','/start/wallets/','/start/security/','/start/networks/','/start/defi/','/connect/','/portfolio/','/portfolio/assets/','/portfolio/positions/','/portfolio/risk/','/explore/','/learn/','/learn/addresses/','/learn/risks/','/settings/'];
 for(const route of routes){
