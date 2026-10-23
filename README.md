@@ -20,7 +20,8 @@ The domain remains managed through WordPress. The proposed `app` subdomain may p
 3. [docs/APP_SCOPE.md](docs/APP_SCOPE.md) — Sola Lens engineering and acceptance criteria.
 4. [docs/WORDPRESS_SCOPE.md](docs/WORDPRESS_SCOPE.md) — public-site responsibilities and launch-link contract.
 5. [docs/OPERATIONS.md](docs/OPERATIONS.md) — branches, reviews, testing, deployment and rollback.
-6. [CHANGELOG.md](CHANGELOG.md) — recorded material changes.
+6. [docs/V0_2_BUILD_SCOPE.md](docs/V0_2_BUILD_SCOPE.md) — **next build plan**: immersive learning + live read-only wallet tracking, phased and Cloudflare-compatible.
+7. [CHANGELOG.md](CHANGELOG.md) — recorded material changes.
 
 ## Proposed delivery sequence
 
