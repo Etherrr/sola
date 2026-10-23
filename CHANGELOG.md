@@ -6,7 +6,7 @@ Document **material, user-visible, architecture, security, or process changes**.
 
 ### v0.2 EDU-02 security decision lab (2026-10-23, stacked on EDU-01 and unmerged PR #3)
 - Added `/learn/security-lab/`: four invented, simulated prompts (a connection request, a request for a recovery phrase, an unlimited spending approval and a look-alike giveaway link). Each choice reveals its consequence and a safer habit in place, with Ethereum-specific wording and ethereum.org sources.
-- Radios and buttons only: no text entry, no wallet access, no network calls and no storage. The answered count lasts for the visit only.
+- Radios and buttons only: no text entry and no wallet access. Scenario answers are not stored or sent anywhere; the answered count lasts for the visit only. (Normal page hosting and the external source links are unchanged.)
 - Linked from the learning library; added to the export route check; unit tests assert no wallet, network, storage or text-input code; an e2e test covers the choice flow; automated accessibility checks cover the route.
 - Cost: none. No new dependencies. Rollback: revert this commit. Not deployed; not merged.
 

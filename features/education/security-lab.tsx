@@ -12,8 +12,8 @@ export function SecurityLab() {
       <p className="mode-marker mode-simulated" role="note">
         <span className="badge">◇ SIMULATED</span>
         <span>
-          Invented prompts for practice. No wallet is used, nothing is typed or stored, and nothing
-          leaves this page.
+          Invented prompts for practice. No wallet is used. Your answers are not typed, saved or
+          sent anywhere.
         </span>
       </p>
       <h2 id="lab-title">Four decisions, with the consequence shown right here</h2>

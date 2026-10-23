@@ -45,7 +45,7 @@ export const SCENARIOS: Scenario[] = [
         label: 'Reject it and use the tracker by pasting a public address instead',
         verdict: 'safer',
         outcome:
-          'Watching a public address needs no connection at all. Pasting an address shares less than connecting a wallet, so it is a lower-risk way to look around.',
+          'Pasting an address means no wallet permission prompt and no wallet connection, so the site cannot ask your wallet for anything. It is not private, though: the tracker still sees the address you paste and can look up its public history.',
       },
       {
         id: 'connect-blind',
@@ -56,7 +56,7 @@ export const SCENARIOS: Scenario[] = [
       },
     ],
     saferAction:
-      'Connect only to sites you chose yourself, read every prompt as new, and prefer watch-only address entry when you only want to look.',
+      'Connect only to sites you chose yourself and read every prompt as new. If you only want to look, entering a public address avoids a wallet prompt, but the site still sees that address.',
   },
   {
     id: 'seed',
