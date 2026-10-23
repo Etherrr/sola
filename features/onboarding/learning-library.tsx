@@ -29,6 +29,12 @@ export function LearningLibrary() {
             </span>
           </Link>
         ))}
+        <Link className="journey-card" href="/learn/network-journey">
+          <span className="eyebrow">INTERACTIVE · SIMULATED</span>
+          <h2>An Ethereum transfer, step by step</h2>
+          <p>Follow one pretend ETH transfer from approval to finality. Pause, step or scrub.</p>
+          <span className="card-link">Try the scene →</span>
+        </Link>
       </div>
     </>
   );

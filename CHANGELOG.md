@@ -4,6 +4,10 @@ Document **material, user-visible, architecture, security, or process changes**.
 
 ## Unreleased
 
+### v0.2 EDU-01 network journey (2026-10-23, stacked on DES-01 and unmerged PR #3)
+- Added `/learn/network-journey`: a fully simulated Ethereum transfer between fictional people with play, pause, step, scrub and replay, a live status line, a worked fee example and the same journey as text.
+- Keyboard and reduced-motion behaviour tested; no wallet, network call or live data. Facts follow ethereum.org transaction, gas and finality pages; fee example is arithmetic only.
+
 ### v0.2 DES-01 and BASE-01 (2026-10-23, stacked on unmerged PR #3)
 - Added `docs/BASE-01_BASELINE.md`: recorded the actual repository and Cloudflare baseline, including failed docs-branch builds and unverified Functions/Access coverage.
 - Added a shared mode marker (SIMULATED, LIVE · CACHED, LIVE · REFRESHED, STALE, INCOMPLETE) with text and symbol; the demo notice now uses it.
