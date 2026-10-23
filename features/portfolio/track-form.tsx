@@ -50,7 +50,11 @@ export function TrackForm() {
           id="track-address"
           ref={input}
           value={value}
-          onChange={(e) => setValue(e.target.value)}
+          onChange={(e) => {
+            setValue(e.target.value);
+            setOutcome(null);
+          }}
+          readOnly={busy}
           autoComplete="off"
           spellCheck={false}
           inputMode="text"
@@ -98,6 +102,7 @@ export function TrackForm() {
         {outcome?.kind === 'error' && (
           <div className="notice">
             <ModeMarker
+              context="lookup result"
               mode="INCOMPLETE"
               note="No balances are shown because the lookup did not complete. This is not an empty wallet."
             />
@@ -107,7 +112,9 @@ export function TrackForm() {
         {ok && (
           <section aria-labelledby="track-result">
             <h2 id="track-result">Result</h2>
+            <p className="fine addr">Result for the address you looked up: {outcome?.address}</p>
             <ModeMarker
+              context="lookup result"
               mode={ok.partial ? 'INCOMPLETE' : ok.simulated ? 'SIMULATED' : 'LIVE_REFRESHED'}
               note={
                 ok.simulated

@@ -60,21 +60,33 @@ export async function verifyAccessJwt(
 const MAX_CERTS_BYTES = 32 * 1024;
 const MAX_KEYS = 10;
 const CERTS_TTL_MS = 60 * 60 * 1000;
-const REFRESH_MIN_MS = 60 * 1000;
+const MAX_STALE_MS = 6 * 60 * 60 * 1000; // past this, fail closed instead of trusting old keys
+const ATTEMPT_COOLDOWN_MS = 60 * 1000; // applies to every attempt, failed or not
 const FETCH_DEADLINE_MS = 3000;
+
+function withDeadline<T>(p: Promise<T>, ms: number, onTimeout: () => void): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  const t = new Promise<never>((_, rej) => {
+    timer = setTimeout(() => {
+      onTimeout();
+      rej(new Error('deadline'));
+    }, ms);
+  });
+  return Promise.race([p, t]).finally(() => clearTimeout(timer));
+}
 
 export function makeKeyFetcher(
   fetchImpl: typeof fetch = fetch,
   now: () => number = Date.now,
+  deadlineMs = FETCH_DEADLINE_MS,
 ): KeyFetcher {
   const cache = new Map<string, { keys: Jwk[]; at: number }>();
-  return async (teamDomain, force = false) => {
-    const hit = cache.get(teamDomain);
-    const t = now();
-    if (hit && (!force ? t - hit.at < CERTS_TTL_MS : t - hit.at < REFRESH_MIN_MS)) return hit.keys;
+  const lastAttempt = new Map<string, number>();
+  const inflight = new Map<string, Promise<Jwk[]>>();
+
+  async function load(teamDomain: string): Promise<Jwk[]> {
     const ctl = new AbortController();
-    const timer = setTimeout(() => ctl.abort(), FETCH_DEADLINE_MS);
-    try {
+    const run = (async () => {
       const r = await fetchImpl(`https://${teamDomain}/cdn-cgi/access/certs`, {
         signal: ctl.signal,
         redirect: 'error',
@@ -93,8 +105,8 @@ export function makeKeyFetcher(
         }
         chunks.push(value);
       }
-      const text = new TextDecoder().decode(concatBytes(chunks));
-      const keys = ((JSON.parse(text) as { keys?: Jwk[] }).keys ?? [])
+      const parsed = JSON.parse(new TextDecoder().decode(concatBytes(chunks))) as { keys?: Jwk[] };
+      return (parsed.keys ?? [])
         .filter(
           (k) =>
             k &&
@@ -104,14 +116,36 @@ export function makeKeyFetcher(
             typeof k.e === 'string',
         )
         .slice(0, MAX_KEYS);
-      cache.set(teamDomain, { keys, at: now() });
-      return keys;
-    } catch (e) {
-      if (hit) return hit.keys; // keep serving the last good keys on a fetch failure
-      throw e;
-    } finally {
-      clearTimeout(timer);
+    })();
+    return withDeadline(run, deadlineMs, () => ctl.abort());
+  }
+
+  return async (teamDomain, force = false) => {
+    const t = now();
+    const hit = cache.get(teamDomain);
+    const fresh = hit && t - hit.at < CERTS_TTL_MS;
+    if (fresh && !force) return hit.keys;
+    const running = inflight.get(teamDomain);
+    if (running) return running;
+    const usableStale = hit && t - hit.at < MAX_STALE_MS ? hit.keys : null;
+    const last = lastAttempt.get(teamDomain);
+    if (last !== undefined && t - last < ATTEMPT_COOLDOWN_MS) {
+      if (usableStale) return usableStale;
+      throw new Error('cooldown');
     }
+    lastAttempt.set(teamDomain, t);
+    const p = load(teamDomain)
+      .then((keys) => {
+        cache.set(teamDomain, { keys, at: now() });
+        return keys;
+      })
+      .catch((e) => {
+        if (usableStale) return usableStale;
+        throw e;
+      })
+      .finally(() => inflight.delete(teamDomain));
+    inflight.set(teamDomain, p);
+    return p;
   };
 }
 

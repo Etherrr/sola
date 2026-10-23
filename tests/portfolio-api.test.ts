@@ -35,8 +35,13 @@ async function signer() {
     e: string;
     kty: string;
   };
-  const sign = async (payload: Record<string, unknown>, kid = 'k1', alg = 'RS256') => {
-    const head = enc({ alg, kid, typ: 'JWT' });
+  const sign = async (
+    payload: Record<string, unknown>,
+    kid = 'k1',
+    alg = 'RS256',
+    extra: Record<string, unknown> = {},
+  ) => {
+    const head = enc({ alg, kid, typ: 'JWT', ...extra });
     const body = enc(payload);
     const sig = await crypto.subtle.sign(
       'RSASSA-PKCS1-v1_5',
@@ -350,25 +355,6 @@ describe('hardening: bounded body and bounded key fetch', () => {
     expect((await handleResolve(chunked, ENV, d)).status).toBe(413);
     expect(pulled).toBeLessThan(64 * 1024);
   });
-  it('caches keys for an hour and refreshes at most once a minute on an unknown kid', async () => {
-    let calls = 0;
-    let t = 1_000_000;
-    const f = makeKeyFetcher(
-      (async () => (
-        calls++,
-        certsRes([{ kid: 'a', kty: 'RSA', n: 'x', e: 'AQAB' }])
-      )) as unknown as typeof fetch,
-      () => t,
-    );
-    await f('t.example');
-    await f('t.example');
-    expect(calls).toBe(1);
-    await f('t.example', true);
-    expect(calls).toBe(1); // forced refresh inside 60 s is served from cache
-    t += 61_000;
-    await f('t.example', true);
-    expect(calls).toBe(2);
-  });
   it('picks up a rotated key on first use of a new kid', async () => {
     const s = await signer();
     const jwt = await s.sign(good(), 'rotated');
@@ -390,38 +376,6 @@ describe('hardening: bounded body and bounded key fetch', () => {
     expect((await handleResolve(post(valid, jwt), ENV, deps([], { fetchKeys: f }))).status).toBe(
       200,
     );
-  });
-  it('rejects oversize certs, caps key count, refuses redirects, enforces a deadline, and keeps last good keys', async () => {
-    const huge = makeKeyFetcher(
-      (async () =>
-        new Response(streamOf([new Uint8Array(40 * 1024).fill(32)]))) as unknown as typeof fetch,
-    );
-    await expect(huge('a.example')).rejects.toThrow();
-    const many = makeKeyFetcher((async () =>
-      certsRes(
-        Array.from({ length: 50 }, (_, i) => ({ kid: 'k' + i, kty: 'RSA', n: 'x', e: 'AQAB' })),
-      )) as unknown as typeof fetch);
-    expect((await many('a.example')).length).toBe(10);
-    let init: RequestInit | undefined;
-    const spy = makeKeyFetcher(
-      (async (_u: string, i: RequestInit) => ((init = i), certsRes([]))) as unknown as typeof fetch,
-    );
-    await spy('a.example');
-    expect(init?.redirect).toBe('error');
-    expect(init?.signal).toBeInstanceOf(AbortSignal);
-    let t = 0;
-    let fail = false;
-    const keep = makeKeyFetcher(
-      (async () => {
-        if (fail) throw new Error('down');
-        return certsRes([{ kid: 'a', kty: 'RSA', n: 'x', e: 'AQAB' }]);
-      }) as unknown as typeof fetch,
-      () => t,
-    );
-    await keep('a.example');
-    fail = true;
-    t += 2 * 60 * 60 * 1000;
-    expect((await keep('a.example')).length).toBe(1);
   });
 });
 
@@ -455,7 +409,7 @@ describe('hardening: media type, stream errors, token shape', () => {
       duplex: 'half',
     } as RequestInit);
     const r = await handleResolve(req, ENV, deps(s.keys));
-    expect(r.status).toBe(400);
+    expect(r.status).toBe(408);
     expect(r.headers.get('cache-control')).toBe('no-store');
     expect((await r.json()).requestId).toBe('req-1');
   });
@@ -463,5 +417,164 @@ describe('hardening: media type, stream errors, token shape', () => {
     const s = await signer();
     const big = await s.sign(good({ pad: 'x'.repeat(9000) }));
     expect((await handleResolve(post(valid, big), ENV, deps(s.keys))).status).toBe(401);
+  });
+});
+
+describe('key fetcher limits', () => {
+  const key = { kid: 'a', kty: 'RSA', n: 'x', e: 'AQAB' };
+  const H = 60 * 60 * 1000;
+  it('caches for an hour and throttles forced refreshes, including after failures', async () => {
+    let calls = 0;
+    let t = 1_000_000;
+    let fail = false;
+    const f = makeKeyFetcher(
+      (async () => {
+        calls++;
+        if (fail) throw new Error('down');
+        return certsRes([key]);
+      }) as unknown as typeof fetch,
+      () => t,
+    );
+    await f('t.example');
+    await f('t.example');
+    expect(calls).toBe(1);
+    await f('t.example', true);
+    expect(calls).toBe(1);
+    t += 61_000;
+    fail = true;
+    await f('t.example', true);
+    await f('t.example', true);
+    await f('t.example', true);
+    expect(calls).toBe(2); // failed attempt still starts the cooldown
+    t += 61_000;
+    await f('t.example', true);
+    expect(calls).toBe(3);
+  });
+  it('shares one in-flight fetch between concurrent callers', async () => {
+    let calls = 0;
+    const f = makeKeyFetcher((async () => {
+      calls++;
+      await new Promise((r) => setTimeout(r, 20));
+      return certsRes([key]);
+    }) as unknown as typeof fetch);
+    await Promise.all([f('t.example'), f('t.example'), f('t.example', true)]);
+    expect(calls).toBe(1);
+  });
+  it('serves stale keys on failure only up to 6 h, then fails closed', async () => {
+    let t = 0;
+    let fail = false;
+    const f = makeKeyFetcher(
+      (async () => {
+        if (fail) throw new Error('down');
+        return certsRes([key]);
+      }) as unknown as typeof fetch,
+      () => t,
+    );
+    await f('t.example');
+    fail = true;
+    t += 2 * H;
+    expect((await f('t.example')).length).toBe(1);
+    t += 5 * H;
+    await expect(f('t.example')).rejects.toThrow();
+  });
+  it('rejects oversize certs, caps keys at 10, refuses redirects', async () => {
+    await expect(
+      makeKeyFetcher(
+        (async () =>
+          new Response(streamOf([new Uint8Array(40 * 1024).fill(32)]))) as unknown as typeof fetch,
+      )('a.example'),
+    ).rejects.toThrow();
+    const many = makeKeyFetcher((async () =>
+      certsRes(
+        Array.from({ length: 50 }, (_, i) => ({ ...key, kid: 'k' + i })),
+      )) as unknown as typeof fetch);
+    expect((await many('a.example')).length).toBe(10);
+    let init: RequestInit | undefined;
+    await makeKeyFetcher(
+      (async (_u: string, i: RequestInit) => ((init = i), certsRes([]))) as unknown as typeof fetch,
+    )('a.example');
+    expect(init?.redirect).toBe('error');
+  });
+  it('times out a hung fetch and a stalled body', async () => {
+    const hung = makeKeyFetcher(
+      (() => new Promise(() => {})) as unknown as typeof fetch,
+      Date.now,
+      50,
+    );
+    await expect(hung('a.example')).rejects.toThrow('deadline');
+    const stalled = makeKeyFetcher(
+      (async () => new Response(new ReadableStream({ start() {} }))) as unknown as typeof fetch,
+      Date.now,
+      50,
+    );
+    await expect(stalled('b.example')).rejects.toThrow('deadline');
+  });
+  it('a hung key fetch makes the endpoint answer 401, not hang', async () => {
+    const s = await signer();
+    const jwt = await s.sign(good());
+    const f = makeKeyFetcher(
+      (() => new Promise(() => {})) as unknown as typeof fetch,
+      Date.now,
+      50,
+    );
+    expect((await handleResolve(post(valid, jwt), ENV, deps([], { fetchKeys: f }))).status).toBe(
+      401,
+    );
+  });
+  it('times out a stalled request body', async () => {
+    const s = await signer();
+    const jwt = await s.sign(good());
+    const body = new ReadableStream<Uint8Array>({ start() {} });
+    const req = new Request('https://app.example/api/v1/portfolio/resolve', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'cf-access-jwt-assertion': jwt },
+      body,
+      duplex: 'half',
+    } as RequestInit);
+    const r = await handleResolve(req, ENV, deps(s.keys, { bodyDeadlineMs: 50 }));
+    expect(r.status).toBe(408);
+  });
+  it('rejects a really signed token carrying a crit header', async () => {
+    const s = await signer();
+    const jwt = await s.sign(good(), 'k1', 'RS256', { crit: ['exp'] });
+    expect((await handleResolve(post(valid, jwt), ENV, deps(s.keys))).status).toBe(401);
+    expect((await handleResolve(post(valid, await s.sign(good())), ENV, deps(s.keys))).status).toBe(
+      200,
+    );
+  });
+});
+
+import { parseApiSuccess } from '../features/portfolio/api-client';
+
+describe('browser response validation', () => {
+  it('accepts the real server answer and rejects malformed, partial and mislabeled ones', async () => {
+    const s = await signer();
+    const r = await handleResolve(post(valid, await s.sign(good())), ENV, deps(s.keys));
+    const body = await r.json();
+    expect(parseApiSuccess(body)).not.toBeNull();
+    const bad: unknown[] = [
+      null,
+      '<html>Access login</html>',
+      { wallets: [] },
+      { ...body, wallets: [] },
+      { ...body, simulated: undefined },
+      { ...body, mode: undefined },
+      { ...body, mode: 'mock', simulated: false },
+      { ...body, mode: 'live', simulated: true },
+      { ...body, totals: undefined },
+      { ...body, warnings: 'x' },
+      { ...body, schemaVersion: 2 },
+      { ...body, wallets: [{ ...body.wallets[0], assets: [{ amount: '1' }] }] },
+      {
+        ...body,
+        wallets: [
+          {
+            ...body.wallets[0],
+            assets: [{ ...(body.wallets[0].assets[0] ?? {}), amount: '1e999' }],
+          },
+        ],
+      },
+    ];
+    for (const b of bad) expect(parseApiSuccess(b)).toBeNull();
   });
 });

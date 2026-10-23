@@ -14,6 +14,7 @@ export type Deps = {
   now: () => Date;
   id: () => string;
   timeoutMs: number;
+  bodyDeadlineMs: number;
 };
 
 export const defaultDeps = (): Deps => ({
@@ -22,6 +23,7 @@ export const defaultDeps = (): Deps => ({
   now: () => new Date(),
   id: () => crypto.randomUUID(),
   timeoutMs: 8000,
+  bodyDeadlineMs: 3000,
 });
 
 const HEADERS = {
@@ -40,9 +42,31 @@ const err = (
 ) => reply(status, { error: { code, message }, requestId }, extra);
 
 /** Reads at most `limit` bytes of the body; returns null as soon as it is exceeded (never buffers more). */
-async function readBounded(req: Request, limit: number): Promise<string | null> {
+async function readBounded(
+  req: Request,
+  limit: number,
+  deadlineMs: number,
+): Promise<string | null> {
   if (!req.body) return '';
   const reader = req.body.getReader();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const expired = new Promise<never>((_, rej) => {
+    timer = setTimeout(() => {
+      void reader.cancel().catch(() => {});
+      rej(new Error('body deadline'));
+    }, deadlineMs);
+  });
+  try {
+    return await Promise.race([readAll(reader, limit), expired]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function readAll(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  limit: number,
+): Promise<string | null> {
   const chunks: Uint8Array[] = [];
   let total = 0;
   for (;;) {
@@ -93,9 +117,9 @@ export async function handleResolve(
     return err(413, 'body_too_large', 'Request body is too large.', requestId);
   let text: string | null;
   try {
-    text = await readBounded(req, MAX_BODY_BYTES);
+    text = await readBounded(req, MAX_BODY_BYTES, d.bodyDeadlineMs);
   } catch {
-    return err(400, 'bad_body', 'Could not read the request body.', requestId);
+    return err(408, 'body_timeout_or_error', 'Could not read the request body in time.', requestId);
   }
   if (text === null) return err(413, 'body_too_large', 'Request body is too large.', requestId);
   const parsed = parseResolveRequest(text);

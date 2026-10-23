@@ -26,7 +26,42 @@ export type ApiSuccess = {
   warnings: string[];
 };
 export type LookupOutcome =
-  { kind: 'ok'; data: ApiSuccess } | { kind: 'error'; message: string; retryable: boolean };
+  | { kind: 'ok'; data: ApiSuccess; address: string }
+  | { kind: 'error'; message: string; retryable: boolean; address: string };
+
+const DEC = /^\d+(\.\d+)?$/;
+const isStr = (v: unknown): v is string => typeof v === 'string';
+const isDec = (v: unknown) => isStr(v) && DEC.test(v);
+const isDecOrNull = (v: unknown) => v === null || isDec(v);
+const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null;
+const strArr = (v: unknown): v is string[] => Array.isArray(v) && v.every(isStr);
+
+/** Strict runtime check of the whole response. Anything unexpected is rejected, never guessed. */
+export function parseApiSuccess(raw: unknown): ApiSuccess | null {
+  if (!isObj(raw)) return null;
+  if (raw.schemaVersion !== 1) return null;
+  if (raw.mode !== 'mock' && raw.mode !== 'live') return null;
+  if (typeof raw.simulated !== 'boolean') return null;
+  if (raw.mode === 'mock' && raw.simulated !== true) return null;
+  if (raw.mode === 'live' && raw.simulated !== false) return null;
+  if (!isStr(raw.provider) || !isStr(raw.generatedAt) || !isStr(raw.observedAt)) return null;
+  if (typeof raw.partial !== 'boolean' || !strArr(raw.warnings)) return null;
+  const t = raw.totals;
+  if (!isObj(t) || !isDecOrNull(t.recognizedPricedSubtotalUsd)) return null;
+  if (!Number.isInteger(t.unpricedAssetCount) || !isStr(t.note)) return null;
+  if (!Array.isArray(raw.wallets) || raw.wallets.length < 1 || raw.wallets.length > 5) return null;
+  for (const w of raw.wallets) {
+    if (!isObj(w) || !isStr(w.address) || typeof w.partial !== 'boolean' || !strArr(w.warnings))
+      return null;
+    if (!Array.isArray(w.assets) || w.assets.length > 200) return null;
+    for (const a of w.assets) {
+      if (!isObj(a) || !isStr(a.assetId) || !isStr(a.symbol) || !Number.isInteger(a.decimals))
+        return null;
+      if (!isDec(a.amount) || !isDecOrNull(a.price) || !isDecOrNull(a.value)) return null;
+    }
+  }
+  return raw as unknown as ApiSuccess;
+}
 
 const MESSAGES: Record<number, [string, boolean]> = {
   400: ['That address could not be checked. Check it and try again.', false],
@@ -56,21 +91,54 @@ export async function lookupAddress(address: string): Promise<LookupOutcome> {
       signal: ctl.signal,
     });
     if (res.ok) {
-      const data = (await res.json()) as ApiSuccess;
-      if (!Array.isArray(data.wallets))
-        return { kind: 'error', message: MESSAGES[502]![0], retryable: true };
-      return { kind: 'ok', data };
+      let data: ApiSuccess | null = null;
+      try {
+        data = parseApiSuccess(await res.json());
+      } catch {
+        data = null; // HTML from an Access redirect or a malformed body
+      }
+      if (data && data.wallets[0]!.address.toLowerCase() !== address.toLowerCase()) data = null;
+      if (!data)
+        return {
+          kind: 'error',
+          message:
+            'The answer was not in the expected form (your Access session may have expired; reload and sign in). Nothing was shown.',
+          retryable: true,
+          address,
+        };
+      return { kind: 'ok', data, address };
+    }
+    if (res.status === 503) {
+      let code = '';
+      try {
+        code = String(
+          ((await res.json()) as { error?: { code?: string }; code?: string }).error?.code ?? '',
+        );
+      } catch {
+        /* ignore */
+      }
+      if (code === 'disabled' || code === 'not_configured')
+        return {
+          kind: 'error',
+          message:
+            code === 'disabled'
+              ? 'The simulated lookup is switched off on this deployment. This is expected, not a fault.'
+              : 'The lookup is not configured on this deployment yet.',
+          retryable: false,
+          address,
+        };
     }
     const [message, retryable] = MESSAGES[res.status] ?? [
       'The lookup failed. Nothing was substituted.',
       true,
     ];
-    return { kind: 'error', message, retryable };
+    return { kind: 'error', message, retryable, address };
   } catch {
     return {
       kind: 'error',
       message: 'The lookup service could not be reached. Nothing was substituted.',
       retryable: true,
+      address,
     };
   } finally {
     clearTimeout(timer);
