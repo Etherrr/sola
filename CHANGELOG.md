@@ -4,6 +4,11 @@ Document **material, user-visible, architecture, security, or process changes**.
 
 ## Unreleased
 
+### v0.1.1 — protected preview preparation (2026-10-23)
+- Added a Vercel hosting protection, private QA, access verification and rollback runbook.
+- No hosted deployment, app functionality, wallet integrations, DNS or WordPress configuration has been changed.
+
+
 ### 2026-10-23 — Sola Lens v0.1 preview
 
 - Added a pinned Next.js App Router, React, and TypeScript scaffold; responsive Sola navy/gold/violet welcome screen, navigation, and all APP-01 routes.
