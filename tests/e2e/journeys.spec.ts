@@ -58,7 +58,7 @@ test('beginner, experienced and demo entry points work', async ({ page }) => {
   await page.getByRole('link', { name: 'Open simulated portfolio' }).click();
   await expect(page.getByText('$11,000.00', { exact: true })).toBeVisible();
   await expect(page.getByRole('cell', { name: /Unknown.*Price unavailable/ })).toBeVisible();
-  await expect(page.locator('.simulation-notice')).toContainText('SIMULATED');
+  await expect(page.locator('.mode-marker')).toContainText('SIMULATED');
 });
 test('security quiz gives feedback and optional local progress can be cleared', async ({
   page,
@@ -119,7 +119,7 @@ test('keyboard navigation, mobile menu, reduced motion, and missing page', async
     await page.keyboard.press('Enter');
     await expect(menu).toHaveAttribute('aria-expanded', 'true');
     await page.keyboard.press('Tab');
-    await expect(page.getByRole('link', { name: 'Portfolio', exact: true })).toBeFocused();
+    await expect(page.getByRole('link', { name: 'Explore demo', exact: true })).toBeFocused();
     await page.keyboard.press('Escape');
     await expect(menu).toBeFocused();
     await expect(menu).toHaveAttribute('aria-expanded', 'false');

@@ -31,7 +31,13 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
               <br />
               No financial advice, custody, or performance guarantees.
             </p>
-            <Link href="/settings">Privacy & local data</Link>
+            <span>
+              <a href="https://solacapitalpartners.com/" rel="noopener noreferrer">
+                Back to solacapitalpartners.com
+              </a>
+              {' · '}
+              <Link href="/settings">Privacy & local data</Link>
+            </span>
           </footer>
         </ProgressProvider>
       </body>

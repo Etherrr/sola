@@ -1,6 +1,6 @@
 /* global console */
 import { stat, readFile } from 'node:fs/promises';
-const routes=['/','/start/','/start/wallets/','/start/security/','/start/networks/','/start/defi/','/connect/','/portfolio/','/portfolio/assets/','/portfolio/positions/','/portfolio/risk/','/explore/','/learn/','/learn/addresses/','/learn/risks/','/settings/'];
+const routes=['/','/start/','/start/wallets/','/start/security/','/start/networks/','/start/defi/','/connect/','/portfolio/','/portfolio/assets/','/portfolio/positions/','/portfolio/risk/','/explore/','/track/','/learn/','/learn/addresses/','/learn/risks/','/settings/'];
 for(const route of routes){
   const path='out'+route+'index.html';
   const file=await readFile(path,'utf8');

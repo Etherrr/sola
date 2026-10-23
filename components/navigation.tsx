@@ -3,9 +3,10 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 const links = [
-  { href: '/portfolio', label: 'Portfolio' },
+  { href: '/portfolio', label: 'Explore demo' },
+  { href: '/track', label: 'Track an address' },
   { href: '/explore', label: 'Explore' },
-  { href: '/learn', label: 'Learn' },
+  { href: '/learn', label: 'Learn DeFi' },
   { href: '/settings', label: 'Settings' },
 ];
 export function Navigation() {
@@ -55,6 +56,13 @@ export function Navigation() {
               {link.label}
             </Link>
           ))}
+          <a
+            className="nav-return"
+            href="https://solacapitalpartners.com/"
+            rel="noopener noreferrer"
+          >
+            ← Sola Capital Partners
+          </a>
         </nav>
         <span className="preview-tag">v0.1 · PREVIEW</span>
       </div>

@@ -1,4 +1,12 @@
 :root {
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 16px;
+  --space-4: 24px;
+  --space-5: 40px;
+  --motion-fast: 150ms;
+  --motion-slow: 600ms;
+  --focus-ring: 2px solid var(--gold);
   color-scheme: dark;
   --navy: #0b1323;
   --navy-deep: #080f1c;
@@ -600,7 +608,8 @@ small {
   border-radius: 5px;
   margin: 22px 0;
 }
-.simulation-notice {
+.simulation-notice,
+.mode-marker {
   display: flex;
   gap: 14px;
   align-items: center;
@@ -611,8 +620,27 @@ small {
   font-size: 0.78rem;
   color: var(--gold-light);
 }
-.simulation-notice .badge {
+.simulation-notice .badge,
+.mode-marker .badge {
   white-space: nowrap;
+}
+.mode-marker {
+  margin-bottom: 20px;
+}
+.mode-live-cached,
+.mode-live-refreshed {
+  border-color: #3f6b5a;
+  background: #14231f;
+  color: var(--green);
+}
+.mode-stale,
+.mode-incomplete {
+  border-color: #7a4a40;
+  background: #261a19;
+  color: var(--danger);
+}
+.mode-marker:focus-within {
+  outline: 2px solid var(--gold);
 }
 .tabs {
   display: flex;
@@ -1344,4 +1372,11 @@ code {
     gap: 10px;
     font-size: 1.2rem;
   }
+}
+
+.nav .nav-return {
+  opacity: 0.85;
+  border: 1px solid rgba(212, 175, 55, 0.45);
+  border-radius: 999px;
+  padding: 0.35rem 0.8rem;
 }
