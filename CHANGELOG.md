@@ -4,6 +4,12 @@ Document **material, user-visible, architecture, security, or process changes**.
 
 ## Unreleased
 
+### v0.2 EDU-02 security decision lab (2026-10-23, stacked on EDU-01 and unmerged PR #3)
+- Added `/learn/security-lab/`: four invented, simulated prompts (a connection request, a request for a recovery phrase, an unlimited spending approval and a look-alike giveaway link). Each choice reveals its consequence and a safer habit in place, with Ethereum-specific wording and ethereum.org sources.
+- Radios and buttons only: no text entry, no wallet access, no network calls and no storage. The answered count lasts for the visit only.
+- Linked from the learning library; added to the export route check; unit tests assert no wallet, network, storage or text-input code; an e2e test covers the choice flow; automated accessibility checks cover the route.
+- Cost: none. No new dependencies. Rollback: revert this commit. Not deployed; not merged.
+
 ### V3.1 app consistency (2026-10-23, stacked on EDU-01 and unmerged PR #3)
 - Added the corporate gold and purple monogram as the favicon, Apple touch icon and header brand mark (replacing the CSS "S"). Assets are the images already published on solacapitalpartners.com.
 - Renamed the nav item and page title for `/track` to "Address lookup" with a "soon" marker, because lookup is off in this preview.
