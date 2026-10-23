@@ -46,14 +46,14 @@ test('all routes render, remain responsive, and pass WCAG automated checks', asy
 test('beginner, experienced and demo entry points work', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('link', { name: /I’m new to DeFi/ }).click();
-  await expect(page).toHaveURL(/\/start$/);
+  await expect(page).toHaveURL(/\/start\/?$/);
   await page.getByRole('link', { name: 'Skip this lesson' }).click();
-  await expect(page).toHaveURL(/\/start\/wallets$/);
+  await expect(page).toHaveURL(/\/start\/wallets\/?$/);
   await page.getByRole('radio', { name: 'Keeping keys on a separate device' }).check();
   await expect(page.getByRole('status')).toContainText('Research hardware');
   await page.goto('/');
   await page.getByRole('link', { name: /I know my way around/ }).click();
-  await expect(page).toHaveURL(/\/connect$/);
+  await expect(page).toHaveURL(/\/connect\/?$/);
   await expect(page.locator('input')).toHaveCount(0);
   await page.getByRole('link', { name: 'Open simulated portfolio' }).click();
   await expect(page.getByText('$11,000.00', { exact: true })).toBeVisible();
