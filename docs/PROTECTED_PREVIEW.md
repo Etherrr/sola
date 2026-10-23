@@ -1,6 +1,6 @@
 # Sola Lens v0.1.1 — Protected Live Preview
 
-**State:** deployment preparation only. An actual protected deployment requires the owner's Vercel account connection and verified access settings.
+**State:** superseded hosting option; see [Cloudflare Free Preview](CLOUDFLARE_PREVIEW.md) for the selected zero-subscription testing approach. No deployment completed. An actual protected deployment requires the owner's Vercel account connection and verified access settings.
 
 ## Scope and boundaries
 - Deploy the existing **simulated v0.1** app from the GitHub `main` branch to an isolated HTTPS preview.
