@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+
 export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: true,
@@ -8,6 +9,7 @@ export default defineConfig({
     { name: 'mobile', use: { ...devices['iPhone 13'], defaultBrowserType: 'chromium' } },
   ],
   webServer: {
+    // Serve the actual static export, not a Next.js production server.
     command: 'npm run start',
     url: 'http://127.0.0.1:3000',
     reuseExistingServer: !process.env.CI,
