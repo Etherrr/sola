@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
+import { ModeMarker } from './mode-marker';
 export function PageIntro({
   eyebrow,
   title,
@@ -33,10 +34,5 @@ export function ActionLink({
   );
 }
 export function SimulatedNotice() {
-  return (
-    <aside className="simulation-notice">
-      <span className="badge">SIMULATED</span>
-      <span>Educational sample only. No wallet connected. No live data or transactions.</span>
-    </aside>
-  );
+  return <ModeMarker mode="SIMULATED" />;
 }

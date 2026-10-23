@@ -3,9 +3,10 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 const links = [
-  { href: '/portfolio', label: 'Portfolio' },
+  { href: '/portfolio', label: 'Explore demo' },
+  { href: '/track', label: 'Track an address' },
   { href: '/explore', label: 'Explore' },
-  { href: '/learn', label: 'Learn' },
+  { href: '/learn', label: 'Learn DeFi' },
   { href: '/settings', label: 'Settings' },
 ];
 export function Navigation() {
