@@ -4,6 +4,8 @@ Document **material, user-visible, architecture, security, or process changes**.
 
 ## Unreleased
 
+- DATA-02 hardening and slice 2: bounded request body (Content-Length precheck plus streamed 2 KB cap, stream errors return contract JSON), exact JSON media type, Access key fetch with 3 s deadline, 32 KB cap, 10-key cap, 1 h cache, one rate-limited refresh on unknown kid, no redirects, last-good keys on failure, 8 KB JWT cap, `crit` rejected. `/track` now has a SIMULATED fixture lookup form (same-origin POST only; no provider call). Still fixture-only, default off, no rate limiter.
+
 ### v0.2 EDU-02 security decision lab (2026-10-23, stacked on EDU-01 and unmerged PR #3)
 - Added `/learn/security-lab/`: four invented, simulated prompts (a connection request, a request for a recovery phrase, an unlimited spending approval and a look-alike giveaway link). Each choice reveals its consequence and a safer habit in place, with Ethereum-specific wording and ethereum.org sources.
 - Radios and buttons only: no text entry and no wallet access. Scenario answers are not stored or sent anywhere; the answered count lasts for the visit only. (Normal page hosting and the external source links are unchanged.)

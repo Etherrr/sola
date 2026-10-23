@@ -306,3 +306,162 @@ describe('endpoint security and behavior', () => {
     expect(n.networks).toEqual([{ id: 'ethereum', chainId: 1, status: 'mock' }]);
   });
 });
+
+import { makeKeyFetcher } from '../server/portfolio/access';
+
+const streamOf = (parts: Uint8Array[]) =>
+  new ReadableStream<Uint8Array>({
+    start(c) {
+      parts.forEach((p) => c.enqueue(p));
+      c.close();
+    },
+  });
+const certsRes = (keys: unknown[]) => new Response(JSON.stringify({ keys }));
+
+describe('hardening: bounded body and bounded key fetch', () => {
+  it('rejects an oversize body by header and by streaming without buffering it all', async () => {
+    const s = await signer();
+    const jwt = await s.sign(good());
+    const d = deps(s.keys);
+    const big = new Request('https://app.example/api/v1/portfolio/resolve', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'cf-access-jwt-assertion': jwt,
+        'content-length': '999999',
+      },
+      body: '{}',
+    });
+    expect((await handleResolve(big, ENV, d)).status).toBe(413);
+    let pulled = 0;
+    const body = new ReadableStream<Uint8Array>({
+      pull(c) {
+        pulled += 1024;
+        c.enqueue(new Uint8Array(1024).fill(97));
+        if (pulled > 1024 * 1024) c.close();
+      },
+    });
+    const chunked = new Request('https://app.example/api/v1/portfolio/resolve', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'cf-access-jwt-assertion': jwt },
+      body,
+      duplex: 'half',
+    } as RequestInit);
+    expect((await handleResolve(chunked, ENV, d)).status).toBe(413);
+    expect(pulled).toBeLessThan(64 * 1024);
+  });
+  it('caches keys for an hour and refreshes at most once a minute on an unknown kid', async () => {
+    let calls = 0;
+    let t = 1_000_000;
+    const f = makeKeyFetcher(
+      (async () => (
+        calls++,
+        certsRes([{ kid: 'a', kty: 'RSA', n: 'x', e: 'AQAB' }])
+      )) as unknown as typeof fetch,
+      () => t,
+    );
+    await f('t.example');
+    await f('t.example');
+    expect(calls).toBe(1);
+    await f('t.example', true);
+    expect(calls).toBe(1); // forced refresh inside 60 s is served from cache
+    t += 61_000;
+    await f('t.example', true);
+    expect(calls).toBe(2);
+  });
+  it('picks up a rotated key on first use of a new kid', async () => {
+    const s = await signer();
+    const jwt = await s.sign(good(), 'rotated');
+    let t = 5_000_000;
+    let serveNew = false;
+    const f = makeKeyFetcher(
+      (async () =>
+        certsRes(
+          serveNew
+            ? [{ ...s.keys[0]!, kid: 'rotated' }]
+            : [{ kid: 'old', kty: 'RSA', n: 'x', e: 'AQAB' }],
+        )) as unknown as typeof fetch,
+      () => t,
+    );
+    await f(TEAM);
+    serveNew = true;
+    t += 120_000;
+
+    expect((await handleResolve(post(valid, jwt), ENV, deps([], { fetchKeys: f }))).status).toBe(
+      200,
+    );
+  });
+  it('rejects oversize certs, caps key count, refuses redirects, enforces a deadline, and keeps last good keys', async () => {
+    const huge = makeKeyFetcher(
+      (async () =>
+        new Response(streamOf([new Uint8Array(40 * 1024).fill(32)]))) as unknown as typeof fetch,
+    );
+    await expect(huge('a.example')).rejects.toThrow();
+    const many = makeKeyFetcher((async () =>
+      certsRes(
+        Array.from({ length: 50 }, (_, i) => ({ kid: 'k' + i, kty: 'RSA', n: 'x', e: 'AQAB' })),
+      )) as unknown as typeof fetch);
+    expect((await many('a.example')).length).toBe(10);
+    let init: RequestInit | undefined;
+    const spy = makeKeyFetcher(
+      (async (_u: string, i: RequestInit) => ((init = i), certsRes([]))) as unknown as typeof fetch,
+    );
+    await spy('a.example');
+    expect(init?.redirect).toBe('error');
+    expect(init?.signal).toBeInstanceOf(AbortSignal);
+    let t = 0;
+    let fail = false;
+    const keep = makeKeyFetcher(
+      (async () => {
+        if (fail) throw new Error('down');
+        return certsRes([{ kid: 'a', kty: 'RSA', n: 'x', e: 'AQAB' }]);
+      }) as unknown as typeof fetch,
+      () => t,
+    );
+    await keep('a.example');
+    fail = true;
+    t += 2 * 60 * 60 * 1000;
+    expect((await keep('a.example')).length).toBe(1);
+  });
+});
+
+describe('hardening: media type, stream errors, token shape', () => {
+  it('requires the exact JSON media type', async () => {
+    const s = await signer();
+    const jwt = await s.sign(good());
+    for (const ct of ['application/jsonBAD', 'text/plain']) {
+      const r = await handleResolve(post(valid, jwt, { 'content-type': ct }), ENV, deps(s.keys));
+      expect(r.status).toBe(415);
+    }
+    const ok = await handleResolve(
+      post(valid, jwt, { 'content-type': 'application/json; charset=utf-8' }),
+      ENV,
+      deps(s.keys),
+    );
+    expect(ok.status).toBe(200);
+  });
+  it('turns a body stream error into a contract JSON no-store response', async () => {
+    const s = await signer();
+    const jwt = await s.sign(good());
+    const body = new ReadableStream<Uint8Array>({
+      pull() {
+        throw new Error('boom');
+      },
+    });
+    const req = new Request('https://app.example/api/v1/portfolio/resolve', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'cf-access-jwt-assertion': jwt },
+      body,
+      duplex: 'half',
+    } as RequestInit);
+    const r = await handleResolve(req, ENV, deps(s.keys));
+    expect(r.status).toBe(400);
+    expect(r.headers.get('cache-control')).toBe('no-store');
+    expect((await r.json()).requestId).toBe('req-1');
+  });
+  it('rejects crit headers and oversize tokens', async () => {
+    const s = await signer();
+    const big = await s.sign(good({ pad: 'x'.repeat(9000) }));
+    expect((await handleResolve(post(valid, big), ENV, deps(s.keys))).status).toBe(401);
+  });
+});

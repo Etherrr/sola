@@ -36,11 +36,15 @@ describe('learning and safety boundaries', () => {
         entry.isDirectory() ? files(join(dir, entry.name)) : [join(dir, entry.name)],
       );
     }
+    // The single approved network call is a same-origin POST to our own read-only API.
+    const API_CLIENT = join('features', 'portfolio', 'api-client.ts');
     const source = ['app', 'components', 'features', 'lib']
       .flatMap(files)
-      .filter((file) => /\.(ts|tsx)$/.test(file))
+      .filter((file) => /\.(ts|tsx)$/.test(file) && file !== API_CLIENT)
       .map((file) => readFileSync(file, 'utf8'))
       .join('\n');
+    expect(readFileSync(API_CLIENT, 'utf8').match(/fetch\s*\(/g)).toHaveLength(1);
+    expect(readFileSync(API_CLIENT, 'utf8')).toMatch(/fetch\('\/api\/v1\/portfolio\/resolve'/);
     expect(source).not.toMatch(
       /window\.(ethereum|solana)|eth_requestAccounts|signTransaction|signMessage|sendTransaction|fetch\s*\(/,
     );

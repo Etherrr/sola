@@ -1,4 +1,5 @@
-import { parseResolveRequest, type ResolveResponse } from './contract';
+import { concatBytes } from './bytes';
+import { parseResolveRequest, MAX_BODY_BYTES, type ResolveResponse } from './contract';
 import { verifyAccessJwt, fetchAccessKeys, type KeyFetcher } from './access';
 import { mockProvider, type PortfolioProvider } from './provider';
 
@@ -38,6 +39,25 @@ const err = (
   extra: Record<string, string> = {},
 ) => reply(status, { error: { code, message }, requestId }, extra);
 
+/** Reads at most `limit` bytes of the body; returns null as soon as it is exceeded (never buffers more). */
+async function readBounded(req: Request, limit: number): Promise<string | null> {
+  if (!req.body) return '';
+  const reader = req.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.length;
+    if (total > limit) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(value);
+  }
+  return new TextDecoder().decode(concatBytes(chunks));
+}
+
 /** Gate every request: kill switch, then Access JWT (never trust an email header). Fails closed. */
 async function gate(req: Request, env: Env, d: Deps, requestId: string): Promise<Response | null> {
   if (env.PORTFOLIO_API_ENABLED !== 'true')
@@ -63,12 +83,22 @@ export async function handleResolve(
     return err(405, 'method_not_allowed', 'Use POST.', requestId, { allow: 'POST' });
   const blocked = await gate(req, env, d, requestId);
   if (blocked) return blocked;
-  if (!(req.headers.get('content-type') ?? '').toLowerCase().startsWith('application/json'))
+  if (!/^application\/json\s*(;.*)?$/i.test(req.headers.get('content-type') ?? ''))
     return err(415, 'unsupported_media_type', 'Send application/json.', requestId);
   const origin = req.headers.get('origin');
   if (origin && origin !== new URL(req.url).origin)
     return err(403, 'bad_origin', 'Cross-origin requests are not allowed.', requestId);
-  const parsed = parseResolveRequest(await req.text());
+  const declared = Number(req.headers.get('content-length'));
+  if (Number.isFinite(declared) && declared > MAX_BODY_BYTES)
+    return err(413, 'body_too_large', 'Request body is too large.', requestId);
+  let text: string | null;
+  try {
+    text = await readBounded(req, MAX_BODY_BYTES);
+  } catch {
+    return err(400, 'bad_body', 'Could not read the request body.', requestId);
+  }
+  if (text === null) return err(413, 'body_too_large', 'Request body is too large.', requestId);
+  const parsed = parseResolveRequest(text);
   if (!parsed.ok) return err(parsed.status, parsed.code, parsed.message, requestId);
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), d.timeoutMs);

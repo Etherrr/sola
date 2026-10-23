@@ -1,7 +1,8 @@
+import { concatBytes } from './bytes';
 // Cloudflare Access JWT verification (RS256) using WebCrypto. Fails closed.
 export type AccessConfig = { teamDomain: string; aud: string };
 export type Jwk = { kid: string; kty: string; n: string; e: string; alg?: string };
-export type KeyFetcher = (teamDomain: string) => Promise<Jwk[]>;
+export type KeyFetcher = (teamDomain: string, forceRefresh?: boolean) => Promise<Jwk[]>;
 
 const b64u = (s: string) =>
   Uint8Array.from(
@@ -23,20 +24,20 @@ export async function verifyAccessJwt(
   nowSec = Math.floor(Date.now() / 1000),
 ): Promise<boolean> {
   try {
-    if (!token) return false;
+    if (!token || token.length > 8192) return false;
     const parts = token.split('.');
     if (parts.length !== 3) return false;
     const header = json(parts[0]!);
     const payload = json(parts[1]!);
-    if (header.alg !== 'RS256' || typeof header.kid !== 'string') return false;
+    if (header.alg !== 'RS256' || typeof header.kid !== 'string' || 'crit' in header) return false;
     if (payload.iss !== `https://${cfg.teamDomain}`) return false;
     const aud = payload.aud;
     if (!(Array.isArray(aud) ? aud.includes(cfg.aud) : aud === cfg.aud)) return false;
     if (typeof payload.exp !== 'number' || payload.exp <= nowSec) return false;
     if (typeof payload.nbf === 'number' && payload.nbf > nowSec + 60) return false;
-    const jwk = (await fetchKeys(cfg.teamDomain)).find(
-      (k) => k.kid === header.kid && k.kty === 'RSA',
-    );
+    const find = (keys: Jwk[]) => keys.find((k) => k.kid === header.kid && k.kty === 'RSA');
+    let jwk = find(await fetchKeys(cfg.teamDomain));
+    if (!jwk) jwk = find(await fetchKeys(cfg.teamDomain, true)); // rotated key: one rate-limited refresh
     if (!jwk) return false;
     const key = await crypto.subtle.importKey(
       'jwk',
@@ -56,10 +57,62 @@ export async function verifyAccessJwt(
   }
 }
 
-export const fetchAccessKeys: KeyFetcher = async (teamDomain) => {
-  const r = await fetch(`https://${teamDomain}/cdn-cgi/access/certs`, {
-    cf: { cacheTtl: 3600 },
-  } as RequestInit);
-  if (!r.ok) throw new Error('certs');
-  return ((await r.json()) as { keys: Jwk[] }).keys;
-};
+const MAX_CERTS_BYTES = 32 * 1024;
+const MAX_KEYS = 10;
+const CERTS_TTL_MS = 60 * 60 * 1000;
+const REFRESH_MIN_MS = 60 * 1000;
+const FETCH_DEADLINE_MS = 3000;
+
+export function makeKeyFetcher(
+  fetchImpl: typeof fetch = fetch,
+  now: () => number = Date.now,
+): KeyFetcher {
+  const cache = new Map<string, { keys: Jwk[]; at: number }>();
+  return async (teamDomain, force = false) => {
+    const hit = cache.get(teamDomain);
+    const t = now();
+    if (hit && (!force ? t - hit.at < CERTS_TTL_MS : t - hit.at < REFRESH_MIN_MS)) return hit.keys;
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), FETCH_DEADLINE_MS);
+    try {
+      const r = await fetchImpl(`https://${teamDomain}/cdn-cgi/access/certs`, {
+        signal: ctl.signal,
+        redirect: 'error',
+      });
+      if (!r.ok || !r.body) throw new Error('certs');
+      const reader = r.body.getReader();
+      const chunks: Uint8Array[] = [];
+      let total = 0;
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        total += value.length;
+        if (total > MAX_CERTS_BYTES) {
+          await reader.cancel();
+          throw new Error('certs too large');
+        }
+        chunks.push(value);
+      }
+      const text = new TextDecoder().decode(concatBytes(chunks));
+      const keys = ((JSON.parse(text) as { keys?: Jwk[] }).keys ?? [])
+        .filter(
+          (k) =>
+            k &&
+            k.kty === 'RSA' &&
+            typeof k.kid === 'string' &&
+            typeof k.n === 'string' &&
+            typeof k.e === 'string',
+        )
+        .slice(0, MAX_KEYS);
+      cache.set(teamDomain, { keys, at: now() });
+      return keys;
+    } catch (e) {
+      if (hit) return hit.keys; // keep serving the last good keys on a fetch failure
+      throw e;
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+}
+
+export const fetchAccessKeys: KeyFetcher = makeKeyFetcher();
