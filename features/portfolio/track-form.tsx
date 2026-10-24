@@ -1,7 +1,8 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { ModeMarker } from '@/components/mode-marker';
-import { lookupAddress, type LookupOutcome, type TrackNetwork } from './api-client';
+import { lookupAddress, type LookupOutcome } from './api-client';
+import { useTrackNetwork } from './track-network-context';
 import { differsWhenRounded, fmtAmount, fmtPrice, fmtUsd } from './format';
 
 const SAMPLES: { label: string; address: string }[] = [
@@ -20,7 +21,8 @@ const SOL_ADDR = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 const feedTime = (iso: string) => iso.slice(0, 16).replace('T', ' ') + ' UTC';
 export function TrackForm({ mode = 'mock' }: { mode?: 'checking' | 'mock' | 'live' | 'unknown' }) {
   const examples = mode === 'mock';
-  const [network, setNetwork] = useState<TrackNetwork>('ethereum');
+  // Shared with the top-bar network selector: both controls drive one Track network choice.
+  const { network, setNetwork } = useTrackNetwork();
   const [value, setValue] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -28,6 +30,18 @@ export function TrackForm({ mode = 'mock' }: { mode?: 'checking' | 'mock' | 'liv
   const [exact, setExact] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const output = useRef<HTMLDivElement>(null);
+  // A network switch from the top-bar selector must reset the form exactly like the chips do,
+  // so a stale address or result from the other network never sits under the new selection.
+  const mounted = useRef(false);
+  useEffect(() => {
+    if (!mounted.current) {
+      mounted.current = true;
+      return;
+    }
+    setValue('');
+    setOutcome(null);
+    setError(null);
+  }, [network]);
   // After a completed lookup, bring the result or error into view and move focus to it, so the
   // outcome is not hidden below the controls on a phone. Motion is skipped when the user asks.
   useEffect(() => {

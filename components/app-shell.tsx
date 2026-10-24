@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { ChainSelector } from './chain-selector';
 import { AccountMenu } from './account-menu';
 import { SessionProvider } from '@/features/portfolio/session-context';
+import { TrackNetworkProvider } from '@/features/portfolio/track-network-context';
 const sections = [
   {
     id: 'defi',
@@ -54,6 +55,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   if (path === '/' || path === '') return <SessionProvider>{children}</SessionProvider>;
   return (
     <SessionProvider>
+      <TrackNetworkProvider>
       <div className="app">
         <a className="skip-link" href="#main">
           Skip to content
@@ -143,6 +145,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </footer>
         </div>
       </div>
+      </TrackNetworkProvider>
     </SessionProvider>
   );
 }

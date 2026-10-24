@@ -1,17 +1,18 @@
 'use client';
 import { useId } from 'react';
 import { usePathname } from 'next/navigation';
-// Only Ethereum has any (simulated) support. Other chains are listed so the roadmap is honest,
-// but they are disabled and carry no data.
-export const CHAINS = [
-  { id: 'ethereum', label: 'Ethereum', supported: true },
-  { id: 'solana', label: 'Solana', supported: false },
-  { id: 'base', label: 'Base', supported: false },
-  { id: 'arbitrum', label: 'Arbitrum', supported: false },
-] as const;
+import { useTrackNetwork } from '@/features/portfolio/track-network-context';
+import type { TrackNetwork } from '@/features/portfolio/api-client';
+// Networks the Track lookup actually reads today. Unsupported chains are not listed here at all:
+// a control that offers networks it cannot read would contradict the result it sits above.
+export const TRACK_NETWORKS: { id: TrackNetwork; label: string }[] = [
+  { id: 'ethereum', label: 'Ethereum' },
+  { id: 'solana', label: 'Solana (SOL only)' },
+];
 export function ChainSelector() {
   const id = useId();
   const path = usePathname();
+  const { network, setNetwork } = useTrackNetwork();
   // The overview demo spans invented Ethereum and Solana holdings, so a network filter there
   // would be misleading. The selector only appears where a network actually applies.
   if (path.startsWith('/portfolio')) return <span className="scope-chip">Demo · all networks</span>;
@@ -19,15 +20,21 @@ export function ChainSelector() {
   return (
     <div className="chain-select">
       <label htmlFor={id}>Network</label>
-      <select id={id} value="ethereum" onChange={() => undefined} aria-describedby={`${id}-note`}>
-        {CHAINS.map((c) => (
-          <option key={c.id} value={c.id} disabled={!c.supported}>
-            {c.supported ? c.label : `${c.label} · not supported yet`}
+      <select
+        id={id}
+        value={network}
+        onChange={(e) => setNetwork(e.target.value as TrackNetwork)}
+        aria-describedby={`${id}-note`}
+      >
+        {TRACK_NETWORKS.map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.label}
           </option>
         ))}
       </select>
       <span id={`${id}-note`} className="sr-only">
-        Only Ethereum is available, with simulated data. Other networks are not supported yet.
+        Applies to the address lookup below and matches the network chips in the form. Ethereum
+        reads ETH and a short list of tokens; Solana reads the SOL balance only.
       </span>
     </div>
   );

@@ -39,3 +39,27 @@ describe('network-specific result copy never names the wrong chain', () => {
     expect(handler).toContain('A missing token is not a zero balance');
   });
 });
+
+describe('the top-bar network selector never contradicts the track selection', () => {
+  const sel = readFileSync('components/chain-selector.tsx', 'utf8');
+  const form = readFileSync('features/portfolio/track-form.tsx', 'utf8');
+  const shell = readFileSync('components/app-shell.tsx', 'utf8');
+  it('offers only networks the lookup actually reads, with no disabled placeholders', () => {
+    expect(sel).not.toMatch(/not supported yet/);
+    expect(sel).not.toMatch(/disabled/);
+    expect(sel).toContain("id: 'ethereum'");
+    expect(sel).toContain("label: 'Solana (SOL only)'");
+    // Base and Arbitrum were listed as disabled options; they must not return silently.
+    expect(sel).not.toMatch(/Base|Arbitrum/);
+  });
+  it('is bound to the shared track network state, never frozen on Ethereum', () => {
+    expect(sel).not.toMatch(/value="ethereum"/);
+    expect(sel).not.toMatch(/onChange={\(\) => undefined}/);
+    expect(sel).toContain('useTrackNetwork');
+  });
+  it('the form reads the same shared state, so the two controls cannot diverge', () => {
+    expect(form).toContain('useTrackNetwork');
+    expect(form).not.toMatch(/useState<TrackNetwork>/);
+    expect(shell).toContain('TrackNetworkProvider');
+  });
+});

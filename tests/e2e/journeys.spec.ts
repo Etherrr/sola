@@ -480,15 +480,25 @@ test.describe('entrance', () => {
     await expect(btn).toHaveAttribute('aria-expanded', 'false');
   });
 });
-test('only Ethereum is selectable; other networks are disabled and say so', async ({ page }) => {
+test('the top-bar network selector and the track form share one selection', async ({ page }) => {
   await page.goto('/track');
   const select = page.getByLabel('Network');
   await expect(select).toHaveValue('ethereum');
-  for (const name of ['Solana', 'Base', 'Arbitrum']) {
-    const option = select.locator('option', { hasText: name });
-    await expect(option).toBeDisabled();
-    await expect(option).toContainText('not supported yet');
-  }
+  // Only networks the lookup actually reads are offered; none are disabled placeholders.
+  await expect(select.locator('option')).toHaveText(['Ethereum', 'Solana (SOL only)']);
+  await expect(select.locator('option[disabled]')).toHaveCount(0);
+  // Selecting Solana in the top bar switches the form to the Solana label and coverage.
+  await select.selectOption('solana');
+  await expect(page.getByText('Public Solana address (Solana mainnet)')).toBeVisible();
+  // And the form chip reflects the same single selection.
+  await expect(page.getByRole('button', { name: 'Solana (SOL only)' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  // Switching back from the form chip moves the top-bar selector too.
+  await page.getByRole('button', { name: 'Ethereum', exact: true }).click();
+  await expect(select).toHaveValue('ethereum');
+  await expect(page.getByText('Public Ethereum address (Ethereum mainnet)')).toBeVisible();
 });
 
 test('corporate site link is reachable on every width', async ({ page }) => {
