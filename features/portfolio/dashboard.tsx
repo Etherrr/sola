@@ -89,10 +89,11 @@ export function Dashboard({ view = 'overview' }: { view?: View }) {
             </p>
           </section>
           <section className="panel">
-            <p className="eyebrow">LEARN THE CONTEXT</p>
+            <p className="eyebrow">RISK CONTEXT</p>
             <h2>Return is only half the story.</h2>
-            <p>Understand contract, liquidity, staking, and liquidation risks.</p>
-            <Link href="/learn/risks">Explore the risk lesson →</Link>
+            <p>
+              Contract, liquidity, staking, and liquidation risks are not covered by this sample.
+            </p>
           </section>
         </div>
       ) : (
@@ -104,10 +105,9 @@ export function Dashboard({ view = 'overview' }: { view?: View }) {
                 <p className="eyebrow">LENS NOTE</p>
                 <h2>A balance is a starting point.</h2>
                 <p>
-                  What sits in a wallet and what is owed tell different stories. Learn to read them
+                  What sits in a wallet and what is owed tell different stories; read them
                   together.
                 </p>
-                <Link href="/learn/addresses">Understand portfolio basics →</Link>
               </section>
             </div>
           )}

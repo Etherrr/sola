@@ -2,7 +2,7 @@ export const MODES = {
   SIMULATED: {
     label: 'SIMULATED',
     symbol: '◇',
-    text: 'Educational sample only. No wallet connected. No live data or transactions.',
+    text: 'Simulated sample only. No wallet connected. No live data or transactions.',
   },
   LIVE_CACHED: {
     label: 'LIVE · CACHED',

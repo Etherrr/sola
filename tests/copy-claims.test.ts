@@ -103,3 +103,17 @@ describe('the entrance is truthful about live lookups and welcomes the verified 
     expect(entrance).not.toMatch(/Bill|bill\.|Master/);
   });
 });
+
+describe('the Overview carries no education traces either', () => {
+  const dash = readFileSync('features/portfolio/dashboard.tsx', 'utf8');
+  const marker = readFileSync('components/mode-marker.tsx', 'utf8');
+  const fixtureSrc = readFileSync('features/portfolio/fixture.ts', 'utf8');
+  it('has no lesson links, learn CTAs or educational framing', () => {
+    expect(dash).not.toMatch(/\/learn\//);
+    expect(dash).not.toMatch(/lesson/i);
+    expect(dash).not.toMatch(/LEARN THE CONTEXT/);
+    expect(marker).not.toMatch(/Educational sample/);
+    expect(marker).toMatch(/Simulated sample only/);
+    expect(fixtureSrc).not.toMatch(/educational/i);
+  });
+});

@@ -1,7 +1,7 @@
 import type { Position } from './model';
 // Invented economic exposures, not real contracts, addresses, balances, or price observations.
 export const fixture = {
-  source: 'Sola educational fixture v1',
+  source: 'Sola sample fixture v1',
   observedAt: '2026-10-23T00:00:00Z',
   positions: [
     {
