@@ -42,7 +42,7 @@ Two different facts must be shown separately: the ACTIVE endpoint is OFF, and ev
   hash host (a 404 DeploymentNotFound style page), meaning nothing executes there. A network failure, a login redirect,
   a 401, or the absence of an API deployment ID is not proof. A deleted host cannot be asked to mock.
 - Timing: a reviewer measured 3 min 25 s for a DELETE to propagate on a preview. That is a delete measurement only, not
-  a flag-change measurement. Re-check on a fixed schedule: one fresh request at about 1, 3 and 5 minutes after the change (never faster than one request per minute). If the active endpoint is still not OFF, or a retired hash still answers, at 10 minutes, stop checking and escalate to the reviewer or owner instead of polling further.
+  a flag-change measurement. Re-check on a fixed schedule: one fresh request at about 1, 3 and 5 minutes after the change (never faster than one request per minute). Make one final fresh check at 10 minutes. If the active endpoint is still not OFF, or a retired hash still answers, stop checking and escalate to the reviewer or owner instead of polling further.
 - Detaching a hostname or revoking an Access policy is NOT part of routine rollback. It limits who can reach the app but
   does not stop the Function for anyone who still passes Access, and it is not an engine or alias kill switch. It is a
   separate, reviewed access action under its own authority.
