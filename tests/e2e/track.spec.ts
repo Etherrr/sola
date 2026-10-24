@@ -605,6 +605,19 @@ test.describe('shared top bar fits at narrow widths', () => {
         await expect(pill).toBeVisible();
         const fits = await pill.evaluate((el) => el.scrollWidth <= el.clientWidth + 1);
         expect(fits).toBe(true);
+        const select = page.locator('.chain-select select');
+        if (await select.count()) {
+          const selectedFits = await select.evaluate((el: HTMLSelectElement) => {
+            const cs = getComputedStyle(el);
+            const ctx = document.createElement('canvas').getContext('2d')!;
+            ctx.font = `${cs.fontSize} ${cs.fontFamily}`;
+            const text = el.options[el.selectedIndex].text;
+            const avail =
+              el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - 24;
+            return ctx.measureText(text).width <= avail;
+          });
+          expect(selectedFits).toBe(true);
+        }
         const page_ok = await page.evaluate(
           () => document.documentElement.scrollWidth <= innerWidth,
         );
