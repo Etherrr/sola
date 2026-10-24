@@ -11,7 +11,7 @@ export function PrivacySettings() {
         collected by this app.
       </p>
       <p>
-        Separately, the welcome screen keeps one flag, <code>sola-welcomed</code>, in this
+        Separately, the entrance animation keeps one flag, <code>sola-welcomed</code>, in this
         browser&apos;s session storage so it shows once per session. It is cleared when you close
         the tab and holds nothing about you.
       </p>
