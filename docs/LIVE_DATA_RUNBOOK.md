@@ -42,7 +42,7 @@ Two different facts must be shown separately: the ACTIVE endpoint is OFF, and ev
   hash host (a 404 DeploymentNotFound style page), meaning nothing executes there. A network failure, a login redirect,
   a 401, or the absence of an API deployment ID is not proof. A deleted host cannot be asked to mock.
 - Timing: a reviewer measured 3 min 25 s for a DELETE to propagate on a preview. That is a delete measurement only, not
-  a flag-change measurement. Re-check with fresh requests for several minutes before saying anything is off.
+  a flag-change measurement. Re-check on a fixed schedule: one fresh request at about 1, 3 and 5 minutes after the change (never faster than one request per minute). If the active endpoint is still not OFF, or a retired hash still answers, at 10 minutes, stop checking and escalate to the reviewer or owner instead of polling further.
 - Detaching a hostname or revoking an Access policy is NOT part of routine rollback. It limits who can reach the app but
   does not stop the Function for anyone who still passes Access, and it is not an engine or alias kill switch. It is a
   separate, reviewed access action under its own authority.
@@ -65,8 +65,9 @@ error, empty result, wrong id, a hung upstream, a stalled body, and an upstream 
 Every case asserts the HTTP status and error code, exactly one upstream request, no balances substituted, `no-store`,
 that neither the body nor this app's log line contains (Cloudflare's own edge logs are not covered) the address, upstream text or endpoint. The timeout cases also assert elapsed time lands near the configured deadline. The redirect case uses a fake fetch that really follows a 3xx when the request does
 not say `redirect: 'manual'`, and the test asserts the request's destination, method, `redirect` and abort signal.
-The test helper supplies the Access keys directly, so it covers one RPC request per lookup, not the total subrequests or total CPU of
-a real request (Access key fetch and JWT verification are stubbed, so total CPU is unknown) (the Access key fetch is cached for an hour and is additional). A 25-request burst shows outbound
+The unit test runs the real Access JWT verification but supplies the signing keys directly (only the JWKS fetch is stubbed), so it
+covers one RPC request per lookup, not the total subrequests of a real request (the Access key fetch is cached for an hour and is additional) and
+not total CPU, which is unknown. A 25-request burst shows outbound
 requests are 1:1 with lookups (no retry); it is NOT an admission limit and shows no backpressure. Not covered: real Cloudflare runtime behaviour, real vendor limits, and
 real latency. Those need a disposable deployment and are UNTESTED.
 
