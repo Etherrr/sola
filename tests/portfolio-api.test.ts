@@ -805,21 +805,28 @@ describe('readExpiresAt', () => {
 
 describe('live data kill switch', () => {
   const fakeRpc = (async (_u: string, init: RequestInit) => {
-    const reqs = JSON.parse(String(init.body)) as { id: number; method: string }[];
-    return new Response(
-      JSON.stringify(
-        reqs.map((r) => ({
-          jsonrpc: '2.0',
-          id: r.id,
-          result:
-            r.method === 'eth_blockNumber'
-              ? '0x1312d00'
-              : r.method === 'eth_getBalance'
-                ? '0x' + (10n ** 18n).toString(16)
-                : '0x' + '0'.repeat(64),
-        })),
-      ),
+    const req = JSON.parse(String(init.body)) as { id: number; params: [{ data: string }] };
+    const w = (x: bigint) => x.toString(16).padStart(64, '0');
+    // Count the calls from the aggregate3 array length word, then answer each with one word.
+    const n = Number(BigInt('0x' + req.params[0].data.slice(10 + 64, 10 + 128)));
+    const words = Array.from({ length: n }, (_, i) =>
+      i === 0
+        ? 20_000_000n
+        : i === 1
+          ? BigInt(Math.floor(NOW.getTime() / 1000))
+          : i === 2
+            ? 10n ** 18n
+            : 0n,
     );
+    const els = words.map((x) => w(1n) + w(0x40n) + w(32n) + w(x));
+    let off = BigInt(n * 32);
+    const offs = els.map((e) => {
+      const o = off;
+      off += BigInt(e.length / 2);
+      return w(o);
+    });
+    const result = '0x' + w(0x20n) + w(BigInt(n)) + offs.join('') + els.join('');
+    return new Response(JSON.stringify({ jsonrpc: '2.0', id: req.id, result }));
   }) as unknown as typeof fetch;
   const call = async (env: Env) => {
     const s = await signer();

@@ -24,43 +24,80 @@ type Cfg = {
   answer?: bigint;
   rawFeed?: (data: string, def: string) => string;
   rawBlock?: string;
+  chainTs?: number;
+  rpcError?: unknown;
 };
-/** A fake JSON-RPC endpoint answering by method and call data. */
+const MC = '0xca11bde05977b3631167028862be2a173976ca11';
+/** Test-side request decoder, independent of the production encoder's helpers. */
+function decodeCalls(data: string): { target: string; data: string }[] {
+  const b = data.slice(10);
+  const word = (o: number) => BigInt('0x' + b.slice(o * 2, o * 2 + 64));
+  const n = Number(word(0x20));
+  const out: { target: string; data: string }[] = [];
+  for (let i = 0; i < n; i++) {
+    const el = 0x40 + Number(word(0x40 + i * 32));
+    const target = '0x' + b.slice((el + 12) * 2, (el + 32) * 2);
+    const len = Number(word(el + 0x60));
+    out.push({ target, data: '0x' + b.slice((el + 0x80) * 2, (el + 0x80 + len) * 2) });
+  }
+  return out;
+}
+function encodeResults(rs: { success: boolean; data: string }[]): string {
+  const w = (x: number) => x.toString(16).padStart(64, '0');
+  const els = rs.map((r) => {
+    const body = r.data.slice(2);
+    return (
+      w(r.success ? 1 : 0) +
+      w(0x40) +
+      w(body.length / 2) +
+      body.padEnd(Math.ceil(body.length / 64) * 64, '0')
+    );
+  });
+  let off = rs.length * 32;
+  const offs = els.map((e) => {
+    const o = off;
+    off += e.length / 2;
+    return w(o);
+  });
+  return '0x' + w(0x20) + w(rs.length) + offs.join('') + els.join('');
+}
+/** A fake JSON-RPC endpoint that answers one aggregate3 eth_call by target and call data. */
 function rpc(cfg: Cfg = {}, status = 200, mutate?: (r: unknown) => unknown): typeof fetch {
   return (async (_u: string, init: RequestInit) => {
-    const reqs = JSON.parse(String(init.body)) as {
+    const req = JSON.parse(String(init.body)) as {
       id: number;
       method: string;
-      params: [unknown, ...unknown[]];
-    }[];
-    const out = reqs.map((r) => {
-      let result: string | null;
-      if (r.method === 'eth_blockNumber') result = cfg.rawBlock ?? '0x1312d00';
-      else if (r.method === 'eth_getBalance')
-        result = cfg.eth === undefined ? hex(10n ** 18n) : cfg.eth;
-      else {
-        const p = r.params[0] as { to: string; data: string };
-        const feed = (Object.keys(FEEDS) as (keyof typeof FEEDS)[]).find(
-          (f) => FEEDS[f].address.toLowerCase() === p.to.toLowerCase(),
-        );
-        if (feed) {
-          const def =
-            p.data === '0x313ce567'
-              ? hex(cfg.feedDec ?? 8n)
-              : round(cfg.answer ?? 100_000_000n, nowS - (cfg.feedAge?.[feed] ?? 60));
-          result = cfg.rawFeed ? cfg.rawFeed(p.data, def) : def;
-        } else {
-          const tok = TOKENS.find((t) => t.address === p.to.toLowerCase())!;
-          const v = cfg.tokens?.[tok.symbol];
-          result = v === undefined ? hex(0n) : v;
-        }
+      params: [{ to: string; data: string }, string];
+    };
+    if (cfg.rpcError !== undefined)
+      return new Response(JSON.stringify({ jsonrpc: '2.0', id: req.id, error: cfg.rpcError }), {
+        status,
+      });
+    const results = decodeCalls(req.params[0].data).map((c) => {
+      const ok = (data: string) => ({ success: true, data });
+      const bad = { success: false, data: '0x' };
+      if (c.target === MC) {
+        if (c.data === '0x42cbb15c') return ok(cfg.rawBlock ?? hex(20_000_000n));
+        if (c.data === '0x0f28c97d') return ok(hex(BigInt(cfg.chainTs ?? nowS)));
+        if (cfg.eth === null) return bad;
+        return ok(cfg.eth === undefined ? hex(10n ** 18n) : cfg.eth);
       }
-      return result === null
-        ? { jsonrpc: '2.0', id: r.id, error: { code: -1 } }
-        : { jsonrpc: '2.0', id: r.id, result };
+      const feed = (Object.keys(FEEDS) as (keyof typeof FEEDS)[]).find(
+        (f) => FEEDS[f].address.toLowerCase() === c.target.toLowerCase(),
+      );
+      if (feed) {
+        const def =
+          c.data === '0x313ce567'
+            ? hex(cfg.feedDec ?? 8n)
+            : round(cfg.answer ?? 100_000_000n, nowS - (cfg.feedAge?.[feed] ?? 60));
+        return ok(cfg.rawFeed ? cfg.rawFeed(c.data, def) : def);
+      }
+      const tok = TOKENS.find((t) => t.address === c.target.toLowerCase())!;
+      const v = cfg.tokens?.[tok.symbol];
+      return v === null ? bad : ok(v === undefined ? hex(0n) : v);
     });
-    const body = JSON.stringify(mutate && reqs.length > 1 ? mutate(out) : out);
-    return new Response(body, { status });
+    const obj = { jsonrpc: '2.0', id: req.id, result: encodeResults(results) };
+    return new Response(JSON.stringify(mutate ? mutate(obj) : obj), { status });
   }) as unknown as typeof fetch;
 }
 const run = (f: typeof fetch, signal = new AbortController().signal) =>
@@ -139,26 +176,26 @@ describe('live provider hardening (reviewer findings)', () => {
     expect(await ethPrice({ feedAge: { 'ETH/USD': -240 } })).toBeNull();
     expect(await ethPrice({ feedAge: { 'ETH/USD': -10 } })).toBe('1');
   });
-  it('pins one block for the whole batch and reports it', async () => {
-    const tags: unknown[] = [];
+  it('reads everything in ONE eth_call at latest, with block number and time from inside the call', async () => {
+    const seen: { method: string; tag: unknown; isArray: boolean }[] = [];
     const inner = rpc({});
     const f = (async (u: string, init: RequestInit) => {
-      for (const c of JSON.parse(String(init.body)) as { method: string; params: unknown[] }[])
-        if (c.method !== 'eth_blockNumber') tags.push(c.params[1]);
+      const body = JSON.parse(String(init.body));
+      seen.push({ method: body.method, tag: body.params[1], isArray: Array.isArray(body) });
       return inner(u, init);
     }) as unknown as typeof fetch;
     const r = await run(f);
     if (!r.ok) throw new Error('x');
-    expect(new Set(tags)).toEqual(new Set(['0x1312d00']));
+    expect(seen).toEqual([{ method: 'eth_call', tag: 'latest', isArray: false }]);
     expect(r.wallets[0]!.warnings.join()).toMatch(/block 20000000/);
   });
-  it('the maximum 5 addresses stay within 2 subrequests and a 33-call batch', async () => {
+  it('the maximum 5 addresses stay within 1 subrequest and a 35-call aggregate', async () => {
     let reqs = 0;
-    let biggest = 0;
+    let calls = 0;
     const inner = rpc({});
     const f = (async (u: string, init: RequestInit) => {
       reqs += 1;
-      biggest = Math.max(biggest, (JSON.parse(String(init.body)) as unknown[]).length);
+      calls = decodeCalls(JSON.parse(String(init.body)).params[0].data).length;
       return inner(u, init);
     }) as unknown as typeof fetch;
     const addrs = [1, 2, 3, 4, 5].map((n) => '0x' + String(n).repeat(40));
@@ -167,11 +204,17 @@ describe('live provider hardening (reviewer findings)', () => {
       new AbortController().signal,
     );
     expect(r.ok).toBe(true);
-    expect(reqs).toBe(2);
-    expect(biggest).toBe(5 * 5 + 8);
+    expect(reqs).toBe(1);
+    expect(calls).toBe(2 + 5 * 5 + 8);
+  });
+  it('a node whose latest block is far from this clock is refused, not trusted for feed age', async () => {
+    const r = await run(rpc({ chainTs: nowS - 600 }));
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.diag?.step).toBe('stale_node');
+    expect((await run(rpc({ chainTs: nowS - 100 }))).ok).toBe(true);
   });
   it('a bad block number is a bad_response, not a throw', async () => {
-    for (const rawBlock of ['0x', '0x0', '0x' + 'f'.repeat(20)]) {
+    for (const rawBlock of ['0x', hex(0n), '0x' + 'f'.repeat(64)]) {
       const r = await run(rpc({ rawBlock }));
       expect(r.ok).toBe(false);
     }
@@ -227,7 +270,7 @@ describe('live provider (default-off, read-only)', () => {
     if (!r.ok) throw new Error('x');
     expect(r.wallets[0]!.partial).toBe(true);
   });
-  it('maps HTTP 429, 5xx, bad JSON, oversized, duplicate ids and non-arrays to explicit errors', async () => {
+  it('maps HTTP 429, 5xx, bad JSON, oversized, malformed results and RPC errors to explicit errors', async () => {
     const kind = async (f: typeof fetch) => {
       const r = await run(f);
       return r.ok ? 'ok' : r.kind;
@@ -243,10 +286,13 @@ describe('live provider (default-off, read-only)', () => {
         (async () => new Response('x'.repeat(MAX_RESPONSE_BYTES + 1))) as unknown as typeof fetch,
       ),
     ).toBe('bad_response');
-    expect(
-      await kind(rpc({}, 200, (o) => (o as { id: number }[]).map((x) => ({ ...x, id: 0 })))),
-    ).toBe('bad_response');
+    expect(await kind(rpc({}, 200, () => [{ result: '0x' }]))).toBe('bad_response');
     expect(await kind(rpc({}, 200, () => ({ result: 1 })))).toBe('bad_response');
+    expect(await kind(rpc({}, 200, (o) => ({ ...(o as object), result: '0x' })))).toBe(
+      'bad_response',
+    );
+    expect(await kind(rpc({ rpcError: { code: -32005 } }))).toBe('rate_limited');
+    expect(await kind(rpc({ rpcError: { code: -32000 } }))).toBe('unavailable');
     expect(
       await kind((async () => {
         throw new Error('net');
@@ -279,5 +325,29 @@ describe('live provider (default-off, read-only)', () => {
     expect(seen?.redirect).toBe('manual'); // workerd rejects 'error'; a 3xx is not ok, so it is unavailable
     expect(seen?.method).toBe('POST');
     expect(Object.keys(seen?.headers as object)).toEqual(['content-type']);
+  });
+});
+
+describe('failure diagnostics are sanitized', () => {
+  it('carry only a fixed step, bounded numbers and the call count', async () => {
+    const r1 = await run(rpc({}, 429));
+    const r2 = await run(
+      rpc({ rpcError: { code: -32005, message: `limit for ${ADDR} at https://x.example/key123` } }),
+    );
+    const r3 = await run(rpc({}, 200, (o) => ({ ...(o as object), result: '0x1234' })));
+    for (const r of [r1, r2, r3]) expect(r.ok).toBe(false);
+    if (r1.ok || r2.ok || r3.ok) return;
+    expect(r1.diag).toEqual({ step: 'response', http: 429, calls: 35 - 25 + 5 });
+    expect(r2.diag).toEqual({ step: 'rpc_error', http: 200, rpcCode: -32005, calls: 15 });
+    expect(r3.diag).toEqual({ step: 'decode', http: 200, calls: 15 });
+    const all = JSON.stringify([r1, r2, r3]);
+    expect(all).not.toContain(ADDR.slice(2));
+    expect(all).not.toContain('key123');
+    expect(all).not.toContain('x.example');
+  });
+  it('a non-integer or absent RPC code adds no code field', async () => {
+    const r = await run(rpc({ rpcError: { code: 'boom', message: 'x' } }));
+    if (r.ok) throw new Error('x');
+    expect(r.diag).toEqual({ step: 'rpc_error', http: 200, calls: 15 });
   });
 });

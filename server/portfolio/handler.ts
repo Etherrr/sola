@@ -8,7 +8,7 @@ import {
   readExpiresAt,
   type KeyFetcher,
 } from './access';
-import { mockProvider, type PortfolioProvider } from './provider';
+import { mockProvider, type Diag, type PortfolioProvider } from './provider';
 import { createLiveProvider } from './live-provider';
 
 export type Env = {
@@ -58,7 +58,13 @@ const err = (
   message: string,
   requestId: string,
   extra: Record<string, string> = {},
-) => reply(status, { error: { code, message }, requestId }, extra);
+  diagnostic?: Diag,
+) =>
+  reply(
+    status,
+    { error: { code, message }, requestId, ...(diagnostic ? { diagnostic } : {}) },
+    extra,
+  );
 
 /** Reads at most `limit` bytes of the body; returns null as soon as it is exceeded (never buffers more). */
 async function readBounded(
@@ -182,6 +188,9 @@ export async function handleResolve(
     clearTimeout(timer);
   }
   if (!result.ok) {
+    const dg = result.diag;
+    // Numbers and fixed step names only: no address, payload, URL or provider text.
+    console.warn(JSON.stringify({ evt: 'provider_failure', requestId, kind: result.kind, ...dg }));
     if (result.kind === 'rate_limited')
       return err(
         429,
@@ -189,6 +198,7 @@ export async function handleResolve(
         'The data source is rate limiting. Try again later.',
         requestId,
         { 'retry-after': '30' },
+        dg,
       );
     if (result.kind === 'timeout')
       return err(
@@ -196,6 +206,8 @@ export async function handleResolve(
         'provider_timeout',
         'The data source took too long. No data was substituted.',
         requestId,
+        {},
+        dg,
       );
     if (result.kind === 'bad_response')
       return err(
@@ -203,12 +215,16 @@ export async function handleResolve(
         'provider_bad_response',
         'The data source returned an unusable answer.',
         requestId,
+        {},
+        dg,
       );
     return err(
       503,
       'provider_unavailable',
       'The data source is unavailable. No data was substituted.',
       requestId,
+      {},
+      dg,
     );
   }
   let subtotal: bigint | null = null; // micro-USD

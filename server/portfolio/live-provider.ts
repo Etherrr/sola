@@ -1,6 +1,18 @@
 import { formatUnits, valueUsd } from './units';
 import type { Asset, WalletResult } from './contract';
-import type { PortfolioProvider, ProviderResult } from './provider';
+import type { Diag, PortfolioProvider, ProviderResult } from './provider';
+import {
+  addressWord,
+  decodeAggregate3,
+  encodeAggregate3,
+  SEL_BALANCE_OF,
+  SEL_DECIMALS,
+  SEL_GET_BLOCK_NUMBER,
+  SEL_GET_CURRENT_BLOCK_TIMESTAMP,
+  SEL_GET_ETH_BALANCE,
+  SEL_LATEST_ROUND_DATA,
+  type Call3,
+} from './abi';
 
 // DEFAULT-OFF live read-only Ethereum provider. It reads balances over a public JSON-RPC endpoint
 // and prices from Chainlink USD feeds read through the same endpoint (no second vendor, no key).
@@ -9,6 +21,9 @@ export const RPC_URL = 'https://ethereum-rpc.publicnode.com';
 export const MAX_RESPONSE_BYTES = 64 * 1024;
 const FEED_DECIMALS = 8;
 const MAX_FUTURE_S = 30;
+const MAX_CLOCK_SKEW_S = 120;
+// Multicall3, canonical address per https://github.com/mds1/multicall3 (read 23 Oct 2026).
+export const MULTICALL3 = '0xcA11bde05977b3631167028862bE2a173976CA11';
 
 type FeedId = 'ETH/USD' | 'USDC/USD' | 'USDT/USD' | 'DAI/USD';
 // Feed addresses and descriptions were read on-chain on 2026-10-23 (description() matched) and match
@@ -62,7 +77,6 @@ export const TOKENS: { symbol: string; address: string; decimals: number; feed: 
 const HEX = /^0x[0-9a-fA-F]+$/; // a bare "0x" is not a value
 type Rpc = { id: number; result?: unknown; error?: unknown };
 const word = (hex: string, i: number) => hex.slice(2 + i * 64, 2 + (i + 1) * 64);
-const pad = (hex: string) => hex.replace(/^0x/, '').toLowerCase().padStart(64, '0');
 
 async function readCapped(res: Response, limit: number): Promise<string | null> {
   const reader = res.body?.getReader();
@@ -101,94 +115,120 @@ export function createLiveProvider(over: Partial<LiveDeps> = {}): PortfolioProvi
     name: 'publicnode-rpc+chainlink',
     simulated: false,
     async fetchWallets(addresses, signal): Promise<ProviderResult> {
+      let diag: Diag = { step: 'build' };
       const fail = (kind: 'rate_limited' | 'timeout' | 'unavailable' | 'bad_response') =>
-        ({ ok: false, provider: 'publicnode-rpc+chainlink', kind }) as const;
-      type Call = { method: string; params: unknown[] };
-      const rpc = async (
-        batch: Call[],
-      ): Promise<
-        { ok: true; out: Map<number, string | null> } | { ok: false; r: ReturnType<typeof fail> }
-      > => {
-        let res: Response;
-        try {
-          res = await d.fetch(d.rpcUrl, {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify(
-              batch.map((c, id) => ({ jsonrpc: '2.0', id, method: c.method, params: c.params })),
-            ),
-            signal,
-            redirect: 'manual',
-          });
-        } catch {
-          return { ok: false, r: fail(signal.aborted ? 'timeout' : 'unavailable') };
-        }
-        if (res.status === 429) return { ok: false, r: fail('rate_limited') };
-        if (!res.ok) return { ok: false, r: fail('unavailable') };
-        let text: string | null;
-        try {
-          text = await readCapped(res, MAX_RESPONSE_BYTES);
-        } catch {
-          return { ok: false, r: fail(signal.aborted ? 'timeout' : 'unavailable') };
-        }
-        if (text === null) return { ok: false, r: fail('bad_response') };
-        let parsed: unknown;
-        try {
-          parsed = JSON.parse(text);
-        } catch {
-          return { ok: false, r: fail('bad_response') };
-        }
-        if (!Array.isArray(parsed) || parsed.length > batch.length)
-          return { ok: false, r: fail('bad_response') };
-        const o = new Map<number, string | null>();
-        for (const r of parsed as Rpc[]) {
-          if (typeof r !== 'object' || r === null || !Number.isInteger(r.id))
-            return { ok: false, r: fail('bad_response') };
-          const id = r.id;
-          if (id < 0 || id >= batch.length || o.has(id))
-            return { ok: false, r: fail('bad_response') };
-          o.set(id, typeof r.result === 'string' && HEX.test(r.result) ? r.result : null);
-        }
-        return { ok: true, out: o };
+        ({ ok: false, provider: 'publicnode-rpc+chainlink', kind, diag }) as const;
+      // ONE eth_call to Multicall3.aggregate3 at "latest". Every read below runs inside the same call,
+      // so balances, feed rounds, block number and block time are one consistent state. Per-read
+      // failures are allowed (allowFailure) so one bad token never hides the rest.
+      const calls: Call3[] = [];
+      const self = (data: string): number => {
+        calls.push({ target: MULTICALL3, allowFailure: false, data });
+        return calls.length - 1;
       };
-      // Step 1: pin one block so every balance and feed read in step 2 comes from the same state.
-      const head = await rpc([{ method: 'eth_blockNumber', params: [] }]);
-      if (!head.ok) return head.r;
-      const bn = head.out.get(0);
-      if (!bn || bn.length > 18 || BigInt(bn) === 0n) return fail('bad_response');
-      const BLOCK = '0x' + BigInt(bn).toString(16);
-      const blockNumber = BigInt(bn).toString();
-      // One batch: per address ETH balance and each token balance, then each feed's decimals and latest round.
-      const calls: Call[] = [];
+      const add = (target: string, data: string): number => {
+        calls.push({ target, allowFailure: true, data });
+        return calls.length - 1;
+      };
+      const iBlock = self(SEL_GET_BLOCK_NUMBER);
+      const iTime = self(SEL_GET_CURRENT_BLOCK_TIMESTAMP);
       const plan: { addr: number; token: number | null; idx: number }[] = [];
       addresses.forEach((a, ai) => {
-        plan.push({ addr: ai, token: null, idx: calls.length });
-        calls.push({ method: 'eth_getBalance', params: [a.toLowerCase(), BLOCK] });
+        plan.push({
+          addr: ai,
+          token: null,
+          idx: add(MULTICALL3, SEL_GET_ETH_BALANCE + addressWord(a)),
+        });
         TOKENS.forEach((t, ti) => {
-          plan.push({ addr: ai, token: ti, idx: calls.length });
-          calls.push({
-            method: 'eth_call',
-            params: [{ to: t.address, data: '0x70a08231' + pad(a) }, BLOCK],
-          });
+          plan.push({ addr: ai, token: ti, idx: add(t.address, SEL_BALANCE_OF + addressWord(a)) });
         });
       });
       const feedIds = Object.keys(FEEDS) as FeedId[];
       const feedAt = new Map<FeedId, { dec: number; round: number }>();
-      for (const f of feedIds) {
-        feedAt.set(f, { dec: calls.length, round: calls.length + 1 });
-        calls.push({
-          method: 'eth_call',
-          params: [{ to: FEEDS[f].address, data: '0x313ce567' }, BLOCK],
+      for (const f of feedIds)
+        feedAt.set(f, {
+          dec: add(FEEDS[f].address, SEL_DECIMALS),
+          round: add(FEEDS[f].address, SEL_LATEST_ROUND_DATA),
         });
-        calls.push({
-          method: 'eth_call',
-          params: [{ to: FEEDS[f].address, data: '0xfeaf968c' }, BLOCK],
+      diag = { step: 'request', calls: calls.length };
+      let res: Response;
+      try {
+        res = await d.fetch(d.rpcUrl, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'eth_call',
+            params: [{ to: MULTICALL3, data: encodeAggregate3(calls) }, 'latest'],
+          }),
+          signal,
+          redirect: 'manual',
         });
+      } catch {
+        return fail(signal.aborted ? 'timeout' : 'unavailable');
       }
-      const body = await rpc(calls);
-      if (!body.ok) return body.r;
-      const out = body.out;
-      const nowS = Math.floor(d.now().getTime() / 1000);
+      diag = { step: 'response', calls: calls.length, http: res.status };
+      if (res.status === 429) return fail('rate_limited');
+      if (!res.ok) return fail('unavailable');
+      let text: string | null;
+      try {
+        text = await readCapped(res, MAX_RESPONSE_BYTES);
+      } catch {
+        return fail(signal.aborted ? 'timeout' : 'unavailable');
+      }
+      if (text === null) return fail('bad_response');
+      let parsed: Rpc;
+      try {
+        parsed = JSON.parse(text) as Rpc;
+      } catch {
+        return fail('bad_response');
+      }
+      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed))
+        return fail('bad_response');
+      if (parsed.error !== undefined) {
+        // Numeric JSON-RPC code only: the message can echo addresses, URLs or provider text.
+        const code = (parsed.error as { code?: unknown } | null)?.code;
+        diag = {
+          ...diag,
+          step: 'rpc_error',
+          ...(Number.isInteger(code) ? { rpcCode: code as number } : {}),
+        };
+        return fail(code === -32005 || code === -32029 ? 'rate_limited' : 'unavailable');
+      }
+      if (typeof parsed.result !== 'string') return fail('bad_response');
+      const results = decodeAggregate3(parsed.result, calls.length);
+      if (!results) {
+        diag = { ...diag, step: 'decode' };
+        return fail('bad_response');
+      }
+      const out = new Map<number, string | null>();
+      results.forEach((r, i) => out.set(i, r.success && HEX.test(r.data) ? r.data : null));
+      const bnHex = out.get(iBlock);
+      const tsHex = out.get(iTime);
+      if (!bnHex || bnHex.length !== 66 || !tsHex || tsHex.length !== 66) {
+        diag = { ...diag, step: 'block_info' };
+        return fail('bad_response');
+      }
+      const bnBig = BigInt(bnHex);
+      const chainS = BigInt(tsHex);
+      if (
+        bnBig === 0n ||
+        bnBig > BigInt(Number.MAX_SAFE_INTEGER) ||
+        chainS > BigInt(Number.MAX_SAFE_INTEGER)
+      ) {
+        diag = { ...diag, step: 'block_info' };
+        return fail('bad_response');
+      }
+      const blockNumber = bnBig.toString();
+      // Feed age is measured against the block's own time. If the node's latest block is far from
+      // this server's clock the node is lagging, and ages would be wrong, so the lookup stops.
+      const localS = Math.floor(d.now().getTime() / 1000);
+      if (Math.abs(localS - Number(chainS)) > MAX_CLOCK_SKEW_S) {
+        diag = { ...diag, step: 'stale_node' };
+        return fail('bad_response');
+      }
+      const nowS = Number(chainS);
       // Prices: valid only when decimals are 8, the answer is positive and the round is fresh.
       const prices = new Map<FeedId, { price: string; at: string }>();
       for (const f of feedIds) {
@@ -244,7 +284,7 @@ export function createLiveProvider(over: Partial<LiveDeps> = {}): PortfolioProvi
         const hex = out.get(p.idx);
         const t = p.token === null ? null : TOKENS[p.token]!;
         const label = t ? t.symbol : 'ETH';
-        const badLen = t ? hex?.length !== 66 : !hex || hex.length < 3 || hex.length > 66;
+        const badLen = hex?.length !== 66;
         if (hex === null || hex === undefined || badLen) {
           w.partial = true;
           if (
