@@ -9,6 +9,8 @@ const KEY = 'sola-welcomed';
 // Access has already authenticated the visitor before this page loads.
 export function Entrance() {
   const [intro, setIntro] = useState(false);
+  const [curtainDone, setCurtainDone] = useState(false);
+  const curtain = intro && !curtainDone;
   useEffect(() => {
     const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     let play: boolean;
@@ -22,11 +24,29 @@ export function Entrance() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (play && !calm) setIntro(true);
   }, []);
+  // Remove the curtain after the animation so it can never linger over the page.
+  useEffect(() => {
+    if (!curtain) return;
+    const t = window.setTimeout(() => setCurtainDone(true), 2400);
+    return () => window.clearTimeout(t);
+  }, [curtain]);
   return (
     <div className={intro ? 'entrance intro' : 'entrance'}>
       <a className="skip-link" href="#main">
         Skip to content
       </a>
+      {curtain && (
+        <div className="entrance-curtain" aria-hidden="true">
+          <span className="curtain-half left" />
+          <span className="curtain-half right" />
+          <span className="curtain-mark">
+            <span className="brand-symbol" />
+            <span>
+              SOLA <span className="brand-lens">LENS</span>
+            </span>
+          </span>
+        </div>
+      )}
       <header className="entrance-top">
         <Link className="brand" href="/" aria-label="Sola Lens home">
           <span className="brand-symbol" aria-hidden="true" />
@@ -38,9 +58,11 @@ export function Entrance() {
         <AccountMenu />
       </header>
       <main id="main" tabIndex={-1} className="entrance-main">
-        <h1 className="entrance-title">Where to?</h1>
+        <h1 className="entrance-title">
+          <span>Choose your</span> <em>lens.</em>
+        </h1>
         <p className="entrance-sub">
-          Two sections, one lens. Everything here is simulated and read-only.
+          Learn first, or open the app. Everything here is simulated and read-only.
         </p>
         <div className="entrance-split">
           <Link href="/education" className="entrance-card edu">

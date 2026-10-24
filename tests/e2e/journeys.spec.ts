@@ -261,6 +261,12 @@ test.describe('entrance', () => {
     );
     await page.goto('/');
     await expect(page.locator('.entrance')).toHaveClass(/intro/);
+    await expect(page.locator('.entrance-curtain')).toHaveCount(1);
+    // The curtain never intercepts input and is gone once the animation is over.
+    expect(
+      await page.locator('.entrance-curtain').evaluate((el) => getComputedStyle(el).pointerEvents),
+    ).toBe('none');
+    await expect(page.locator('.entrance-curtain')).toHaveCount(0, { timeout: 5000 });
     await expect(page.getByRole('link', { name: /^Education/ })).toBeVisible();
     await expect(page.getByRole('link', { name: /^DeFi App/ })).toBeVisible();
     await expect(page.locator('input')).toHaveCount(0);
@@ -270,6 +276,48 @@ test.describe('entrance', () => {
     await page.getByRole('link', { name: /^DeFi App/ }).click();
     await expect(page).toHaveURL(/\/portfolio\/?$/);
   });
+  test('a visible tab rechecks the session as time passes and clears identity when it ends', async ({
+    page,
+  }) => {
+    let calls = 0;
+    let expired = false;
+    await page.clock.install();
+    await page.route('**/api/v1/session', (r) => {
+      calls += 1;
+      if (expired) {
+        return r.fulfill({
+          status: 401,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            status: 'unauthenticated',
+            via: 'cloudflare-access',
+            identity: null,
+          }),
+        });
+      }
+      return r.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          status: 'ok',
+          via: 'cloudflare-access',
+          identity: { email: 'jun@example.com' },
+        }),
+      });
+    });
+    await page.goto('/portfolio');
+    const btn = page.getByRole('button', { name: /^Account/ });
+    await expect(btn).toHaveAttribute('aria-label', /jun@example.com/);
+    const before = calls;
+    expired = true;
+    await page.clock.fastForward('06:00');
+    await expect.poll(() => calls).toBeGreaterThan(before);
+    await expect(page.getByRole('button', { name: /^Account/ })).not.toHaveAttribute(
+      'aria-label',
+      /jun@example.com/,
+    );
+  });
+
   test('Tab out of the account control closes it; a route change rechecks the session', async ({
     page,
     isMobile,
@@ -317,6 +365,7 @@ test.describe('entrance', () => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.goto('/');
     await expect(page.locator('.entrance')).not.toHaveClass(/intro/);
+    await expect(page.locator('.entrance-curtain')).toHaveCount(0);
     const name = await page
       .locator('.entrance-card.edu')
       .evaluate((el) => getComputedStyle(el).animationName);
