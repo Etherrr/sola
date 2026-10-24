@@ -46,7 +46,9 @@ function TrackIntro({ mode }: { mode: Shown }) {
             short list of tokens (USDC, USDT, DAI, WETH). Other tokens, NFTs and DeFi positions are
             not shown, so a result is not a full portfolio and a missing token is not proof of an
             empty wallet. WETH is priced with the ETH/USD feed, so it is a proxy and can differ from
-            the real WETH price if WETH trades off its peg.
+            the real WETH price if WETH trades off its peg. Chainlink marks its USDC and USDT feeds
+            as capped, so those prices stop at the peg when the coin trades above $1 and are
+            reference values, not executable market prices.
           </p>
           <p className="notice">
             Live mode is on for this deployment. Nothing has been looked up yet. Read-only: no

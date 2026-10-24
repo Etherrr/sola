@@ -97,6 +97,7 @@ test.describe('/track data mode follows the server', () => {
     await expect(page.getByText(/then to PublicNode/)).toBeVisible();
     await expect(page.getByText(/not proof of an empty wallet/)).toBeVisible();
     await expect(page.getByText(/WETH is priced with the ETH\/USD feed/)).toBeVisible();
+    await expect(page.getByText(/USDC and USDT feeds as capped/)).toBeVisible();
     await page.getByRole('textbox').fill(ADDR);
     await page.getByRole('button', { name: /look up/i }).click();
     await expect(page.getByRole('heading', { name: 'Result' })).toBeVisible();
