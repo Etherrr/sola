@@ -56,24 +56,30 @@ export function decodeAggregate3(hex: string, expected: number): Result3[] | nul
   const n = read(0x20);
   if (n === null || n !== BigInt(expected)) return null;
   const base = 0x40; // start of the offsets table
+  // Canonical (Solidity-encoded) output lays elements out one after another with no gaps or overlap.
+  // Anything else (shared or overlapping regions, backwards offsets) is rejected, not interpreted.
+  let cursor = base + expected * 32;
   const out: Result3[] = [];
   for (let i = 0; i < expected; i++) {
     const rel = read(base + i * 32);
     if (rel === null || rel > BigInt(size)) return null;
     const el = base + Number(rel);
+    if (el !== cursor) return null;
     const ok = read(el);
     const bOff = read(el + 32);
-    if (ok === null || bOff === null || (ok !== 0n && ok !== 1n) || bOff > BigInt(size))
-      return null;
-    const bStart = el + Number(bOff);
+    if (ok === null || bOff === null || (ok !== 0n && ok !== 1n) || bOff !== 0x40n) return null;
+    const bStart = el + 0x40;
     const len = read(bStart);
     if (len === null || len > BigInt(size)) return null;
     const l = Number(len);
-    if (bStart + 32 + l > size) return null;
+    const padded = Math.ceil(l / 32) * 32;
+    if (bStart + 32 + padded > size) return null;
     out.push({
       success: ok === 1n,
       data: '0x' + body.slice((bStart + 32) * 2, (bStart + 32 + l) * 2),
     });
+    cursor = bStart + 32 + padded;
   }
+  if (cursor !== size) return null; // trailing bytes
   return out;
 }

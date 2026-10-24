@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { keccak256 } from './helpers/keccak';
 import * as abi from '../server/portfolio/abi';
+import V from './fixtures-abi-vectors.json';
 
 const sel = (sig: string) => '0x' + keccak256(sig).slice(0, 8);
 describe('selectors are computed, not remembered', () => {
@@ -80,5 +81,67 @@ describe('aggregate3 codec', () => {
     // huge bytes length
     const badLen = ok.slice(0, 2 + 64 * 5) + 'f'.repeat(64) + ok.slice(2 + 64 * 6);
     expect(abi.decodeAggregate3(badLen, 1)).toBeNull();
+  });
+});
+
+// Vectors generated once with ethers v6 (Interface.encodeFunctionData / encodeFunctionResult) from the
+// Multicall3 ABI in mds1/multicall3, kept in tests/fixtures-abi-vectors.json. They are independent of
+// this repo's encoder and of the test-side decoder above.
+describe('canonical ABI vectors (ethers v6)', () => {
+  it.each(Object.keys(V.enc))('encoder matches canonical calldata: %s', (k) => {
+    const v = V.enc[k as keyof typeof V.enc];
+    expect(abi.encodeAggregate3(v.calls)).toBe(v.calldata);
+  });
+  it.each(Object.keys(V.dec))('decoder reads canonical return data: %s', (k) => {
+    const v = V.dec[k as keyof typeof V.dec];
+    expect(abi.decodeAggregate3(v.returndata, v.expected)).toEqual(v.results);
+  });
+  it('selectors equal the library values', () => {
+    expect(abi.SEL_AGGREGATE3).toBe(V.selectors.aggregate3);
+    expect(abi.SEL_GET_ETH_BALANCE).toBe(V.selectors.getEthBalance);
+    expect(abi.SEL_GET_BLOCK_NUMBER).toBe(V.selectors.getBlockNumber);
+    expect(abi.SEL_GET_CURRENT_BLOCK_TIMESTAMP).toBe(V.selectors.getCurrentBlockTimestamp);
+    expect(abi.SEL_BALANCE_OF).toBe(V.selectors.balanceOf);
+    expect(abi.SEL_DECIMALS).toBe(V.selectors.decimals);
+    expect(abi.SEL_LATEST_ROUND_DATA).toBe(V.selectors.latestRoundData);
+  });
+});
+describe('hostile return data', () => {
+  const good = V.dec.mixed.returndata;
+  const wordAt = (h: string, byte: number, val: string) =>
+    h.slice(0, 2 + byte * 2) + val.padStart(64, '0') + h.slice(2 + (byte + 32) * 2);
+  it('rejects trailing bytes and truncation by one word', () => {
+    expect(abi.decodeAggregate3(good + '00'.repeat(32), 5)).toBeNull();
+    expect(abi.decodeAggregate3(good.slice(0, -64), 5)).toBeNull();
+  });
+  it('rejects two elements pointing at the same region (duplicate)', () => {
+    const first = good.slice(2 + 0x40 * 2, 2 + 0x40 * 2 + 64);
+    expect(abi.decodeAggregate3(wordAt(good, 0x60, first.replace(/^0+/, '') || '0'), 5)).toBeNull();
+  });
+  it('rejects an offset pointing back into the offsets table or into another element', () => {
+    expect(abi.decodeAggregate3(wordAt(good, 0x40, '20'), 5)).toBeNull();
+    expect(abi.decodeAggregate3(wordAt(good, 0x40, '1'), 5)).toBeNull();
+  });
+  it('rejects offsets and lengths near 2^256 and 2^53 without throwing', () => {
+    for (const v of [
+      'f'.repeat(64),
+      '1' + '0'.repeat(63),
+      (2n ** 53n).toString(16),
+      (2n ** 32n).toString(16),
+    ]) {
+      expect(abi.decodeAggregate3(wordAt(good, 0x40, v), 5)).toBeNull();
+      expect(abi.decodeAggregate3(wordAt(good, 0x20, v), 5)).toBeNull();
+      expect(abi.decodeAggregate3(wordAt(good, 0x0, v), 5)).toBeNull();
+    }
+  });
+  it('rejects an element length larger than the payload (memory-amplification attempt)', () => {
+    const lenPos = 0x40 + 5 * 32 + 0x40; // first element's bytes length word
+    expect(abi.decodeAggregate3(wordAt(good, lenPos, (2n ** 40n).toString(16)), 5)).toBeNull();
+  });
+  it('rejects a bytes offset other than 0x40', () => {
+    expect(abi.decodeAggregate3(wordAt(good, 0x40 + 5 * 32 + 32, '60'), 5)).toBeNull();
+  });
+  it('an absurd call count or a 1 MB hex string is not decoded', () => {
+    expect(abi.decodeAggregate3('0x' + '00'.repeat(1_000_000), 35)).toBeNull();
   });
 });
