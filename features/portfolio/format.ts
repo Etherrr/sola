@@ -1,6 +1,8 @@
 // Display formatting for decimal strings. Works on the digits only (BigInt), never on floats, so a
 // rounded figure is the true rounding of the exact string. Anything unexpected is returned as is.
 const DEC = /^\d+(\.\d+)?$/;
+/** Same number without leading zeros in the whole part ("00.5" -> "0.5"); other strings unchanged. */
+const norm = (s: string) => (DEC.test(s) ? s.replace(/^0+(?=\d)/, '') : s);
 
 /** Round a non-negative decimal string half-up to `dp` places. */
 export function roundDecimal(s: string, dp: number): string {
@@ -19,7 +21,8 @@ const withGroups = (s: string) => {
 const isZero = (s: string) => !/[1-9]/.test(s);
 
 /** USD value or subtotal: 2 places and thousands separators; exact keeps every digit. */
-export function fmtUsd(s: string, exact: boolean): string {
+export function fmtUsd(raw: string, exact: boolean): string {
+  const s = norm(raw);
   if (!DEC.test(s)) return `$${s}`;
   if (exact) return `$${withGroups(s)}`;
   const r = roundDecimal(s, 2);
@@ -27,7 +30,8 @@ export function fmtUsd(s: string, exact: boolean): string {
   return !isZero(s) && isZero(r) ? '<$0.01' : `$${withGroups(padded)}`;
 }
 /** Unit price: 4 places under $10, else 2; at least 2 places shown. */
-export function fmtPrice(s: string, exact: boolean): string {
+export function fmtPrice(raw: string, exact: boolean): string {
+  const s = norm(raw);
   if (!DEC.test(s)) return `$${s}`;
   if (exact) return `$${withGroups(s)}`;
   const big = (s.split('.')[0] ?? '0').length >= 2;
@@ -39,10 +43,11 @@ export function fmtPrice(s: string, exact: boolean): string {
       (r.includes('.') ? r : `${r}.`).indexOf('.') + 3,
       '0',
     );
-  return !isZero(s) && isZero(r) ? '<$0.01' : `$${withGroups(r)}`;
+  return !isZero(s) && isZero(r) ? '<$0.0001' : `$${withGroups(r)}`;
 }
 /** Token amount: up to 6 places, trailing zeros trimmed; exact keeps every digit. */
-export function fmtAmount(s: string, exact: boolean): string {
+export function fmtAmount(raw: string, exact: boolean): string {
+  const s = norm(raw);
   if (!DEC.test(s)) return s;
   if (exact) return withGroups(s);
   let r = roundDecimal(s, 6);

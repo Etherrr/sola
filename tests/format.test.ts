@@ -27,6 +27,18 @@ describe('display formats', () => {
     expect(fmtUsd('0.004', false)).toBe('<$0.01');
     expect(fmtUsd('17561.045954', true)).toBe('$17,561.045954');
   });
+  it('leading zeros are normalized before choosing a format', () => {
+    expect(fmtPrice('00.99985102', false)).toBe('$0.9999');
+    expect(fmtPrice('0002383.71109191', false)).toBe('$2,383.71');
+    expect(fmtAmount('007.5', false)).toBe('7.5');
+    expect(fmtUsd('00012.5', false)).toBe('$12.50');
+    expect(fmtUsd('0', false)).toBe('$0.00');
+  });
+  it('a tiny unit price is not shown as zero or as a cent threshold', () => {
+    expect(fmtPrice('0.000049', false)).toBe('<$0.0001');
+    expect(fmtPrice('0.00012', false)).toBe('$0.0001');
+    expect(fmtPrice('0', false)).toBe('$0.00');
+  });
   it('price: 4 places under $10, 2 at or above, min 2 shown', () => {
     expect(fmtPrice('2383.71109191', false)).toBe('$2,383.71');
     expect(fmtPrice('0.99985102', false)).toBe('$0.9999');

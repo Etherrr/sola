@@ -594,3 +594,22 @@ test.describe('/track simulated lookup', () => {
     expect(b!.y).toBeGreaterThanOrEqual(0);
   });
 });
+
+test.describe('shared top bar fits at narrow widths', () => {
+  for (const width of [320, 360, 390, 520]) {
+    for (const path of ['/portfolio', '/track', '/settings']) {
+      test(`pill text stays inside its pill at ${width}px on ${path}`, async ({ page }) => {
+        await page.setViewportSize({ width, height: 700 });
+        await page.goto(path);
+        const pill = page.locator('.sim-pill').first();
+        await expect(pill).toBeVisible();
+        const fits = await pill.evaluate((el) => el.scrollWidth <= el.clientWidth + 1);
+        expect(fits).toBe(true);
+        const page_ok = await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth,
+        );
+        expect(page_ok).toBe(true);
+      });
+    }
+  }
+});

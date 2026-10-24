@@ -2934,17 +2934,22 @@ html {
 }
 @media (max-width: 520px) {
   .chain-select {
-    flex: 0 0 auto;
+    flex: 0 1 auto;
+    min-width: 0;
   }
   .chain-select select {
-    width: 8.5rem;
+    width: min(8.5rem, 36vw);
+    min-width: 0;
   }
   .sim-pill {
-    flex: 1 1 0;
-    min-width: 0;
+    flex: 1 1 auto;
+    min-width: min-content;
     white-space: normal;
+    overflow-wrap: normal;
     text-align: center;
     line-height: 1.25;
+    letter-spacing: 0.03em;
+    padding: 4px 6px;
   }
 }
 .track-table caption {
