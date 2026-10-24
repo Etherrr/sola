@@ -25,7 +25,12 @@ export function TrackForm() {
     if (!outcome || !output.current) return;
     const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     output.current.focus({ preventScroll: true });
-    output.current.scrollIntoView({ block: 'nearest', behavior: calm ? 'auto' : 'smooth' });
+    // Align the top of the outcome under the sticky bar when its start is not already comfortably
+    // in view. 'nearest' would align the bottom of a tall result and hide its heading.
+    const top = output.current.getBoundingClientRect().top;
+    if (top < 72 || top > window.innerHeight - 160) {
+      output.current.scrollIntoView({ block: 'start', behavior: calm ? 'auto' : 'smooth' });
+    }
   }, [outcome]);
 
   async function run(raw: string) {

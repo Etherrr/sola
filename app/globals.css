@@ -2256,11 +2256,23 @@ code {
   margin-left: 0;
 }
 @media (max-width: 520px) {
+  /* Keep the email in the accessibility tree; only hide it visually on phones. */
   .session-email {
-    display: none;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
   }
 }
 .app .track-output {
   scroll-margin-top: 72px;
   scroll-margin-bottom: 84px;
+}
+/* Keyboard focus scrolling must keep the focused control clear of the sticky top bar and the
+   phone tab bar. scroll-padding applies to focus-driven scrolling, not only to anchors. */
+html {
+  scroll-padding-top: 72px;
+  scroll-padding-bottom: 96px;
 }

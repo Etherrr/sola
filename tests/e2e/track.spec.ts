@@ -87,6 +87,97 @@ test.describe('/track simulated lookup', () => {
       .analyze();
     expect(axe.violations).toEqual([]);
   });
+  test('after a lookup the result or error start and focus are visible between the fixed bars', async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    const many = Array.from({ length: 30 }, (_, i) => ({
+      assetId: 'a' + i,
+      symbol: i === 0 ? 'A'.repeat(40) : 'TKN' + i,
+      decimals: 18,
+      amount: i === 0 ? '123456789012345678901234567890.123456789' : '1',
+      price: null,
+      value: null,
+    }));
+    const tall = {
+      ...okBody,
+      wallets: [{ ...okBody.wallets[0], assets: many }],
+      totals: { ...okBody.totals, unpricedAssetCount: 30 },
+    };
+    const geometry = () =>
+      page.evaluate(() => {
+        const out = document.querySelector('.track-output') as HTMLElement;
+        const bar = (document.querySelector('.topbar') as HTMLElement).getBoundingClientRect();
+        const side = (document.querySelector('.side') as HTMLElement).getBoundingClientRect();
+        const r = out.getBoundingClientRect();
+        const lowerBar = side.top > 100 ? side.top : window.innerHeight;
+        return {
+          focused: document.activeElement === out,
+          topClear: r.top >= bar.bottom - 1,
+          startAboveLowerBar: r.top + 40 <= lowerBar,
+          noHScroll: document.documentElement.scrollWidth <= window.innerWidth,
+        };
+      });
+    for (const [status, body] of [
+      [200, tall],
+      [503, { error: { code: 'disabled', message: 'x' }, requestId: 'r' }],
+    ] as const) {
+      await page.unroute('**/api/v1/portfolio/resolve').catch(() => {});
+      await mock(page, status, body);
+      await page.goto('/track/');
+      await page.getByRole('button', { name: 'Mixed tokens' }).click();
+      await expect(
+        page.locator('.track-output [role],.track-output h2,.track-output .notice').first(),
+      ).toBeVisible();
+      expect(await geometry()).toEqual({
+        focused: true,
+        topClear: true,
+        startAboveLowerBar: true,
+        noHScroll: true,
+      });
+    }
+  });
+  test('Shift+Tab and Tab after a lookup never leave a focused control under a fixed bar', async ({
+    page,
+  }) => {
+    await page.route('**/api/v1/portfolio/resolve', (r) =>
+      r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(okBody) }),
+    );
+    await page.goto('/track/');
+    await page.getByRole('button', { name: 'Mixed tokens' }).click();
+    await expect(page.getByRole('heading', { name: 'Result' })).toBeVisible();
+    const probe = () =>
+      page.evaluate(() => {
+        const el = document.activeElement as HTMLElement;
+        const bar = (document.querySelector('.topbar') as HTMLElement).getBoundingClientRect();
+        const side = (document.querySelector('.side') as HTMLElement).getBoundingClientRect();
+        const lower = side.top > 100 ? side.top : window.innerHeight;
+        const r = el.getBoundingClientRect();
+        const inBar = !!el.closest('.topbar, .side, .skip-link');
+        return {
+          what: (el.textContent || el.tagName).slice(0, 24),
+          top: Math.round(r.top),
+          bottom: Math.round(r.bottom),
+          bar: Math.round(bar.bottom),
+          lower: Math.round(lower),
+          ok: inBar || (r.top >= bar.bottom - 1 && r.bottom <= lower + 1),
+        };
+      });
+    const bad: unknown[] = [];
+    for (let i = 0; i < 14; i++) {
+      await page.keyboard.press('Shift+Tab');
+      await page.waitForTimeout(350);
+      const p = await probe();
+      if (!p.ok) bad.push(p);
+    }
+    for (let i = 0; i < 14; i++) {
+      await page.keyboard.press('Tab');
+      await page.waitForTimeout(350);
+      const p = await probe();
+      if (!p.ok) bad.push(p);
+    }
+    expect(bad).toEqual([]);
+  });
   test('malformed 200, HTML 200 and wrong-address 200 show an error and no balances', async ({
     page,
   }) => {

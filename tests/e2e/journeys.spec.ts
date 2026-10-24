@@ -326,11 +326,50 @@ test.describe('session status', () => {
     await expect(page.locator('.session-chip')).toContainText('jun@example.com', {
       useInnerText: false,
     });
+    // The email stays in the accessibility tree on every width (visually hidden on phones).
+    await expect(page.locator('.session-email')).toHaveText(
+      /Signed in via Cloudflare Access as\s*jun@example\.com/,
+    );
     status = 401;
     await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
     await expect(page.getByText('Session not verified')).toBeVisible();
     await expect(page.getByText('jun@example.com')).toHaveCount(0);
     expect(isMobile !== undefined).toBe(true);
+  });
+  test('a slow older 200 cannot bring back an email after a newer 401', async ({ page }) => {
+    let n = 0;
+    let releaseSecond: () => void = () => {};
+    const held = new Promise<void>((r) => (releaseSecond = r));
+    const ok = {
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        status: 'ok',
+        via: 'cloudflare-access',
+        identity: { email: 'jun@example.com' },
+      }),
+    };
+    await page.route('**/api/v1/session', async (r) => {
+      n += 1;
+      if (n === 1) return r.fulfill(ok);
+      if (n === 2) {
+        await held;
+        return r.fulfill(ok).catch(() => {});
+      }
+      return r.fulfill({ status: 401, contentType: 'application/json', body: '{}' });
+    });
+    await page.goto('/track');
+    await expect(page.locator('.session-chip')).toContainText('jun@example.com', {
+      useInnerText: false,
+    });
+    const ping = () => page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+    await ping(); // request 2 is held
+    await ping(); // request 3 answers 401
+    await expect(page.getByText('Session not verified')).toBeVisible();
+    releaseSecond();
+    await page.waitForTimeout(300);
+    await expect(page.getByText('Session not verified')).toBeVisible();
+    await expect(page.getByText('jun@example.com')).toHaveCount(0);
   });
   test('no identity is shown when the API is absent or answers with the wrong shape', async ({
     page,
