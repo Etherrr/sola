@@ -321,11 +321,9 @@ export function TrackForm({ mode = 'mock' }: { mode?: 'checking' | 'mock' | 'liv
             </p>
             {!ok.simulated && (
               <p className="fine">
-                Privacy: this lookup sent the address to a public Ethereum node (PublicNode) from
-                the app server and read Chainlink USD price feeds through it. PublicNode&apos;s
-                published policy says it keeps IP addresses and request data for at most 24 hours;
-                that is their statement and is not verified here. Prices are on-chain feed values at
-                the time shown on each feed, not market quotes.
+                {network === 'solana'
+                  ? "Privacy: this lookup sent the address to a public Solana node (PublicNode) from the app server, and read the Chainlink SOL/USD price feed through a public Ethereum node (PublicNode). PublicNode's published policy says it keeps IP addresses and request data for at most 24 hours; that is their statement and is not verified here. Prices are on-chain feed values at the time shown on each feed, not market quotes."
+                  : "Privacy: this lookup sent the address to a public Ethereum node (PublicNode) from the app server and read Chainlink USD price feeds through it. PublicNode's published policy says it keeps IP addresses and request data for at most 24 hours; that is their statement and is not verified here. Prices are on-chain feed values at the time shown on each feed, not market quotes."}
               </p>
             )}
           </section>
