@@ -49,7 +49,7 @@ test('all routes render, remain responsive, and pass WCAG automated checks', asy
   }
   expect(errors).toEqual([]);
 });
-test('beginner, experienced and demo entry points work', async ({ page }) => {
+test('beginner, experienced and demo entry points work', async ({ page, isMobile }) => {
   await page.goto('/');
   await page.getByRole('link', { name: /^Education/ }).click();
   await expect(page).toHaveURL(/\/education\/?$/);
@@ -63,7 +63,12 @@ test('beginner, experienced and demo entry points work', async ({ page }) => {
   await expect(page.locator('input')).toHaveCount(0);
   await page.getByRole('link', { name: 'Open simulated portfolio' }).click();
   await expect(page.getByText('$11,000.00', { exact: true })).toBeVisible();
-  await expect(page.getByRole('cell', { name: /Unknown.*Price unavailable/ })).toBeVisible();
+  // Phones show the holdings as a list; larger screens show the table. Same data either way.
+  await expect(
+    isMobile
+      ? page.locator('.pos-cards li', { hasText: 'Price unavailable' })
+      : page.getByRole('cell', { name: /Unknown.*Price unavailable/ }),
+  ).toBeVisible();
   await expect(page.locator('.mode-marker')).toContainText('SIMULATED');
 });
 test('security quiz gives feedback and optional local progress can be cleared', async ({
@@ -368,6 +373,31 @@ test.describe('entrance', () => {
       'aria-label',
       /jun@example.com/,
     );
+  });
+
+  test('holdings keep asset, value and debt direction on screen without sideways scrolling on phones', async ({
+    page,
+    isMobile,
+  }) => {
+    await page.goto('/portfolio');
+    const vis = (sel: string) =>
+      page.locator(sel).evaluateAll((els) =>
+        els.some((e) => {
+          const r = e.getBoundingClientRect();
+          return r.width > 0 && r.right <= window.innerWidth && r.left >= 0;
+        }),
+      );
+    if (isMobile) {
+      expect(await vis('.pos-cards li .pos-val')).toBe(true);
+      await expect(page.locator('.pos-cards')).toBeVisible();
+      await expect(page.locator('.pos-cards .debt')).toContainText('−$1,000.00');
+      await expect(page.locator('.pos-cards')).toContainText('Price unavailable');
+      await expect(page.locator('.table-scroll')).toBeHidden();
+    } else {
+      await expect(page.locator('.pos-cards')).toBeHidden();
+      await expect(page.locator('.table-scroll')).toBeVisible();
+    }
+    await expect(page.locator('svg.donut')).toHaveAttribute('aria-label', /ETH 37.5 percent/);
   });
 
   test('Tab out of the account control closes it; a route change rechecks the session', async ({

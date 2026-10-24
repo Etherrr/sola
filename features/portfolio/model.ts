@@ -53,3 +53,45 @@ export function networkAllocation(positions: readonly Position[]) {
     percent: total === 0n ? 0 : Number((value * 1000n + total / 2n) / total) / 10,
   }));
 }
+
+/**
+ * Gross priced allocation by holding, keyed by assetId (never by ticker: two assets can share a
+ * symbol). Debt, unpriced and receipt rows are excluded. Exact cents; one bounded percent per row.
+ */
+export function assetAllocation(positions: readonly Position[]) {
+  const byAsset = new Map<string, { symbol: string; value: bigint }>();
+  for (const position of uniqueExposures(positions)) {
+    if (position.kind === 'Debt' || position.valueCents === null) continue;
+    const cur = byAsset.get(position.assetId);
+    byAsset.set(position.assetId, {
+      symbol: position.symbol,
+      value: (cur?.value ?? 0n) + position.valueCents,
+    });
+  }
+  const total = [...byAsset.values()].reduce((sum, v) => sum + v.value, 0n);
+  return [...byAsset]
+    .sort((a, b) =>
+      a[1].value === b[1].value ? a[0].localeCompare(b[0]) : a[1].value > b[1].value ? -1 : 1,
+    )
+    .map(([assetId, v]) => ({
+      assetId,
+      symbol: v.symbol,
+      value: v.value,
+      percent: total === 0n ? 0 : Number((v.value * 1000n + total / 2n) / total) / 10,
+    }));
+}
+/** Stable palette index per symbol so a symbol keeps its colour in the donut, legend and table. */
+export const SYMBOL_COLORS = ['#d8b45c', '#8b7cf6', '#4fb8a6', '#e07a8a', '#6aa6e8', '#c98a4b'];
+const KNOWN: Record<string, string> = {
+  ETH: '#8b7cf6',
+  SOL: '#4fb8a6',
+  USDC: '#6aa6e8',
+  'SOL / USDC': '#d8b45c',
+  DEMO: '#c98a4b',
+};
+export function symbolColor(symbol: string): string {
+  if (KNOWN[symbol]) return KNOWN[symbol];
+  let h = 0;
+  for (const ch of symbol) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return SYMBOL_COLORS[h % SYMBOL_COLORS.length]!;
+}

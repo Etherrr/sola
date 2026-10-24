@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { money, type Position } from './model';
+import { money, symbolColor, type Position } from './model';
 export function PositionTable({ positions }: { positions: Position[] }) {
   if (!positions.length)
     return (
@@ -10,49 +10,76 @@ export function PositionTable({ positions }: { positions: Position[] }) {
       </div>
     );
   return (
-    <div
-      className="table-scroll"
-      tabIndex={0}
-      role="region"
-      aria-label="Scrollable simulated holdings table"
-    >
-      <table>
-        <caption>Simulated holdings · USD values · all quantities invented</caption>
-        <thead>
-          <tr>
-            <th scope="col">Asset / position</th>
-            <th scope="col">Network</th>
-            <th scope="col">Type</th>
-            <th scope="col">Quantity</th>
-            <th scope="col">Sample value</th>
-          </tr>
-        </thead>
-        <tbody>
-          {positions.map((item) => (
-            <tr key={item.id}>
-              <th scope="row">
-                <span
-                  className={`asset-icon ${item.network === 'Solana' ? 'purple' : ''}`}
-                  aria-hidden="true"
-                >
-                  {item.symbol[0]}
-                </span>
-                {item.symbol}
-              </th>
-              <td>{item.network}</td>
-              <td>
-                <span className="type-label">{item.kind}</span>
-              </td>
-              <td>{item.quantity}</td>
-              <td className={item.kind === 'Debt' ? 'debt' : ''}>
-                {item.kind === 'Debt' ? '−' : ''}
-                {money(item.valueCents)}
-                {item.valueCents === null && <small className="muted">Price unavailable</small>}
-              </td>
+    <>
+      <ul className="pos-cards" aria-label="Simulated holdings">
+        {positions.map((item) => (
+          <li key={item.id}>
+            <span
+              className="asset-icon"
+              style={{ background: symbolColor(item.symbol) }}
+              aria-hidden="true"
+            >
+              {item.symbol[0]}
+            </span>
+            <span className="pos-main">
+              <strong>{item.symbol}</strong>
+              <small>
+                {item.network} · {item.kind} · {item.quantity}
+              </small>
+            </span>
+            <span className={item.kind === 'Debt' ? 'pos-val debt' : 'pos-val'}>
+              {item.kind === 'Debt' ? '−' : ''}
+              {money(item.valueCents)}
+              {item.valueCents === null && <small className="muted">Price unavailable</small>}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <div
+        className="table-scroll"
+        tabIndex={0}
+        role="region"
+        aria-label="Scrollable simulated holdings table"
+      >
+        <table>
+          <caption>Simulated holdings · USD values · all quantities invented</caption>
+          <thead>
+            <tr>
+              <th scope="col">Asset / position</th>
+              <th scope="col">Network</th>
+              <th scope="col">Type</th>
+              <th scope="col">Quantity</th>
+              <th scope="col">Sample value</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            {positions.map((item) => (
+              <tr key={item.id}>
+                <th scope="row">
+                  <span
+                    className="asset-icon"
+                    style={{ background: symbolColor(item.symbol) }}
+                    aria-hidden="true"
+                  >
+                    {item.symbol[0]}
+                  </span>
+                  {item.symbol}
+                </th>
+                <td>{item.network}</td>
+                <td>
+                  <span className="type-label">{item.kind}</span>
+                </td>
+                <td>{item.quantity}</td>
+                <td className={item.kind === 'Debt' ? 'debt' : ''}>
+                  {item.kind === 'Debt' ? '−' : ''}
+                  {money(item.valueCents)}
+                  {item.valueCents === null && <small className="muted">Price unavailable</small>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }

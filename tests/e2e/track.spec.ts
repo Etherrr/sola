@@ -74,6 +74,15 @@ test.describe('/track simulated lookup', () => {
     await page.getByRole('button', { name: 'Mixed tokens' }).click();
     await expect(page.getByRole('heading', { name: 'Result' })).toBeVisible();
     await expect(page.getByText('Unknown').first()).toBeVisible();
+    // The result table must stay visible at every width, phones included (a phone-only rule once hid it).
+    const row = page.getByRole('row', { name: /ETH 1\.5/ });
+    await expect(row).toBeVisible();
+    expect(
+      await row.evaluate((e) => {
+        const r = e.getBoundingClientRect();
+        return r.width > 0 && r.left >= 0;
+      }),
+    ).toBe(true);
     await expect(page.getByText(/Nothing was read from a blockchain/)).toBeVisible();
     expect(posted).toBe(1);
     expect(
