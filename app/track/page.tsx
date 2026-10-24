@@ -1,21 +1,10 @@
-import { PageIntro, ActionLink } from '@/components/ui';
-import { ModeMarker } from '@/components/mode-marker';
-import { TrackForm } from '@/features/portfolio/track-form';
-export const metadata = { title: 'Address lookup (simulated)' };
+import { ActionLink } from '@/components/ui';
+import { TrackApp } from '@/features/portfolio/track-intro';
+export const metadata = { title: 'Address lookup' };
 export default function Track() {
   return (
     <div className="page-container">
-      <PageIntro eyebrow="WATCH-ONLY · SIMULATED" title="Track a public address">
-        <p>
-          Look up an Ethereum address. Results are fixed simulated examples, not blockchain data.
-          Live data stays off until it is separately approved.
-        </p>
-      </PageIntro>
-      <ModeMarker
-        mode="SIMULATED"
-        note="Simulated fixtures. No live data, no wallet, nothing is signed."
-      />
-      <TrackForm />
+      <TrackApp />
       <details className="limits">
         <summary>What it does and does not do</summary>
         <ul>

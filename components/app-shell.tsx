@@ -97,7 +97,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="app-body">
           <header className="topbar">
             <ChainSelector />
-            <span className="sim-pill">◇ SIMULATED</span>
+            <span className="sim-pill">
+              {path.startsWith('/track') ? '◇ MODE SHOWN WITH RESULT' : '◇ SIMULATED'}
+            </span>
             <AccountMenu />
             <a
               className="top-return"

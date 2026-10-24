@@ -12,7 +12,7 @@ const SAMPLES: { label: string; address: string }[] = [
   { label: 'Source unavailable', address: '0x111111111111111111111111111111111111111f' },
 ];
 
-export function TrackForm() {
+export function TrackForm({ examples = true }: { examples?: boolean }) {
   const [value, setValue] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -91,27 +91,29 @@ export function TrackForm() {
             </button>
           </div>
         </form>
-        <div className="notice">
-          <p>
-            <strong>Simulated examples</strong> (fixed fixtures, not real wallets):
-          </p>
-          <div className="actions">
-            {SAMPLES.map((s) => (
-              <button
-                key={s.label}
-                type="button"
-                className="button secondary chip"
-                disabled={busy}
-                onClick={() => {
-                  setValue(s.address);
-                  void run(s.address);
-                }}
-              >
-                {s.label}
-              </button>
-            ))}
+        {examples && (
+          <div className="notice">
+            <p>
+              <strong>Simulated examples</strong> (fixed fixtures, not real wallets):
+            </p>
+            <div className="actions">
+              {SAMPLES.map((s) => (
+                <button
+                  key={s.label}
+                  type="button"
+                  className="button secondary chip"
+                  disabled={busy}
+                  onClick={() => {
+                    setValue(s.address);
+                    void run(s.address);
+                  }}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </div>
       <div className="track-output" role="status" aria-live="polite" ref={output} tabIndex={-1}>
         {busy && <p>Looking up…</p>}
@@ -204,6 +206,15 @@ export function TrackForm() {
             <p className="fine">
               Provider: {ok.provider}. Observed {ok.observedAt}.
             </p>
+            {!ok.simulated && (
+              <p className="fine">
+                Privacy: this lookup sent the address to a public Ethereum node (PublicNode) from
+                the app server and read Chainlink USD price feeds through it. PublicNode&apos;s
+                published policy says it keeps IP addresses and request data for at most 24 hours;
+                that is their statement and is not verified here. Prices are on-chain feed values at
+                the time shown on each feed, not market quotes.
+              </p>
+            )}
           </section>
         )}
       </div>

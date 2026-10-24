@@ -195,3 +195,20 @@ export async function fetchSession(signal?: AbortSignal): Promise<SessionState> 
     signal?.removeEventListener('abort', onAbort);
   }
 }
+
+export type DataMode = 'mock' | 'live' | 'unknown';
+/** Which data mode lookups use on this deployment (same-origin health endpoint; no address is sent). */
+export async function fetchDataMode(signal?: AbortSignal): Promise<DataMode> {
+  try {
+    const r = await fetch('/api/v1/health', {
+      cache: 'no-store',
+      credentials: 'same-origin',
+      signal,
+    });
+    const j: unknown = r.ok ? await r.json() : null;
+    const m = (j as { mode?: unknown } | null)?.mode;
+    return m === 'mock' || m === 'live' ? m : 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}

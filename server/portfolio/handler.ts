@@ -9,14 +9,18 @@ import {
   type KeyFetcher,
 } from './access';
 import { mockProvider, type PortfolioProvider } from './provider';
+import { createLiveProvider } from './live-provider';
 
 export type Env = {
   PORTFOLIO_API_ENABLED?: string;
+  /** Live read-only data. Only the exact string '1' turns it on; anything else keeps the simulated fixtures. */
+  PORTFOLIO_LIVE_DATA?: string;
   ACCESS_TEAM_DOMAIN?: string;
   ACCESS_AUD?: string;
 };
 export type Deps = {
   provider: PortfolioProvider;
+  liveProvider: PortfolioProvider;
   fetchKeys: KeyFetcher;
   now: () => Date;
   id: () => string;
@@ -26,12 +30,16 @@ export type Deps = {
 
 export const defaultDeps = (): Deps => ({
   provider: mockProvider,
+  liveProvider: createLiveProvider(),
   fetchKeys: fetchAccessKeys,
   now: () => new Date(),
   id: () => crypto.randomUUID(),
   timeoutMs: 8000,
   bodyDeadlineMs: 3000,
 });
+
+/** The provider for this request: simulated unless the kill switch is exactly '1'. */
+const pick = (env: Env, d: Deps) => (env.PORTFOLIO_LIVE_DATA === '1' ? d.liveProvider : d.provider);
 
 const HEADERS = {
   'content-type': 'application/json; charset=utf-8',
@@ -155,7 +163,7 @@ export async function handleResolve(
   let result;
   try {
     result = await Promise.race([
-      d.provider.fetchWallets(parsed.value.addresses, ctl.signal),
+      pick(env, d).fetchWallets(parsed.value.addresses, ctl.signal),
       new Promise<never>((_, rej) =>
         ctl.signal.addEventListener('abort', () => rej(new Error('timeout'))),
       ),
@@ -227,7 +235,11 @@ export async function handleResolve(
       note: 'Wallet balances only: DeFi deposits, staking, debts, LP claims and other positions may be missing; the subtotal is not total net worth.',
     },
     partial: result.wallets.some((w) => w.partial),
-    warnings: result.simulated ? ['SIMULATED fixture data. Not read from any blockchain.'] : [],
+    warnings: result.simulated
+      ? ['SIMULATED fixture data. Not read from any blockchain.']
+      : [
+          'Live read-only Ethereum data. Only ETH, USDC, USDT, DAI and WETH are checked; other tokens, NFTs and DeFi positions are not shown.',
+        ],
   };
   return reply(200, body);
 }
@@ -242,7 +254,7 @@ export async function handleHealth(
     return err(405, 'method_not_allowed', 'Use GET.', requestId, { allow: 'GET' });
   const blocked = await gate(req, env, d, requestId);
   if (blocked) return blocked;
-  return reply(200, { status: 'ok', mode: d.provider.simulated ? 'mock' : 'live', requestId });
+  return reply(200, { status: 'ok', mode: pick(env, d).simulated ? 'mock' : 'live', requestId });
 }
 
 export async function handleNetworks(
@@ -256,7 +268,7 @@ export async function handleNetworks(
   const blocked = await gate(req, env, d, requestId);
   if (blocked) return blocked;
   return reply(200, {
-    networks: [{ id: 'ethereum', chainId: 1, status: d.provider.simulated ? 'mock' : 'live' }],
+    networks: [{ id: 'ethereum', chainId: 1, status: pick(env, d).simulated ? 'mock' : 'live' }],
     requestId,
   });
 }

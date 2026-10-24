@@ -14,6 +14,7 @@ import {
 } from '../server/portfolio/handler';
 import { mockProvider } from '../server/portfolio/provider';
 import { readExpiresAt } from '../server/portfolio/access';
+import { createLiveProvider } from '../server/portfolio/live-provider';
 
 const TEAM = 'team-example.cloudflareaccess.com';
 const AUD = 'aud123';
@@ -799,5 +800,68 @@ describe('readExpiresAt', () => {
   it('rejects a missing or garbage token', () => {
     expect(readExpiresAt(null)).toBeNull();
     expect(readExpiresAt('nope')).toBeNull();
+  });
+});
+
+describe('live data kill switch', () => {
+  const fakeRpc = (async (_u: string, init: RequestInit) => {
+    const reqs = JSON.parse(String(init.body)) as { id: number; method: string }[];
+    return new Response(
+      JSON.stringify(
+        reqs.map((r) => ({
+          jsonrpc: '2.0',
+          id: r.id,
+          result:
+            r.method === 'eth_getBalance'
+              ? '0x' + (10n ** 18n).toString(16)
+              : '0x' + '0'.repeat(64),
+        })),
+      ),
+    );
+  }) as unknown as typeof fetch;
+  const call = async (env: Env) => {
+    const s = await signer();
+    const d = deps(s.keys, {
+      liveProvider: createLiveProvider({ fetch: fakeRpc, now: () => NOW }),
+    });
+    const jwt = await s.sign(good());
+    const r = await handleResolve(
+      post({ network: 'ethereum', addresses: [A('1')], currency: 'USD' }, jwt),
+      env,
+      d,
+    );
+    return { status: r.status, body: await r.json(), d, jwt, s };
+  };
+  it('is OFF unless the variable is exactly "1": the simulated fixtures answer', async () => {
+    for (const v of [undefined, '', 'true', 'yes', '0', ' 1', '01']) {
+      const { body } = await call({ ...ENV, PORTFOLIO_LIVE_DATA: v });
+      expect(body.mode).toBe('mock');
+      expect(body.simulated).toBe(true);
+    }
+  });
+  it('"1" selects the live provider and says what is and is not covered', async () => {
+    const { status, body } = await call({ ...ENV, PORTFOLIO_LIVE_DATA: '1' });
+    expect(status).toBe(200);
+    expect(body.mode).toBe('live');
+    expect(body.simulated).toBe(false);
+    expect(body.provider).toBe('publicnode-rpc+chainlink');
+    expect(body.warnings.join()).toMatch(/Only ETH, USDC, USDT, DAI and WETH/);
+    expect(body.totals.note).toMatch(/not total net worth/);
+  });
+  it('health and networks report live only when the switch is on', async () => {
+    const s = await signer();
+    const d = deps(s.keys, {
+      liveProvider: createLiveProvider({ fetch: fakeRpc, now: () => NOW }),
+    });
+    const jwt = await s.sign(good());
+    const req = () =>
+      new Request('https://app.example/api/v1/networks', {
+        headers: { 'cf-access-jwt-assertion': jwt },
+      });
+    expect((await (await handleNetworks(req(), ENV, d)).json()).networks[0].status).toBe('mock');
+    expect(
+      (await (await handleNetworks(req(), { ...ENV, PORTFOLIO_LIVE_DATA: '1' }, d)).json())
+        .networks[0].status,
+    ).toBe('live');
   });
 });
