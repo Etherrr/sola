@@ -73,7 +73,7 @@ const SCENARIOS: Record<
   '5': {
     name: 'partial data',
     raws: [ETH(10n ** 18n)],
-    warnings: ['Some token data could not be loaded. This is not an empty wallet.'],
+    warnings: ['Some token data could not be loaded. This result cannot tell you whether the wallet is empty.'],
     partial: true,
   },
 };

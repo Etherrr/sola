@@ -136,7 +136,7 @@ export function TrackForm({ mode = 'mock' }: { mode?: 'checking' | 'mock' | 'liv
             <ModeMarker
               context="lookup result"
               mode="INCOMPLETE"
-              note="No balances are shown because the lookup did not complete. This is not an empty wallet."
+              note="No balances are shown because the lookup did not complete. This result cannot tell you whether the wallet is empty."
             />
             <p>{outcome.message}</p>
           </div>

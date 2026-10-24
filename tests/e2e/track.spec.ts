@@ -166,6 +166,29 @@ test.describe('/track data mode follows the server', () => {
         ).toBeVisible();
     });
   }
+  test('a failed lookup says nothing is known, never that the wallet is empty', async ({
+    page,
+  }) => {
+    await page.route('**/api/v1/health', (r) =>
+      r.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ status: 'ok', mode: 'live', requestId: 'r' }),
+      }),
+    );
+    await page.route('**/api/v1/portfolio/resolve', (r) =>
+      r.fulfill({
+        status: 429,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { code: 'rate_limited', message: 'busy' }, requestId: 'r' }),
+      }),
+    );
+    await page.goto('/track/');
+    await page.getByRole('textbox').fill(ADDR);
+    await page.getByRole('button', { name: /look up/i }).click();
+    await expect(page.getByText(/cannot tell you whether the wallet is empty/)).toBeVisible();
+    await expect(page.getByText(/This is not an empty wallet/)).toHaveCount(0);
+  });
   test('while the mode is still being checked: no examples, submit disabled, nothing is sent', async ({
     page,
   }) => {
