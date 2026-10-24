@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ModeMarker } from '@/components/mode-marker';
 import { lookupAddress, type LookupOutcome } from './api-client';
+import { differsWhenRounded, fmtAmount, fmtPrice, fmtUsd } from './format';
 
 const SAMPLES: { label: string; address: string }[] = [
   { label: 'Empty wallet', address: '0x1111111111111111111111111111111111111110' },
@@ -19,6 +20,7 @@ export function TrackForm({ mode = 'mock' }: { mode?: 'checking' | 'mock' | 'liv
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [outcome, setOutcome] = useState<LookupOutcome | null>(null);
+  const [exact, setExact] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const output = useRef<HTMLDivElement>(null);
   // After a completed lookup, bring the result or error into view and move focus to it, so the
@@ -40,6 +42,7 @@ export function TrackForm({ mode = 'mock' }: { mode?: 'checking' | 'mock' | 'liv
     if (mode === 'checking') return;
     const address = raw.trim();
     setOutcome(null);
+    setExact(false);
     if (!/^0x[0-9a-fA-F]{40}$/.test(address)) {
       setError(
         'Enter an Ethereum address: 0x followed by 40 hexadecimal characters. Names such as .eth are not supported yet.',
@@ -54,6 +57,11 @@ export function TrackForm({ mode = 'mock' }: { mode?: 'checking' | 'mock' | 'liv
   }
 
   const ok = outcome?.kind === 'ok' ? outcome.data : null;
+  const subtotal = ok?.totals.recognizedPricedSubtotalUsd ?? null;
+  const canShowExact =
+    !!ok &&
+    (ok.wallets.some((w) => w.assets.some((a) => differsWhenRounded(a.amount, a.price, a.value))) ||
+      (subtotal !== null && fmtUsd(subtotal, true) !== fmtUsd(subtotal, false)));
   return (
     <div className="track">
       <div className="track-input">
@@ -153,6 +161,19 @@ export function TrackForm({ mode = 'mock' }: { mode?: 'checking' | 'mock' | 'liv
                   : `Balances were read when you pressed Look up (${ok.generatedAt.slice(0, 19).replace('T', ' ')} UTC). Each price shows when its own feed last updated, which can be hours earlier.`
               }
             />
+            {canShowExact && (
+              <p className="fine track-precision">
+                {exact ? 'Showing every digit.' : 'Rounded for reading.'}{' '}
+                <button
+                  type="button"
+                  className="button secondary chip"
+                  aria-pressed={exact}
+                  onClick={() => setExact(!exact)}
+                >
+                  {exact ? 'Show rounded' : 'Show exact values'}
+                </button>
+              </p>
+            )}
             {ok.wallets.map((w) => (
               <div key={w.address}>
                 <p className="fine">Address: {w.address}</p>
@@ -165,24 +186,41 @@ export function TrackForm({ mode = 'mock' }: { mode?: 'checking' | 'mock' | 'liv
                         : 'No ETH, USDC, USDT, DAI or WETH balance was found. Other tokens, NFTs and DeFi positions were not checked, so this does not show that the wallet is empty.'}
                   </p>
                 ) : (
-                  <div className="table-scroll">
-                    <table>
+                  <div
+                    className="table-scroll"
+                    tabIndex={0}
+                    role="region"
+                    aria-label="Wallet balances table, scrolls sideways when it is wider than the screen"
+                  >
+                    <table className="track-table" role="table">
                       <caption>Wallet balances (Ethereum). Prices in USD.</caption>
-                      <thead>
-                        <tr>
-                          <th scope="col">Asset</th>
-                          <th scope="col">Amount</th>
-                          <th scope="col">Price</th>
-                          <th scope="col">Value</th>
+                      <thead role="rowgroup">
+                        <tr role="row">
+                          <th scope="col" role="columnheader">
+                            Asset
+                          </th>
+                          <th scope="col" role="columnheader">
+                            Amount
+                          </th>
+                          <th scope="col" role="columnheader">
+                            Price
+                          </th>
+                          <th scope="col" role="columnheader">
+                            Value
+                          </th>
                         </tr>
                       </thead>
-                      <tbody>
+                      <tbody role="rowgroup">
                         {w.assets.map((a) => (
-                          <tr key={a.assetId}>
-                            <th scope="row">{a.symbol}</th>
-                            <td>{a.amount}</td>
-                            <td>
-                              {a.price === null ? 'Unknown' : `$${a.price}`}
+                          <tr key={a.assetId} role="row">
+                            <th scope="row" role="rowheader">
+                              {a.symbol}
+                            </th>
+                            <td role="cell" className="t-amount" data-unit={a.symbol}>
+                              {fmtAmount(a.amount, exact)}
+                            </td>
+                            <td role="cell" className="t-price">
+                              {a.price === null ? 'Unknown' : fmtPrice(a.price, exact)}
                               {a.price !== null && !ok.simulated && a.priceObservedAt && (
                                 <small className="muted price-src">
                                   {(a.priceSource ?? 'price feed').replace(
@@ -193,7 +231,9 @@ export function TrackForm({ mode = 'mock' }: { mode?: 'checking' | 'mock' | 'liv
                                 </small>
                               )}
                             </td>
-                            <td>{a.value === null ? 'Unknown' : `$${a.value}`}</td>
+                            <td role="cell" className="t-value">
+                              {a.value === null ? 'Unknown' : fmtUsd(a.value, exact)}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -213,7 +253,7 @@ export function TrackForm({ mode = 'mock' }: { mode?: 'checking' | 'mock' | 'liv
                 <dd>
                   {ok.totals.recognizedPricedSubtotalUsd === null
                     ? 'Unknown'
-                    : `$${ok.totals.recognizedPricedSubtotalUsd}`}
+                    : fmtUsd(ok.totals.recognizedPricedSubtotalUsd, exact)}
                 </dd>
               </div>
               <div>

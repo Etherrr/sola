@@ -225,6 +225,94 @@ test.describe('/track data mode follows the server', () => {
     await expect(page.getByText('WATCH-ONLY · SIMULATED')).toHaveCount(0);
   });
 });
+test.describe('/track live-shaped result readability (mocked response)', () => {
+  const liveBody = {
+    ...okBody,
+    provider: 'publicnode-rpc+chainlink',
+    mode: 'live',
+    simulated: false,
+    wallets: [
+      {
+        address: '0x' + 'ab'.repeat(20),
+        partial: false,
+        warnings: [],
+        assets: [
+          {
+            assetId: 'eth',
+            symbol: 'ETH',
+            decimals: 18,
+            amount: '5.773445691890789631',
+            price: '2383.71109191',
+            value: '13763.012345',
+            priceSource: 'chainlink:ETH/USD',
+            priceObservedAt: '2026-10-24T03:00:00.000Z',
+          },
+          {
+            assetId: 'usdc',
+            symbol: 'USDC',
+            decimals: 6,
+            amount: '38.192124',
+            price: '0.99985102',
+            value: '38.186434',
+            priceSource: 'chainlink:USDC/USD',
+            priceObservedAt: '2026-10-24T03:00:00.000Z',
+          },
+        ],
+      },
+    ],
+    totals: { recognizedPricedSubtotalUsd: '13801.198779', unpricedAssetCount: 0, note: 'n' },
+    warnings: [],
+  };
+  test('amount, price and value read together without sideways panning; exact digits on request', async ({
+    page,
+  }) => {
+    await page.route('**/api/v1/health', (r) =>
+      r.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ status: 'ok', mode: 'live', requestId: 'r' }),
+      }),
+    );
+    await mock(page, 200, liveBody);
+    await page.goto('/track/');
+    await expect(page.getByText(/Nothing has been looked up yet/)).toHaveCount(0);
+    await page.getByLabel(/Public Ethereum address/).fill('0x' + 'ab'.repeat(20));
+    await page.getByRole('button', { name: 'Look up' }).click();
+    await expect(page.getByRole('heading', { name: 'Result' })).toBeVisible();
+    await expect(page.getByText(/Nothing has been looked up yet/)).toHaveCount(0);
+    await expect(page.getByText('$13,763.01', { exact: true })).toBeVisible();
+    await expect(page.getByText('5.773446', { exact: true })).toBeVisible();
+    await expect(page.getByText('$13,801.20', { exact: true })).toBeVisible();
+    await expect(page.getByText('5.773445691890789631')).toHaveCount(0);
+    // Every cell of every row is inside the viewport with no horizontal pan.
+    const inside = await page.evaluate(() => {
+      const w = window.innerWidth;
+      const cells = [...document.querySelectorAll('.track-table tbody th, .track-table tbody td')];
+      const box = document.querySelector('.track-output .table-scroll') as HTMLElement;
+      return {
+        page: document.documentElement.scrollWidth <= w,
+        scroller: box.scrollWidth <= box.clientWidth,
+        cells: cells.every((c) => {
+          const r = c.getBoundingClientRect();
+          return r.width > 0 && r.left >= 0 && r.right <= w;
+        }),
+      };
+    });
+    expect(inside).toEqual({ page: true, scroller: true, cells: true });
+    await page.getByRole('button', { name: 'Show exact values' }).click();
+    await expect(page.getByText('5.773445691890789631')).toBeVisible();
+    await expect(page.getByText('$13,763.012345', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Show rounded' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await page.evaluate(() => window.scrollTo(0, 0));
+    const axe = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'])
+      .analyze();
+    expect(axe.violations).toEqual([]);
+  });
+});
 test.describe('/track simulated lookup', () => {
   test('shows a simulated result with Unknown prices and no console errors', async ({ page }) => {
     // Smooth scrolling to the result would move targets while axe measures them.

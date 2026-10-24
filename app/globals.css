@@ -2787,3 +2787,89 @@ html {
   white-space: normal;
   text-align: right;
 }
+
+/* Live and simulated Track results on phones: one card per asset instead of a table that needs
+   sideways panning. Symbol and value lead; amount and price sit underneath and may wrap. The
+   header row is visually hidden (still read by screen readers); roles keep the table semantics. */
+.track-precision {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+@media (max-width: 640px) {
+  .track-table,
+  .track-table tbody {
+    display: block;
+    width: 100%;
+  }
+  .track-table caption {
+    display: block;
+  }
+  .track-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  .track-table tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'sym val'
+      'amt amt'
+      'prc prc';
+    gap: 2px 12px;
+    padding: 10px 0;
+    border-top: 1px solid var(--line, rgba(255, 255, 255, 0.12));
+  }
+  .app .track-table th[scope='row'] {
+    grid-area: sym;
+    padding: 0;
+    border: 0;
+    overflow-wrap: anywhere;
+  }
+  .app .track-table .t-value {
+    grid-area: val;
+    padding: 0;
+    border: 0;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+  .app .track-table .t-amount {
+    grid-area: amt;
+    padding: 0;
+    border: 0;
+    overflow-wrap: anywhere;
+    font-variant-numeric: tabular-nums;
+    text-align: left;
+  }
+  .app .track-table .t-price {
+    grid-area: prc;
+    padding: 0;
+    border: 0;
+    font-size: 0.85rem;
+    color: var(--muted);
+    text-align: left;
+  }
+  .app .track-table .t-amount::after {
+    content: ' ' attr(data-unit);
+    color: var(--muted);
+  }
+  .track-table .price-src {
+    display: inline;
+    max-width: none;
+    margin: 0 0 0 6px;
+    text-align: left;
+  }
+  .app .track-output .track-table td:nth-child(n + 2),
+  .app .track-output .track-table th:nth-child(n + 2) {
+    text-align: left;
+  }
+  .app .track-output .track-table .t-value {
+    text-align: right;
+  }
+}

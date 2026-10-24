@@ -51,9 +51,9 @@ function TrackIntro({ mode }: { mode: Shown }) {
             are reference values, not executable market prices.
           </p>
           <p className="notice">
-            Live mode is on for this deployment. Nothing has been looked up yet. Read-only: no
-            wallet connects and nothing is signed. A pasted address is sent to a public Ethereum
-            node to read its balances.
+            Live mode is on for this deployment. Read-only: no wallet connects and nothing is
+            signed. A pasted address is sent to a public Ethereum node to read its balances. Each
+            result below says when it was read.
           </p>
         </>
       ) : mode === 'mock' ? (
