@@ -105,6 +105,55 @@ test.describe('/track data mode follows the server', () => {
     await expect(page.getByText(/Chainlink ETH\/USD · feed updated/)).toBeVisible();
     await expect(page.getByText(/Nothing was read from a blockchain/)).toHaveCount(0);
   });
+  for (const [name, mode, sim, partial, want, not] of [
+    ['mock empty', 'mock', true, false, /An empty wallet is a valid result/, /not an empty wallet/],
+    [
+      'live covered-zero',
+      'live',
+      false,
+      false,
+      /does not show that the wallet is empty/,
+      /valid result|No balances could be read/,
+    ],
+    [
+      'live all reads failed',
+      'live',
+      false,
+      true,
+      /This is not an empty wallet/,
+      /valid result|No ETH, USDC/,
+    ],
+  ] as const) {
+    test(`empty result wording: ${name}`, async ({ page }) => {
+      await page.route('**/api/v1/health', (r) =>
+        r.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ status: 'ok', mode, requestId: 'r' }),
+        }),
+      );
+      await mock(page, 200, {
+        ...okBody,
+        mode,
+        simulated: sim,
+        partial,
+        wallets: [
+          {
+            address: ADDR,
+            assets: [],
+            partial,
+            warnings: partial ? ['ETH balance could not be read; this is not a zero balance.'] : [],
+          },
+        ],
+      });
+      await page.goto('/track/');
+      await page.getByRole('textbox').fill(ADDR);
+      await page.getByRole('button', { name: /look up/i }).click();
+      await expect(page.getByRole('heading', { name: 'Result' })).toBeVisible();
+      await expect(page.getByText(want)).toBeVisible();
+      await expect(page.getByText(not)).toHaveCount(0);
+    });
+  }
   test('while the mode is still being checked: no examples, submit disabled, nothing is sent', async ({
     page,
   }) => {

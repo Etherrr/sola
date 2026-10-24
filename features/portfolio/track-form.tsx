@@ -157,7 +157,13 @@ export function TrackForm({ mode = 'mock' }: { mode?: 'checking' | 'mock' | 'liv
               <div key={w.address}>
                 <p className="fine">Address: {w.address}</p>
                 {w.assets.length === 0 ? (
-                  <p>No assets found for this fixture. An empty wallet is a valid result.</p>
+                  <p>
+                    {w.partial
+                      ? 'No balances could be read for this address, so nothing is known about it. This is not an empty wallet. See the notes below.'
+                      : ok.simulated
+                        ? 'No assets found for this fixture. An empty wallet is a valid result.'
+                        : 'No ETH, USDC, USDT, DAI or WETH balance was found. Other tokens, NFTs and DeFi positions were not checked, so this does not show that the wallet is empty.'}
+                  </p>
                 ) : (
                   <div className="table-scroll">
                     <table>
