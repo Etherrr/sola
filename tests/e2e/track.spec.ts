@@ -626,3 +626,55 @@ test.describe('shared top bar fits at narrow widths', () => {
     }
   }
 });
+
+test.describe('/track focus offsets follow the real top bar height (30-asset mock)', () => {
+  for (const width of [320, 390, 520, 1280]) {
+    test(`Shift+Tab and Tab keep focus clear of the bars at ${width}px`, async ({ page }) => {
+      const assets = Array.from({ length: 30 }, (_, i) => ({
+        assetId: `a${i}`,
+        symbol: `TKN${i}`,
+        decimals: 18,
+        amount: '1',
+        price: null,
+        value: null,
+      }));
+      const body = {
+        ...okBody,
+        wallets: [{ ...okBody.wallets[0], assets }],
+        totals: { recognizedPricedSubtotalUsd: '0', unpricedAssetCount: 30, note: 'n' },
+      };
+      await page.setViewportSize({ width, height: 844 });
+      await mock(page, 200, body);
+      await page.goto('/track/');
+      await page.getByRole('button', { name: 'Mixed tokens' }).click();
+      await expect(page.getByRole('heading', { name: 'Result' })).toBeVisible();
+      await page.waitForTimeout(500);
+      const probe = () =>
+        page.evaluate(() => {
+          const el = document.activeElement as HTMLElement;
+          const bar = (document.querySelector('.topbar') as HTMLElement).getBoundingClientRect();
+          const side = (document.querySelector('.side') as HTMLElement).getBoundingClientRect();
+          const lower = side.top > 100 ? side.top : window.innerHeight;
+          const r = el.getBoundingClientRect();
+          const inBar = !!el.closest('.topbar, .side, .skip-link');
+          const h = parseFloat(document.documentElement.style.getPropertyValue('--topbar-h'));
+          return {
+            what: (el.textContent || el.tagName).slice(0, 24),
+            top: Math.round(r.top),
+            bar: Math.round(bar.bottom),
+            varMatches: Math.abs(h - bar.height) <= 1,
+            // A tall focused region may extend past the viewport; its start must be visible.
+            ok: inBar || (r.top >= bar.bottom - 1 && r.top < lower - 20),
+          };
+        });
+      const bad: unknown[] = [];
+      for (const key of ['Shift+Tab', 'Shift+Tab', 'Shift+Tab', 'Tab', 'Tab', 'Tab', 'Tab']) {
+        await page.keyboard.press(key);
+        await page.waitForTimeout(350);
+        const p = await probe();
+        if (!p.ok || !p.varMatches) bad.push(p);
+      }
+      expect(bad).toEqual([]);
+    });
+  }
+});

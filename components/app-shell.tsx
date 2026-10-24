@@ -1,4 +1,5 @@
 'use client';
+import { useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ChainSelector } from './chain-selector';
@@ -35,6 +36,21 @@ const phoneTabs = [
 ];
 export function AppShell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
+  const bar = useRef<HTMLElement>(null);
+  // Publish the real sticky-bar height so focus and scroll offsets follow it when the bar wraps
+  // to two rows on narrow screens.
+  useEffect(() => {
+    const el = bar.current;
+    if (!el) return;
+    const root = document.documentElement;
+    const set = () =>
+      root.style.setProperty('--topbar-h', `${Math.ceil(el.getBoundingClientRect().height)}px`);
+    set();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(set);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [path]);
   if (path === '/' || path === '') return <SessionProvider>{children}</SessionProvider>;
   return (
     <SessionProvider>
@@ -97,7 +113,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </p>
         </aside>
         <div className="app-body">
-          <header className="topbar">
+          <header className="topbar" ref={bar}>
             <ChainSelector />
             <span className="sim-pill">
               {path.startsWith('/track') ? '◇ MODE SHOWN WITH RESULT' : '◇ SIMULATED'}

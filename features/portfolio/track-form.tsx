@@ -31,8 +31,10 @@ export function TrackForm({ mode = 'mock' }: { mode?: 'checking' | 'mock' | 'liv
     output.current.focus({ preventScroll: true });
     // Align the top of the outcome under the sticky bar when its start is not already comfortably
     // in view. 'nearest' would align the bottom of a tall result and hide its heading.
+    const barH =
+      parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--topbar-h')) || 72;
     const top = output.current.getBoundingClientRect().top;
-    if (top < 72 || top > window.innerHeight - 160) {
+    if (top < barH + 8 || top > window.innerHeight - 160) {
       output.current.scrollIntoView({ block: 'start', behavior: calm ? 'auto' : 'smooth' });
     }
   }, [outcome]);

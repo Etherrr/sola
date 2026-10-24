@@ -2267,13 +2267,13 @@ code {
   }
 }
 .app .track-output {
-  scroll-margin-top: 72px;
+  scroll-margin-top: calc(var(--topbar-h, 72px) + 8px);
   scroll-margin-bottom: 84px;
 }
 /* Keyboard focus scrolling must keep the focused control clear of the sticky top bar and the
    phone tab bar. scroll-padding applies to focus-driven scrolling, not only to anchors. */
 html {
-  scroll-padding-top: 72px;
+  scroll-padding-top: calc(var(--topbar-h, 72px) + 8px);
   scroll-padding-bottom: 96px;
 }
 /* ===== Entrance (v0.2): one front door with two sections ===== */
