@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
-import { Navigation } from '@/components/navigation';
+import { AppShell } from '@/components/app-shell';
 import { ProgressProvider } from '@/features/onboarding/progress-provider';
 import './globals.css';
 export const metadata: Metadata = {
@@ -14,34 +13,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="en">
       <body>
         <ProgressProvider>
-          <a className="skip-link" href="#main">
-            Skip to content
-          </a>
-          <Navigation />
-          <main id="main" tabIndex={-1}>
-            {children}
-          </main>
-          <footer className="site-footer">
-            <div>
-              <span className="footer-brand">SOLA CAPITAL</span>
-              <p>Clarity before action.</p>
-            </div>
-            <p>
-              Learning preview · Educational information only.
-              <br />
-              No financial advice, custody, or performance guarantees.
-              <br />
-              Content is informational and is not investment advice. Simulated figures in this
-              preview are not market data.
-            </p>
-            <span>
-              <a href="https://solacapitalpartners.com/" rel="noopener noreferrer">
-                Back to solacapitalpartners.com
-              </a>
-              {' · '}
-              <Link href="/settings">Privacy & local data</Link>
-            </span>
-          </footer>
+          <AppShell>{children}</AppShell>
         </ProgressProvider>
       </body>
     </html>

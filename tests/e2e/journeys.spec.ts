@@ -19,6 +19,10 @@ const routes = [
   '/learn/security-lab',
   '/settings',
 ];
+test.beforeEach(async ({ page }) => {
+  // The welcome screen has its own tests; skip it elsewhere.
+  await page.addInitScript(() => sessionStorage.setItem('sola-welcomed', '1'));
+});
 test('all routes render, remain responsive, and pass WCAG automated checks', async ({ page }) => {
   test.setTimeout(120_000);
   const errors: string[] = [];
@@ -114,16 +118,11 @@ test('keyboard navigation, mobile menu, reduced motion, and missing page', async
   expect(await page.evaluate(() => getComputedStyle(document.documentElement).scrollBehavior)).toBe(
     'auto',
   );
+  const nav = page.getByRole('navigation', { name: 'Main' });
+  await expect(nav.getByRole('link', { name: 'Track' })).toBeVisible();
   if (isMobile) {
-    const menu = page.getByRole('button', { name: /Menu/ });
-    await menu.focus();
-    await page.keyboard.press('Enter');
-    await expect(menu).toHaveAttribute('aria-expanded', 'true');
-    await page.keyboard.press('Tab');
-    await expect(page.getByRole('link', { name: 'Explore demo', exact: true })).toBeFocused();
-    await page.keyboard.press('Escape');
-    await expect(menu).toBeFocused();
-    await expect(menu).toHaveAttribute('aria-expanded', 'false');
+    const box = await nav.boundingBox();
+    expect(box && box.y > 400, 'tab bar sits at the bottom on phones').toBe(true);
   }
   const response = await page.goto('/missing-page');
   expect(response?.status()).toBe(404);
@@ -235,4 +234,38 @@ test('security decision lab: every outcome, keyboard use, retry, axe on revealed
   await expect(seed.getByRole('status')).toContainText('A RISKY CHOICE');
   expect(external).toEqual([]);
   expect(await page.evaluate(() => JSON.stringify({ ...localStorage }))).toBe(before);
+});
+
+test.describe('welcome screen', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => sessionStorage.removeItem('sola-welcomed'));
+  });
+  test('shows once per session, focuses Enter, and Escape dismisses it', async ({ page }) => {
+    await page.goto('/track');
+    const dialog = page.getByRole('dialog', { name: 'Welcome.' });
+    await expect(dialog).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Enter' })).toBeFocused();
+    await expect(dialog).toContainText('Protected by Cloudflare Access');
+    await expect(dialog.locator('input')).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+  });
+  test('reduced motion removes the animation', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto('/track');
+    const name = await page
+      .locator('.welcome')
+      .evaluate((el) => getComputedStyle(el).animationName);
+    expect(name).toBe('none');
+  });
+});
+test('only Ethereum is selectable; other networks are disabled and say so', async ({ page }) => {
+  await page.goto('/track');
+  const select = page.getByLabel('Network');
+  await expect(select).toHaveValue('ethereum');
+  for (const name of ['Solana', 'Base', 'Arbitrum']) {
+    const option = select.locator('option', { hasText: name });
+    await expect(option).toBeDisabled();
+    await expect(option).toContainText('not supported yet');
+  }
 });

@@ -42,6 +42,10 @@ const mock = (page: Page, status: number, body: unknown, ct = 'application/json'
     }),
   );
 
+test.beforeEach(async ({ page }) => {
+  // The welcome screen has its own tests; skip it here.
+  await page.addInitScript(() => sessionStorage.setItem('sola-welcomed', '1'));
+});
 test.describe('/track simulated lookup', () => {
   test('shows a simulated result with Unknown prices and no console errors', async ({ page }) => {
     const errors: string[] = [];
