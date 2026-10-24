@@ -11,14 +11,15 @@ export default function Settings() {
       <section className="panel">
         <h2>About this preview</h2>
         <p>
-          Sola Lens v0.1 uses deterministic examples. There are no accounts, provider APIs, wallet
-          connections, or transaction features. Page requests reach the app host; browser-local
-          progress is not sent to Sola.
+          Sola Lens v0.1 uses deterministic examples. The app has no accounts or passwords of its
+          own (access is controlled by Cloudflare Access), and no provider APIs, wallet connections,
+          or transaction features. Page requests reach the app host; browser-local progress is not
+          sent to Sola.
         </p>
         <p>
           External links open third-party websites under their own terms. This app loads no external
-          fonts, trackers, or wallet scripts. Hosting access controls and formal privacy review are
-          required before any hosted preview or public launch.
+          fonts, trackers, or wallet scripts. This preview is protected by Cloudflare Access. A
+          formal privacy review is still required before any public launch.
         </p>
       </section>
     </div>

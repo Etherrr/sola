@@ -1646,3 +1646,633 @@ code {
 .track .fine {
   overflow-wrap: anywhere;
 }
+
+/* ===== App shell (v0.2): sidebar + top bar, welcome screen ===== */
+.app {
+  display: grid;
+  grid-template-columns: 232px 1fr;
+  min-height: 100vh;
+}
+.side {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  padding: 22px 16px;
+  background: var(--navy-deep);
+  border-right: 1px solid var(--line);
+}
+.side .brand {
+  font-size: 1.15rem;
+  padding: 0 8px;
+}
+.side .brand-symbol {
+  width: 28px;
+  height: 31px;
+}
+.side-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.side-nav a {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 0.9rem;
+  min-height: 44px;
+}
+.side-nav a span {
+  width: 20px;
+  text-align: center;
+  color: var(--gold);
+}
+.side-nav a:hover {
+  background: var(--panel);
+  color: var(--text);
+}
+.side-nav a[aria-current] {
+  background: var(--panel-light);
+  color: var(--gold-light);
+  box-shadow: inset 3px 0 0 var(--gold);
+}
+.side-foot {
+  margin: auto 8px 0;
+  font-size: 0.65rem;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+.app-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 28px;
+  background: rgba(8, 15, 28, 0.92);
+  backdrop-filter: blur(6px);
+  border-bottom: 1px solid var(--line);
+}
+.chain-select {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.chain-select label {
+  font-size: 0.65rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.chain-select select {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 12px;
+  min-height: 40px;
+}
+.sim-pill {
+  font-size: 0.65rem;
+  letter-spacing: 0.12em;
+  color: var(--gold-light);
+  border: 1px solid var(--gold);
+  border-radius: 999px;
+  padding: 4px 10px;
+}
+.top-return {
+  margin-left: auto;
+  font-size: 0.75rem;
+  color: var(--muted);
+  text-decoration: none;
+}
+.top-return:hover {
+  color: var(--gold-light);
+}
+.app-body > main {
+  flex: 1;
+}
+.app .page-container {
+  padding-top: 28px;
+}
+.welcome {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: radial-gradient(circle at 50% 35%, #16243d 0%, var(--navy-deep) 70%);
+  animation: welcome-in 700ms ease both;
+}
+.welcome-inner {
+  max-width: 520px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+.welcome-mark {
+  width: 64px;
+  height: 70px;
+  background: url('/sola-monogram.png') center / contain no-repeat;
+  animation: welcome-rise 900ms 150ms ease both;
+}
+.welcome-kicker {
+  margin: 0;
+  font-size: 0.7rem;
+  letter-spacing: 0.24em;
+  color: var(--muted);
+  animation: welcome-rise 900ms 300ms ease both;
+}
+.welcome h2 {
+  margin: 0;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: clamp(2.4rem, 8vw, 3.6rem);
+  font-weight: 400;
+  animation: welcome-rise 900ms 450ms ease both;
+}
+.welcome-sub {
+  margin: 0;
+  color: var(--muted);
+  animation: welcome-rise 900ms 600ms ease both;
+}
+.welcome-facts {
+  list-style: none;
+  margin: 6px 0 10px;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  animation: welcome-rise 900ms 750ms ease both;
+}
+.welcome-facts li {
+  font-size: 0.72rem;
+  color: var(--gold-light);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 5px 12px;
+}
+.welcome .button {
+  animation: welcome-rise 900ms 900ms ease both;
+}
+@keyframes welcome-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes welcome-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .welcome,
+  .welcome * {
+    animation: none !important;
+  }
+}
+@media (max-width: 820px) {
+  .app {
+    grid-template-columns: 1fr;
+    padding-bottom: 68px;
+  }
+  .side {
+    position: fixed;
+    inset: auto 0 0 0;
+    top: auto;
+    height: auto;
+    z-index: 30;
+    flex-direction: row;
+    padding: 6px 8px;
+    border-right: 0;
+    border-top: 1px solid var(--line);
+  }
+  .side .brand,
+  .side-foot {
+    display: none;
+  }
+  .side-nav {
+    flex-direction: row;
+    width: 100%;
+    justify-content: space-around;
+  }
+  .side-nav a {
+    flex-direction: column;
+    gap: 2px;
+    font-size: 0.65rem;
+    padding: 6px 4px;
+    min-width: 56px;
+    justify-content: center;
+  }
+  .side-nav a[aria-current] {
+    box-shadow: inset 0 3px 0 var(--gold);
+  }
+  .topbar {
+    padding: 8px 14px;
+    gap: 10px;
+  }
+  .top-return {
+    display: none;
+  }
+  .chain-select label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+.app-foot {
+  padding: 16px 28px 24px;
+  border-top: 1px solid var(--line);
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+.app-foot p {
+  margin: 0;
+  max-width: 900px;
+}
+
+/* App density: tighter headings, numbers first (applies inside the shell only) */
+.app .page-intro {
+  padding: 4px 0 14px;
+}
+.app .page-intro h1 {
+  margin: 8px 0 8px;
+  font-size: clamp(1.7rem, 3vw, 2.3rem);
+}
+.app .page-intro p {
+  font-size: 0.9rem;
+  line-height: 1.5;
+  max-width: 62ch;
+}
+.app .tabs {
+  margin-bottom: 16px;
+}
+.app .tabs a {
+  padding: 8px 2px 12px;
+}
+.app .metric-grid {
+  gap: 12px;
+}
+.app .metric {
+  padding: 16px 18px;
+  min-width: 0;
+}
+.app .metric strong {
+  font-variant-numeric: tabular-nums;
+}
+.app .panel {
+  padding: 18px;
+  margin-bottom: 14px;
+}
+.app .panel h2 {
+  font-size: 1.25rem;
+  margin-bottom: 10px;
+}
+.app table {
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 820px) {
+  .app .metric-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .app .main-metric {
+    grid-column: 1 / -1;
+  }
+  .app .page-container {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}
+@media (max-width: 820px) {
+  .app .metric {
+    padding: 14px;
+  }
+  .app .metric strong {
+    font-size: clamp(1.25rem, 5.4vw, 1.9rem);
+    margin: 6px 0 8px;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+}
+@media (max-width: 820px) {
+  .chain-select {
+    flex: 1;
+    min-width: 0;
+  }
+  .chain-select select {
+    width: 100%;
+    min-width: 0;
+  }
+  .sim-pill {
+    flex: none;
+    white-space: nowrap;
+    padding: 4px 8px;
+    letter-spacing: 0.06em;
+  }
+}
+
+/* ===== Institutional pass: sans numerics, compact heading row, two-pane lookup ===== */
+.app {
+  --sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+  font-family: var(--sans);
+}
+.app h1,
+.app h2,
+.app h3,
+.app .metric strong {
+  font-family: var(--sans);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.app .page-intro {
+  display: grid;
+  gap: 2px;
+  padding: 0 0 12px;
+}
+.app .page-intro .eyebrow {
+  margin: 0;
+  font-size: 0.65rem;
+  letter-spacing: 0.14em;
+}
+.app .page-intro h1 {
+  margin: 0;
+  font-size: 1.45rem;
+  line-height: 1.25;
+}
+.app .page-intro .lead p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.app .mode-marker {
+  padding: 6px 12px;
+  margin: 0 0 14px;
+  font-size: 0.78rem;
+}
+.app .notice {
+  padding: 10px 14px;
+  margin: 12px 0;
+  font-size: 0.8rem;
+}
+.app .page-container {
+  max-width: 1180px;
+  padding-top: 20px;
+  padding-bottom: 20px;
+}
+.app .metric {
+  padding: 14px 16px;
+}
+.app .metric strong {
+  font-size: clamp(1.3rem, 2vw, 1.75rem);
+  margin: 4px 0 8px;
+}
+.app .metric p {
+  margin: 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.app .metric small {
+  margin-top: 6px;
+}
+.app .panel.insight {
+  display: none;
+}
+.app .dashboard-split {
+  grid-template-columns: 1fr;
+}
+.scope-chip {
+  font-size: 0.75rem;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+.app .track {
+  display: grid;
+  grid-template-columns: minmax(280px, 380px) 1fr;
+  gap: 20px;
+  align-items: start;
+}
+.app .track-input,
+.app .track-output {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  padding: 16px;
+  min-width: 0;
+}
+.app .track-output:empty {
+  display: none;
+}
+.app .track-input .notice {
+  border: 0;
+  background: none;
+  padding: 0;
+  margin: 14px 0 0;
+  color: var(--muted);
+}
+.app .track-input .actions {
+  gap: 8px;
+  margin-top: 10px;
+}
+.app .track-input label {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.app .track-input input {
+  width: 100%;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8rem;
+}
+.app .button.chip {
+  padding: 6px 12px;
+  min-height: 36px;
+  font-size: 0.78rem;
+  border-radius: 999px;
+}
+.app .track-output h2 {
+  font-size: 1rem;
+  margin: 0 0 8px;
+}
+.app .track-total {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  padding: 10px 12px;
+  background: var(--panel-light);
+  border-radius: 8px;
+}
+.app .track-output table td:nth-child(n + 2),
+.app .track-output table th:nth-child(n + 2) {
+  text-align: right;
+}
+.app .addr {
+  overflow-wrap: anywhere;
+}
+.app .limits {
+  margin: 16px 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+.app .limits summary {
+  cursor: pointer;
+  color: var(--gold-light);
+}
+@media (max-width: 820px) {
+  .app .track {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 820px) {
+  .app {
+    padding-bottom: calc(72px + env(safe-area-inset-bottom));
+  }
+  .side {
+    padding-bottom: calc(6px + env(safe-area-inset-bottom));
+  }
+}
+.app .track-hint {
+  margin: 0;
+  color: var(--muted);
+}
+
+/* ===== Density pass 2 ===== */
+.app .track-total {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px 24px;
+  margin: 12px 0;
+  padding: 12px 14px;
+  background: var(--panel-light);
+  border-radius: 8px;
+  font-weight: 400;
+}
+.app .track-total div {
+  display: contents;
+}
+.app .track-total dt {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.app .track-total dd {
+  margin: 0;
+  text-align: right;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.app .track-total div:first-child dd {
+  font-size: 1.25rem;
+}
+.app .track-total dd.warn {
+  color: var(--gold-light);
+}
+.app .track-output:focus {
+  outline: none;
+}
+.app .track-output:focus-visible {
+  outline: var(--focus-ring);
+}
+.app .allocation-bar {
+  height: 10px;
+  margin: 8px 0;
+}
+.app .allocation-legend {
+  display: grid;
+  gap: 4px;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+.app .panel > .eyebrow {
+  display: none;
+}
+.app .panel .fine {
+  margin: 6px 0 0;
+}
+@media (min-width: 821px) {
+  .app .metric-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+.app .metric small {
+  font-size: 0.68rem;
+}
+.app .section-heading {
+  margin-bottom: 6px;
+}
+.app .table-scroll th,
+.app .table-scroll td {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+@media (min-width: 1000px) {
+  .app .dashboard-split + .holdings,
+  .app .dashboard-split {
+    margin-top: 0;
+  }
+}
+.session-chip {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 40vw;
+  font-size: 0.72rem;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 10px;
+}
+.session-chip > span:first-child {
+  color: var(--green);
+}
+.session-chip.warn {
+  color: var(--danger);
+}
+.session-email {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.session-chip + .top-return {
+  margin-left: 0;
+}
+@media (max-width: 520px) {
+  /* Keep the email in the accessibility tree; only hide it visually on phones. */
+  .session-email {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+}
+.app .track-output {
+  scroll-margin-top: 72px;
+  scroll-margin-bottom: 84px;
+}
+/* Keyboard focus scrolling must keep the focused control clear of the sticky top bar and the
+   phone tab bar. scroll-padding applies to focus-driven scrolling, not only to anchors. */
+html {
+  scroll-padding-top: 72px;
+  scroll-padding-bottom: 96px;
+}

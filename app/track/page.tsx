@@ -5,20 +5,19 @@ export const metadata = { title: 'Address lookup (simulated)' };
 export default function Track() {
   return (
     <div className="page-container">
-      <PageIntro eyebrow="WATCH-ONLY · SIMULATED" title="Track a public address.">
+      <PageIntro eyebrow="WATCH-ONLY · SIMULATED" title="Track a public address">
         <p>
-          Paste a public Ethereum address to try the lookup flow. For now the results come from
-          fixed simulated examples inside this app, not from a blockchain, so no real balances are
-          shown. Live data stays off until it is separately approved.
+          Look up an Ethereum address. Results are fixed simulated examples, not blockchain data.
+          Live data stays off until it is separately approved.
         </p>
       </PageIntro>
       <ModeMarker
         mode="SIMULATED"
-        note="Results here are simulated fixtures. No live data, no wallet, nothing is signed."
+        note="Simulated fixtures. No live data, no wallet, nothing is signed."
       />
       <TrackForm />
-      <section className="notice" aria-labelledby="track-promise">
-        <h2 id="track-promise">What it does and does not do</h2>
+      <details className="limits">
+        <summary>What it does and does not do</summary>
         <ul>
           <li>
             It reads public addresses only. It never asks for a seed phrase, private key or
@@ -31,7 +30,7 @@ export default function Track() {
           </li>
           <li>A missing price will show as Unknown, never zero.</li>
         </ul>
-      </section>
+      </details>
       <div className="actions">
         <ActionLink href="/portfolio">Explore the demo →</ActionLink>
         <ActionLink href="/learn" secondary>

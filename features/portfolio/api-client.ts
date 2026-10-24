@@ -144,3 +144,49 @@ export async function lookupAddress(address: string): Promise<LookupOutcome> {
     clearTimeout(timer);
   }
 }
+
+export type SessionState =
+  { kind: 'verified'; email: string } | { kind: 'rejected' } | { kind: 'none' };
+// Same plain-email contract the server enforces (server/portfolio/access.ts).
+const SESSION_EMAIL = /^[^\s@<>"'`]{1,64}@[A-Za-z0-9.-]{1,190}\.[A-Za-z]{2,}$/;
+export function isSessionEmail(v: unknown): v is string {
+  return typeof v === 'string' && v.length <= 254 && SESSION_EMAIL.test(v);
+}
+export const SESSION_TIMEOUT_MS = 8000;
+/**
+ * Same-origin GET of who Cloudflare Access says this session is. It sends the browser's own
+ * same-origin credentials to this app only; nothing is sent to an external identity service and
+ * nothing is stored. Aborts after a bounded time and when the caller's signal aborts.
+ */
+export async function fetchSession(signal?: AbortSignal): Promise<SessionState> {
+  if (signal?.aborted) return { kind: 'none' };
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), SESSION_TIMEOUT_MS);
+  const onAbort = () => ctl.abort();
+  signal?.addEventListener('abort', onAbort);
+  try {
+    const r = await fetch('/api/v1/session', {
+      cache: 'no-store',
+      credentials: 'same-origin',
+      signal: ctl.signal,
+    });
+    if (r.status === 401) return { kind: 'rejected' };
+    if (r.status !== 200) return { kind: 'none' };
+    const j: unknown = await r.json();
+    if (
+      typeof j === 'object' &&
+      j !== null &&
+      (j as { status?: unknown }).status === 'ok' &&
+      (j as { via?: unknown }).via === 'cloudflare-access'
+    ) {
+      const id = (j as { identity?: { email?: unknown } | null }).identity;
+      if (id && isSessionEmail(id.email)) return { kind: 'verified', email: id.email };
+    }
+    return { kind: 'none' };
+  } catch {
+    return { kind: 'none' };
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', onAbort);
+  }
+}

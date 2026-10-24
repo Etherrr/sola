@@ -1,4 +1,4 @@
-import { createLocalJWKSet, jwtVerify, type JWK, type JWSHeaderParameters } from 'jose';
+import { createLocalJWKSet, decodeJwt, jwtVerify, type JWK, type JWSHeaderParameters } from 'jose';
 import { concatBytes } from './bytes';
 // Cloudflare Access JWT verification (RS256) using WebCrypto. Fails closed.
 export type AccessConfig = { teamDomain: string; aud: string };
@@ -188,3 +188,19 @@ export function makeKeyFetcher(
 }
 
 export const fetchAccessKeys: KeyFetcher = makeKeyFetcher();
+
+const EMAIL = /^[^\s@<>"'`]{1,64}@[A-Za-z0-9.-]{1,190}\.[A-Za-z]{2,}$/;
+/**
+ * Reads the `email` claim from a token that has ALREADY passed checkAccessJwt. Returns null when the
+ * claim is absent or is not a plain bounded email (for example a service token). Never call this on
+ * an unverified token, and never return the raw token or any other claim.
+ */
+export function readEmailClaim(token: string | null): string | null {
+  if (!token) return null;
+  try {
+    const v = decodeJwt(token).email;
+    return typeof v === 'string' && v.length <= 254 && EMAIL.test(v) ? v : null;
+  } catch {
+    return null;
+  }
+}

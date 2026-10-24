@@ -1,5 +1,5 @@
 'use client';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ModeMarker } from '@/components/mode-marker';
 import { lookupAddress, type LookupOutcome } from './api-client';
 
@@ -18,6 +18,20 @@ export function TrackForm() {
   const [busy, setBusy] = useState(false);
   const [outcome, setOutcome] = useState<LookupOutcome | null>(null);
   const input = useRef<HTMLInputElement>(null);
+  const output = useRef<HTMLDivElement>(null);
+  // After a completed lookup, bring the result or error into view and move focus to it, so the
+  // outcome is not hidden below the controls on a phone. Motion is skipped when the user asks.
+  useEffect(() => {
+    if (!outcome || !output.current) return;
+    const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    output.current.focus({ preventScroll: true });
+    // Align the top of the outcome under the sticky bar when its start is not already comfortably
+    // in view. 'nearest' would align the bottom of a tall result and hide its heading.
+    const top = output.current.getBoundingClientRect().top;
+    if (top < 72 || top > window.innerHeight - 160) {
+      output.current.scrollIntoView({ block: 'start', behavior: calm ? 'auto' : 'smooth' });
+    }
+  }, [outcome]);
 
   async function run(raw: string) {
     const address = raw.trim();
@@ -38,67 +52,74 @@ export function TrackForm() {
   const ok = outcome?.kind === 'ok' ? outcome.data : null;
   return (
     <div className="track">
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          void run(value);
-        }}
-        noValidate
-      >
-        <label htmlFor="track-address">Public Ethereum address (Ethereum mainnet)</label>
-        <input
-          id="track-address"
-          ref={input}
-          value={value}
-          onChange={(e) => {
-            setValue(e.target.value);
-            setOutcome(null);
+      <div className="track-input">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void run(value);
           }}
-          readOnly={busy}
-          autoComplete="off"
-          spellCheck={false}
-          inputMode="text"
-          aria-invalid={error ? true : undefined}
-          aria-describedby={error ? 'track-error track-privacy' : 'track-privacy'}
-        />
-        <p id="track-privacy" className="fine">
-          A pasted address is sent to this app&apos;s own lookup service and is not saved in your
-          browser. It is observed, not proven to be yours.
-        </p>
-        {error && (
-          <p id="track-error" role="alert" className="fine">
-            {error}
+          noValidate
+        >
+          <label htmlFor="track-address">Public Ethereum address (Ethereum mainnet)</label>
+          <input
+            id="track-address"
+            ref={input}
+            value={value}
+            onChange={(e) => {
+              setValue(e.target.value);
+              setOutcome(null);
+            }}
+            readOnly={busy}
+            autoComplete="off"
+            spellCheck={false}
+            inputMode="text"
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? 'track-error track-privacy' : 'track-privacy'}
+          />
+          <p id="track-privacy" className="fine">
+            A pasted address is sent to this app&apos;s own lookup service and is not saved in your
+            browser. It is observed, not proven to be yours.
           </p>
-        )}
-        <div className="actions">
-          <button className="button primary" type="submit" disabled={busy}>
-            {busy ? 'Looking up…' : 'Look up'}
-          </button>
-        </div>
-      </form>
-      <div className="notice">
-        <p>
-          <strong>Try a simulated example</strong> (fixed fixtures, not real wallets):
-        </p>
-        <div className="actions">
-          {SAMPLES.map((s) => (
-            <button
-              key={s.label}
-              type="button"
-              className="button secondary"
-              disabled={busy}
-              onClick={() => {
-                setValue(s.address);
-                void run(s.address);
-              }}
-            >
-              {s.label}
+          {error && (
+            <p id="track-error" role="alert" className="fine">
+              {error}
+            </p>
+          )}
+          <div className="actions">
+            <button className="button primary" type="submit" disabled={busy}>
+              {busy ? 'Looking up…' : 'Look up'}
             </button>
-          ))}
+          </div>
+        </form>
+        <div className="notice">
+          <p>
+            <strong>Simulated examples</strong> (fixed fixtures, not real wallets):
+          </p>
+          <div className="actions">
+            {SAMPLES.map((s) => (
+              <button
+                key={s.label}
+                type="button"
+                className="button secondary chip"
+                disabled={busy}
+                onClick={() => {
+                  setValue(s.address);
+                  void run(s.address);
+                }}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
-      <div role="status" aria-live="polite">
+      <div className="track-output" role="status" aria-live="polite" ref={output} tabIndex={-1}>
         {busy && <p>Looking up…</p>}
+        {!busy && !outcome && (
+          <p className="fine track-hint">
+            Results appear here. Pick a simulated example or paste an address.
+          </p>
+        )}
         {outcome?.kind === 'error' && (
           <div className="notice">
             <ModeMarker
@@ -112,7 +133,6 @@ export function TrackForm() {
         {ok && (
           <section aria-labelledby="track-result">
             <h2 id="track-result">Result</h2>
-            <p className="fine addr">Result for the address you looked up: {outcome?.address}</p>
             <ModeMarker
               context="lookup result"
               mode={ok.partial ? 'INCOMPLETE' : ok.simulated ? 'SIMULATED' : 'LIVE_REFRESHED'}
@@ -159,13 +179,22 @@ export function TrackForm() {
                 ))}
               </div>
             ))}
-            <p>
-              Recognized priced subtotal:{' '}
-              {ok.totals.recognizedPricedSubtotalUsd === null
-                ? 'Unknown'
-                : `$${ok.totals.recognizedPricedSubtotalUsd}`}
-              . Assets without a price: {ok.totals.unpricedAssetCount}.
-            </p>
+            <dl className="track-total">
+              <div>
+                <dt>Recognized priced subtotal</dt>
+                <dd>
+                  {ok.totals.recognizedPricedSubtotalUsd === null
+                    ? 'Unknown'
+                    : `$${ok.totals.recognizedPricedSubtotalUsd}`}
+                </dd>
+              </div>
+              <div>
+                <dt>Assets without a price</dt>
+                <dd className={ok.totals.unpricedAssetCount > 0 ? 'warn' : undefined}>
+                  {ok.totals.unpricedAssetCount}
+                </dd>
+              </div>
+            </dl>
             <p className="fine">{ok.totals.note}</p>
             {ok.warnings.map((m) => (
               <p key={m} className="fine">

@@ -19,6 +19,10 @@ const routes = [
   '/learn/security-lab',
   '/settings',
 ];
+test.beforeEach(async ({ page }) => {
+  // The welcome screen has its own tests; skip it elsewhere.
+  await page.addInitScript(() => window.sessionStorage.setItem('sola-welcomed', '1'));
+});
 test('all routes render, remain responsive, and pass WCAG automated checks', async ({ page }) => {
   test.setTimeout(120_000);
   const errors: string[] = [];
@@ -114,16 +118,11 @@ test('keyboard navigation, mobile menu, reduced motion, and missing page', async
   expect(await page.evaluate(() => getComputedStyle(document.documentElement).scrollBehavior)).toBe(
     'auto',
   );
+  const nav = page.getByRole('navigation', { name: 'Main' });
+  await expect(nav.getByRole('link', { name: 'Track' })).toBeVisible();
   if (isMobile) {
-    const menu = page.getByRole('button', { name: /Menu/ });
-    await menu.focus();
-    await page.keyboard.press('Enter');
-    await expect(menu).toHaveAttribute('aria-expanded', 'true');
-    await page.keyboard.press('Tab');
-    await expect(page.getByRole('link', { name: 'Explore demo', exact: true })).toBeFocused();
-    await page.keyboard.press('Escape');
-    await expect(menu).toBeFocused();
-    await expect(menu).toHaveAttribute('aria-expanded', 'false');
+    const box = await nav.boundingBox();
+    expect(box && box.y > 400, 'tab bar sits at the bottom on phones').toBe(true);
   }
   const response = await page.goto('/missing-page');
   expect(response?.status()).toBe(404);
@@ -235,4 +234,157 @@ test('security decision lab: every outcome, keyboard use, retry, axe on revealed
   await expect(seed.getByRole('status')).toContainText('A RISKY CHOICE');
   expect(external).toEqual([]);
   expect(await page.evaluate(() => JSON.stringify({ ...localStorage }))).toBe(before);
+});
+
+test.describe('welcome screen', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => window.sessionStorage.removeItem('sola-welcomed'));
+  });
+  test('shows once per session, focuses Enter, and Escape dismisses it', async ({ page }) => {
+    await page.goto('/track');
+    const dialog = page.getByRole('dialog', { name: 'Welcome.' });
+    await expect(dialog).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Enter' })).toBeFocused();
+    await expect(dialog).toContainText('Protected by Cloudflare Access');
+    await expect(dialog.locator('input')).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+  });
+  test('reduced motion removes the animation', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto('/track');
+    const name = await page
+      .locator('.welcome')
+      .evaluate((el) => getComputedStyle(el).animationName);
+    expect(name).toBe('none');
+  });
+});
+test('only Ethereum is selectable; other networks are disabled and say so', async ({ page }) => {
+  await page.goto('/track');
+  const select = page.getByLabel('Network');
+  await expect(select).toHaveValue('ethereum');
+  for (const name of ['Solana', 'Base', 'Arbitrum']) {
+    const option = select.locator('option', { hasText: name });
+    await expect(option).toBeDisabled();
+    await expect(option).toContainText('not supported yet');
+  }
+});
+
+test.describe('welcome keyboard containment', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => window.sessionStorage.removeItem('sola-welcomed'));
+  });
+  test('Tab and Shift+Tab stay on Enter, background is inert, dismiss restores focus', async ({
+    page,
+    isMobile,
+  }) => {
+    test.skip(isMobile, 'keyboard path');
+    await page.goto('/portfolio');
+    const enter = page.getByRole('button', { name: 'Enter' });
+    await expect(enter).toBeFocused();
+    for (const key of ['Tab', 'Shift+Tab', 'Tab', 'Tab']) {
+      await page.keyboard.press(key);
+      const inside = await page.evaluate(() => !!document.activeElement?.closest('.welcome'));
+      expect(inside, key).toBe(true);
+      await expect(enter, key).toBeFocused();
+    }
+    expect(
+      await page.evaluate(() => document.querySelector('.app-body')?.hasAttribute('inert')),
+    ).toBe(true);
+    await enter.focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('.welcome')).toHaveCount(0);
+    await expect(page.locator('#main')).toBeFocused();
+    expect(
+      await page.evaluate(() => document.querySelector('.app-body')?.hasAttribute('inert')),
+    ).toBe(false);
+  });
+});
+test('corporate site link is reachable on every width', async ({ page }) => {
+  await page.goto('/settings');
+  await expect(page.getByRole('link', { name: 'Back to solacapitalpartners.com' })).toBeVisible();
+});
+
+test.describe('session status', () => {
+  test('shows an email only after a verified 200, and clears it on a later 401', async ({
+    page,
+    isMobile,
+  }) => {
+    let status = 200;
+    await page.route('**/api/v1/session', (r) =>
+      r.fulfill({
+        status,
+        contentType: 'application/json',
+        body: JSON.stringify(
+          status === 200
+            ? { status: 'ok', via: 'cloudflare-access', identity: { email: 'jun@example.com' } }
+            : { error: { code: 'unauthorized' } },
+        ),
+      }),
+    );
+    await page.goto('/track');
+    await expect(page.locator('.session-chip')).toContainText('jun@example.com', {
+      useInnerText: false,
+    });
+    // The email stays in the accessibility tree on every width (visually hidden on phones).
+    await expect(page.locator('.session-email')).toHaveText(
+      /Signed in via Cloudflare Access as\s*jun@example\.com/,
+    );
+    status = 401;
+    await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+    await expect(page.getByText('Session not verified')).toBeVisible();
+    await expect(page.getByText('jun@example.com')).toHaveCount(0);
+    expect(isMobile !== undefined).toBe(true);
+  });
+  test('a slow older 200 cannot bring back an email after a newer 401', async ({ page }) => {
+    let n = 0;
+    let releaseSecond: () => void = () => {};
+    const held = new Promise<void>((r) => (releaseSecond = r));
+    const ok = {
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        status: 'ok',
+        via: 'cloudflare-access',
+        identity: { email: 'jun@example.com' },
+      }),
+    };
+    await page.route('**/api/v1/session', async (r) => {
+      n += 1;
+      if (n === 1) return r.fulfill(ok);
+      if (n === 2) {
+        await held;
+        return r.fulfill(ok).catch(() => {});
+      }
+      return r.fulfill({ status: 401, contentType: 'application/json', body: '{}' });
+    });
+    await page.goto('/track');
+    await expect(page.locator('.session-chip')).toContainText('jun@example.com', {
+      useInnerText: false,
+    });
+    const ping = () => page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+    await ping(); // request 2 is held
+    // The shown identity is dropped as soon as the recheck starts, not when it finishes.
+    await expect(page.getByText('jun@example.com')).toHaveCount(0);
+    await ping(); // request 3 answers 401
+    await expect(page.getByText('Session not verified')).toBeVisible();
+    releaseSecond();
+    await page.waitForTimeout(300);
+    await expect(page.getByText('Session not verified')).toBeVisible();
+    await expect(page.getByText('jun@example.com')).toHaveCount(0);
+  });
+  test('no identity is shown when the API is absent or answers with the wrong shape', async ({
+    page,
+  }) => {
+    await page.route('**/api/v1/session', (r) =>
+      r.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: '{"identity":{"email":"x@y.zz"}}',
+      }),
+    );
+    await page.goto('/track');
+    await page.waitForTimeout(400);
+    await expect(page.locator('.session-chip')).toHaveCount(0);
+  });
 });
