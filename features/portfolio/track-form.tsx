@@ -1,5 +1,5 @@
 'use client';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ModeMarker } from '@/components/mode-marker';
 import { lookupAddress, type LookupOutcome } from './api-client';
 
@@ -18,6 +18,15 @@ export function TrackForm() {
   const [busy, setBusy] = useState(false);
   const [outcome, setOutcome] = useState<LookupOutcome | null>(null);
   const input = useRef<HTMLInputElement>(null);
+  const output = useRef<HTMLDivElement>(null);
+  // After a completed lookup, bring the result or error into view and move focus to it, so the
+  // outcome is not hidden below the controls on a phone. Motion is skipped when the user asks.
+  useEffect(() => {
+    if (!outcome || !output.current) return;
+    const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    output.current.focus({ preventScroll: true });
+    output.current.scrollIntoView({ block: 'nearest', behavior: calm ? 'auto' : 'smooth' });
+  }, [outcome]);
 
   async function run(raw: string) {
     const address = raw.trim();
@@ -99,7 +108,7 @@ export function TrackForm() {
           </div>
         </div>
       </div>
-      <div className="track-output" role="status" aria-live="polite">
+      <div className="track-output" role="status" aria-live="polite" ref={output} tabIndex={-1}>
         {busy && <p>Looking up…</p>}
         {!busy && !outcome && (
           <p className="fine track-hint">
@@ -119,7 +128,6 @@ export function TrackForm() {
         {ok && (
           <section aria-labelledby="track-result">
             <h2 id="track-result">Result</h2>
-            <p className="fine addr">Result for the address you looked up: {outcome?.address}</p>
             <ModeMarker
               context="lookup result"
               mode={ok.partial ? 'INCOMPLETE' : ok.simulated ? 'SIMULATED' : 'LIVE_REFRESHED'}
@@ -166,13 +174,22 @@ export function TrackForm() {
                 ))}
               </div>
             ))}
-            <p className="track-total">
-              Recognized priced subtotal:{' '}
-              {ok.totals.recognizedPricedSubtotalUsd === null
-                ? 'Unknown'
-                : `$${ok.totals.recognizedPricedSubtotalUsd}`}
-              . Assets without a price: {ok.totals.unpricedAssetCount}.
-            </p>
+            <dl className="track-total">
+              <div>
+                <dt>Recognized priced subtotal</dt>
+                <dd>
+                  {ok.totals.recognizedPricedSubtotalUsd === null
+                    ? 'Unknown'
+                    : `$${ok.totals.recognizedPricedSubtotalUsd}`}
+                </dd>
+              </div>
+              <div>
+                <dt>Assets without a price</dt>
+                <dd className={ok.totals.unpricedAssetCount > 0 ? 'warn' : undefined}>
+                  {ok.totals.unpricedAssetCount}
+                </dd>
+              </div>
+            </dl>
             <p className="fine">{ok.totals.note}</p>
             {ok.warnings.map((m) => (
               <p key={m} className="fine">

@@ -5,6 +5,7 @@ import { formatUnits, valueUsd } from '../server/portfolio/units';
 import { parseResolveRequest } from '../server/portfolio/contract';
 import {
   handleHealth,
+  handleSession,
   handleNetworks,
   handleResolve,
   defaultDeps,
@@ -717,5 +718,67 @@ describe('key fetch failure sub-categories', () => {
       expect(got).toBe(want);
       expect(got).not.toContain('secret');
     }
+  });
+});
+
+describe('/api/v1/session', () => {
+  const get = (j: string | null, method = 'GET') =>
+    new Request('https://app.example/api/v1/session', {
+      method,
+      headers: j ? { 'cf-access-jwt-assertion': j } : {},
+    });
+  it('rejects missing, forged and non-GET requests without revealing anything', async () => {
+    const s = await signer();
+    const d = deps(s.keys);
+    expect((await handleSession(get(null), ENV, d)).status).toBe(401);
+    const other = await signer();
+    const forged = await other.sign(good({ email: 'a@b.co' }));
+    const r = await handleSession(get(forged), ENV, d);
+    expect(r.status).toBe(401);
+    expect(await r.text()).not.toContain('a@b.co');
+    expect((await handleSession(get(await s.sign(good()), 'POST'), ENV, d)).status).toBe(405);
+  });
+  it('returns only the verified email, no token or other claims, uncached', async () => {
+    const s = await signer();
+    const d = deps(s.keys);
+    const jwt = await s.sign(good({ email: 'jun@example.com', sub: 'secret-sub', custom: 'x' }));
+    const r = await handleSession(get(jwt), ENV, d);
+    expect(r.status).toBe(200);
+    expect(r.headers.get('cache-control')).toBe('no-store');
+    const text = await r.text();
+    expect(JSON.parse(text)).toEqual({
+      status: 'ok',
+      via: 'cloudflare-access',
+      identity: { email: 'jun@example.com' },
+      requestId: 'req-1',
+    });
+    expect(text).not.toContain(jwt);
+    expect(text).not.toContain('secret-sub');
+  });
+  it.each([
+    ['absent', undefined],
+    ['non-string', { a: 1 }],
+    ['not an email', 'not-an-email'],
+    ['markup', '<b>x</b>@example.com'],
+    ['newline', 'a@example.com\nbcc: x@y.zz'],
+    ['too long', 'a'.repeat(300) + '@example.com'],
+  ])(
+    'a verified token with a %s email claim gives identity null, never an invented one',
+    async (_n, v) => {
+      const s = await signer();
+      const d = deps(s.keys);
+      const jwt = await s.sign(good(v === undefined ? {} : { email: v }));
+      const body = await (await handleSession(get(jwt), ENV, d)).json();
+      expect(body.identity).toBeNull();
+    },
+  );
+  it('is switched off with the kill switch', async () => {
+    const s = await signer();
+    const r = await handleSession(
+      get(await s.sign(good())),
+      { ...ENV, PORTFOLIO_API_ENABLED: 'false' },
+      deps(s.keys),
+    );
+    expect(r.status).toBe(503);
   });
 });

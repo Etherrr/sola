@@ -1,6 +1,12 @@
 import { concatBytes } from './bytes';
 import { parseResolveRequest, MAX_BODY_BYTES, type ResolveResponse } from './contract';
-import { checkAccessJwt, fetchAccessKeys, isValidTeamHost, type KeyFetcher } from './access';
+import {
+  checkAccessJwt,
+  fetchAccessKeys,
+  isValidTeamHost,
+  readEmailClaim,
+  type KeyFetcher,
+} from './access';
 import { mockProvider, type PortfolioProvider } from './provider';
 
 export type Env = {
@@ -250,6 +256,26 @@ export async function handleNetworks(
   if (blocked) return blocked;
   return reply(200, {
     networks: [{ id: 'ethereum', chainId: 1, status: d.provider.simulated ? 'mock' : 'live' }],
+    requestId,
+  });
+}
+
+/** Who Cloudflare Access says this browser session is. Same gate as every route; nothing is stored. */
+export async function handleSession(
+  req: Request,
+  env: Env,
+  d: Deps = defaultDeps(),
+): Promise<Response> {
+  const requestId = d.id();
+  if (req.method !== 'GET')
+    return err(405, 'method_not_allowed', 'Use GET.', requestId, { allow: 'GET' });
+  const blocked = await gate(req, env, d, requestId);
+  if (blocked) return blocked;
+  const email = readEmailClaim(req.headers.get('cf-access-jwt-assertion'));
+  return reply(200, {
+    status: 'ok',
+    via: 'cloudflare-access',
+    identity: email === null ? null : { email },
     requestId,
   });
 }

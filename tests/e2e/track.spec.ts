@@ -45,9 +45,19 @@ const mock = (page: Page, status: number, body: unknown, ct = 'application/json'
 test.beforeEach(async ({ page }) => {
   // The welcome screen has its own tests; skip it here.
   await page.addInitScript(() => window.sessionStorage.setItem('sola-welcomed', '1'));
+  // The static test server has no API; answer the session check so it is not a console error.
+  await page.route('**/api/v1/session', (r) =>
+    r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'ok', via: 'cloudflare-access', identity: null }),
+    }),
+  );
 });
 test.describe('/track simulated lookup', () => {
   test('shows a simulated result with Unknown prices and no console errors', async ({ page }) => {
+    // Smooth scrolling to the result would move targets while axe measures them.
+    await page.emulateMedia({ reducedMotion: 'reduce' });
     const errors: string[] = [];
     page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
     let posted = 0;
@@ -70,6 +80,8 @@ test.describe('/track simulated lookup', () => {
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     ).toBe(true);
     expect(errors).toEqual([]);
+    // The sticky top bar can partly cover controls that scrolled under it; measure from the top.
+    await page.evaluate(() => window.scrollTo(0, 0));
     const axe = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'])
       .analyze();

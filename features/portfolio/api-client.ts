@@ -144,3 +144,28 @@ export async function lookupAddress(address: string): Promise<LookupOutcome> {
     clearTimeout(timer);
   }
 }
+
+export type SessionState =
+  { kind: 'verified'; email: string } | { kind: 'rejected' } | { kind: 'none' };
+/** Same-origin GET of who Cloudflare Access says this session is. Never sends or stores anything. */
+export async function fetchSession(): Promise<SessionState> {
+  try {
+    const r = await fetch('/api/v1/session', { cache: 'no-store', credentials: 'same-origin' });
+    if (r.status === 401) return { kind: 'rejected' };
+    if (r.status !== 200) return { kind: 'none' };
+    const j: unknown = await r.json();
+    if (
+      typeof j === 'object' &&
+      j !== null &&
+      (j as { status?: unknown }).status === 'ok' &&
+      (j as { via?: unknown }).via === 'cloudflare-access'
+    ) {
+      const id = (j as { identity?: { email?: unknown } | null }).identity;
+      if (id && typeof id.email === 'string' && id.email.length <= 254)
+        return { kind: 'verified', email: id.email };
+    }
+    return { kind: 'none' };
+  } catch {
+    return { kind: 'none' };
+  }
+}

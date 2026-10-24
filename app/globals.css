@@ -2154,3 +2154,113 @@ code {
   margin: 0;
   color: var(--muted);
 }
+
+/* ===== Density pass 2 ===== */
+.app .track-total {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px 24px;
+  margin: 12px 0;
+  padding: 12px 14px;
+  background: var(--panel-light);
+  border-radius: 8px;
+  font-weight: 400;
+}
+.app .track-total div {
+  display: contents;
+}
+.app .track-total dt {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.app .track-total dd {
+  margin: 0;
+  text-align: right;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.app .track-total div:first-child dd {
+  font-size: 1.25rem;
+}
+.app .track-total dd.warn {
+  color: var(--gold-light);
+}
+.app .track-output:focus {
+  outline: none;
+}
+.app .track-output:focus-visible {
+  outline: var(--focus-ring);
+}
+.app .allocation-bar {
+  height: 10px;
+  margin: 8px 0;
+}
+.app .allocation-legend {
+  display: grid;
+  gap: 4px;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+.app .panel > .eyebrow {
+  display: none;
+}
+.app .panel .fine {
+  margin: 6px 0 0;
+}
+@media (min-width: 821px) {
+  .app .metric-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+.app .metric small {
+  font-size: 0.68rem;
+}
+.app .section-heading {
+  margin-bottom: 6px;
+}
+.app .table-scroll th,
+.app .table-scroll td {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+@media (min-width: 1000px) {
+  .app .dashboard-split + .holdings,
+  .app .dashboard-split {
+    margin-top: 0;
+  }
+}
+.session-chip {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 40vw;
+  font-size: 0.72rem;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 10px;
+}
+.session-chip > span:first-child {
+  color: var(--green);
+}
+.session-chip.warn {
+  color: var(--danger);
+}
+.session-email {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.session-chip + .top-return {
+  margin-left: 0;
+}
+@media (max-width: 520px) {
+  .session-email {
+    display: none;
+  }
+}
+.app .track-output {
+  scroll-margin-top: 72px;
+  scroll-margin-bottom: 84px;
+}

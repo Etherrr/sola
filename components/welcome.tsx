@@ -54,6 +54,11 @@ export function Welcome() {
       aria-labelledby="welcome-title"
       onKeyDown={(e) => {
         if (e.key === 'Escape') enter();
+        // One focusable control: keep focus on it so Tab never reaches browser chrome or the page.
+        if (e.key === 'Tab') {
+          e.preventDefault();
+          btn.current?.focus();
+        }
       }}
     >
       <div className="welcome-inner">

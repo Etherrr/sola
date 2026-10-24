@@ -2,6 +2,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ChainSelector } from './chain-selector';
+import { SessionStatus } from './session-status';
 import { Welcome } from './welcome';
 const items = [
   { href: '/portfolio', label: 'Overview', icon: '◧' },
@@ -47,6 +48,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <header className="topbar">
           <ChainSelector />
           <span className="sim-pill">◇ SIMULATED</span>
+          <SessionStatus />
           <a
             className="top-return"
             href="https://solacapitalpartners.com/"

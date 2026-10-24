@@ -285,9 +285,8 @@ test.describe('welcome keyboard containment', () => {
     for (const key of ['Tab', 'Shift+Tab', 'Tab', 'Tab']) {
       await page.keyboard.press(key);
       const inside = await page.evaluate(() => !!document.activeElement?.closest('.welcome'));
-      const body = await page.evaluate(() => document.activeElement === document.body);
-      // Focus may leave the page to browser chrome (body) but never reach covered content.
-      expect(inside || body, key).toBe(true);
+      expect(inside, key).toBe(true);
+      await expect(enter, key).toBeFocused();
     }
     expect(
       await page.evaluate(() => document.querySelector('.app-body')?.hasAttribute('inert')),
@@ -304,4 +303,47 @@ test.describe('welcome keyboard containment', () => {
 test('corporate site link is reachable on every width', async ({ page }) => {
   await page.goto('/settings');
   await expect(page.getByRole('link', { name: 'Back to solacapitalpartners.com' })).toBeVisible();
+});
+
+test.describe('session status', () => {
+  test('shows an email only after a verified 200, and clears it on a later 401', async ({
+    page,
+    isMobile,
+  }) => {
+    let status = 200;
+    await page.route('**/api/v1/session', (r) =>
+      r.fulfill({
+        status,
+        contentType: 'application/json',
+        body: JSON.stringify(
+          status === 200
+            ? { status: 'ok', via: 'cloudflare-access', identity: { email: 'jun@example.com' } }
+            : { error: { code: 'unauthorized' } },
+        ),
+      }),
+    );
+    await page.goto('/track');
+    await expect(page.locator('.session-chip')).toContainText('jun@example.com', {
+      useInnerText: false,
+    });
+    status = 401;
+    await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+    await expect(page.getByText('Session not verified')).toBeVisible();
+    await expect(page.getByText('jun@example.com')).toHaveCount(0);
+    expect(isMobile !== undefined).toBe(true);
+  });
+  test('no identity is shown when the API is absent or answers with the wrong shape', async ({
+    page,
+  }) => {
+    await page.route('**/api/v1/session', (r) =>
+      r.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: '{"identity":{"email":"x@y.zz"}}',
+      }),
+    );
+    await page.goto('/track');
+    await page.waitForTimeout(400);
+    await expect(page.locator('.session-chip')).toHaveCount(0);
+  });
 });
