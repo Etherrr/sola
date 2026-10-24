@@ -134,7 +134,7 @@ describe('request contract', () => {
   it.each([
     ['not json', 400, 'bad_json'],
     ['[]', 400, 'bad_shape'],
-    [JSON.stringify({ ...valid, network: 'solana' }), 400, 'unsupported_network'],
+    [JSON.stringify({ ...valid, network: 'bitcoin' }), 400, 'unsupported_network'],
     [JSON.stringify({ ...valid, currency: 'EUR' }), 400, 'unsupported_currency'],
     [JSON.stringify({ ...valid, addresses: [] }), 400, 'bad_addresses'],
     [
@@ -149,6 +149,89 @@ describe('request contract', () => {
     const r = parseResolveRequest(body as string);
     expect(r.ok).toBe(false);
     if (!r.ok) expect([r.status, r.code]).toEqual([status, code]);
+  });
+
+  it('accepts a solana request with a base58 address and keeps it verbatim', () => {
+    const addr = 'So11111111111111111111111111111111111111112';
+    const r = parseResolveRequest(
+      JSON.stringify({ network: 'solana', addresses: [addr], currency: 'USD' }),
+    );
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.value).toEqual({ network: 'solana', addresses: [addr], currency: 'USD' });
+  });
+  it.each([
+    [JSON.stringify({ network: 'solana', addresses: [A('1')], currency: 'USD' }), 'bad_address'],
+    [JSON.stringify({ network: 'solana', addresses: ['0xabc'], currency: 'USD' }), 'bad_address'],
+    [JSON.stringify({ network: 'solana', addresses: ['has0OIlchars'.repeat(3)], currency: 'USD' }), 'bad_address'],
+    [JSON.stringify({ network: 'solana', addresses: ['short'], currency: 'USD' }), 'bad_address'],
+    [
+      JSON.stringify({
+        network: 'ethereum',
+        addresses: ['So11111111111111111111111111111111111111112'],
+        currency: 'USD',
+      }),
+      'bad_address',
+    ],
+  ])('rejects cross-network or malformed solana addresses %#', (body, code) => {
+    const r = parseResolveRequest(body as string);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.code).toBe(code);
+  });
+
+  it('resolves solana through the solana mock provider with solana warnings and null chainId', async () => {
+    const s = await signer();
+    const jwt = await s.sign(good());
+    const addr = 'So11111111111111111111111111111111111111112';
+    const res = await handleResolve(
+      post({ network: 'solana', addresses: [addr], currency: 'USD' }, jwt),
+      ENV,
+      deps(s.keys),
+    );
+    expect(res.status).toBe(200);
+    const b = (await res.json()) as {
+      network: string;
+      chainId: number | null;
+      provider: string;
+      simulated: boolean;
+      warnings: string[];
+      wallets: { address: string; assets: { symbol: string }[] }[];
+    };
+    expect(b.network).toBe('solana');
+    expect(b.chainId).toBeNull();
+    expect(b.provider).toBe('mock-fixtures-solana');
+    expect(b.simulated).toBe(true);
+    expect(b.warnings[0]).toContain('SIMULATED');
+    expect(b.wallets[0]!.address).toBe(addr);
+    expect(b.wallets[0]!.assets[0]!.symbol).toBe('SOL');
+  });
+
+  it('uses the solana live provider when live data is on', async () => {
+    const s = await signer();
+    const jwt = await s.sign(good());
+    const addr = 'So11111111111111111111111111111111111111112';
+    const solLive = {
+      name: 'sol-live-stub',
+      simulated: false,
+      async fetchWallets(addresses: string[]) {
+        return {
+          ok: true as const,
+          provider: 'sol-live-stub',
+          simulated: false,
+          observedAt: '2026-10-24T00:00:00.000Z',
+          wallets: [{ address: addresses[0]!, assets: [], partial: false, warnings: [] }],
+        };
+      },
+    };
+    const res = await handleResolve(
+      post({ network: 'solana', addresses: [addr], currency: 'USD' }, jwt),
+      { ...ENV, PORTFOLIO_LIVE_DATA: '1' },
+      deps(s.keys, { solanaLiveProvider: solLive }),
+    );
+    expect(res.status).toBe(200);
+    const b = (await res.json()) as { provider: string; warnings: string[]; simulated: boolean };
+    expect(b.provider).toBe('sol-live-stub');
+    expect(b.simulated).toBe(false);
+    expect(b.warnings[0]).toContain('Only the SOL balance is checked');
   });
 });
 
@@ -311,7 +394,10 @@ describe('endpoint security and behavior', () => {
     const h = await (await handleHealth(get('/api/v1/health', jwt), ENV, d)).json();
     expect(Object.keys(h).sort()).toEqual(['mode', 'requestId', 'status']);
     const n = await (await handleNetworks(get('/api/v1/networks', jwt), ENV, d)).json();
-    expect(n.networks).toEqual([{ id: 'ethereum', chainId: 1, status: 'mock' }]);
+    expect(n.networks).toEqual([
+      { id: 'ethereum', chainId: 1, status: 'mock' },
+      { id: 'solana', chainId: null, status: 'mock' },
+    ]);
   });
 });
 

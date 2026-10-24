@@ -23,3 +23,15 @@ export function checkEvmAddress(input: unknown): AddressCheck {
   if (mixed && canonical !== input) return { ok: false, reason: 'checksum' };
   return { ok: true, address: canonical };
 }
+
+// Base58 alphabet (Bitcoin/Solana): no 0, O, I or l.
+const BASE58 = /^[1-9A-HJ-NP-Za-km-z]+$/;
+
+/** Accepts a Solana mainnet address: base58, 32 to 44 characters (a 32-byte public key is
+ *  typically 43-44 chars; shorter encodings of 32-byte keys are valid). No checksum exists
+ *  on Solana, so a malformed string can only be rejected by shape, never proven wrong. */
+export function checkSolanaAddress(input: unknown): AddressCheck {
+  if (typeof input !== 'string' || input.length < 32 || input.length > 44 || !BASE58.test(input))
+    return { ok: false, reason: 'format' };
+  return { ok: true, address: input };
+}

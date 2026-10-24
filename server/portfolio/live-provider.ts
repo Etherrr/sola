@@ -19,9 +19,9 @@ import {
 // Only the tokens listed below are looked up: a wallet's other tokens are NOT shown.
 export const RPC_URL = 'https://ethereum-rpc.publicnode.com';
 export const MAX_RESPONSE_BYTES = 64 * 1024;
-const FEED_DECIMALS = 8;
-const MAX_FUTURE_S = 30;
-const MAX_CLOCK_SKEW_S = 120;
+export const FEED_DECIMALS = 8;
+export const MAX_FUTURE_S = 30;
+export const MAX_CLOCK_SKEW_S = 120;
 // Multicall3, canonical address per https://github.com/mds1/multicall3 (read 23 Oct 2026).
 export const MULTICALL3 = '0xcA11bde05977b3631167028862bE2a173976CA11';
 
@@ -81,7 +81,7 @@ const isSafeRpcCode = (c: unknown): c is number =>
   typeof c === 'number' && Number.isSafeInteger(c) && Math.abs(c) <= 1_000_000;
 const word = (hex: string, i: number) => hex.slice(2 + i * 64, 2 + (i + 1) * 64);
 
-async function readCapped(res: Response, limit: number): Promise<string | null> {
+export async function readCapped(res: Response, limit: number): Promise<string | null> {
   const reader = res.body?.getReader();
   if (!reader) return null;
   const chunks: Uint8Array[] = [];

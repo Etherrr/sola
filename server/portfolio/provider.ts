@@ -123,3 +123,33 @@ export const mockProvider: PortfolioProvider = {
     return { ok: true, provider: 'mock-fixtures', simulated: true, observedAt: OBSERVED, wallets };
   },
 };
+
+// Simulated Solana fixture, clearly labelled: one invented SOL balance for any address. It is
+// not read from any blockchain and exists only so mock deployments behave the same on both networks.
+export const solanaMockProvider: PortfolioProvider = {
+  name: 'mock-fixtures-solana',
+  simulated: true,
+  async fetchWallets(addresses) {
+    const wallets: WalletResult[] = addresses.map((address) => ({
+      address,
+      assets: [
+        asset({
+          id: 'solana:mainnet/native',
+          symbol: 'SOL',
+          decimals: 9,
+          raw: 12_345_678_901n,
+          price: '200',
+        }),
+      ],
+      partial: false,
+      warnings: [],
+    }));
+    return {
+      ok: true,
+      provider: 'mock-fixtures-solana',
+      simulated: true,
+      observedAt: OBSERVED,
+      wallets,
+    };
+  },
+};

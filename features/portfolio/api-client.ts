@@ -86,7 +86,12 @@ const MESSAGES: Record<number, [string, boolean]> = {
   504: ['The data source took too long. Nothing was substituted.', true],
 };
 
-export async function lookupAddress(address: string): Promise<LookupOutcome> {
+export type TrackNetwork = 'ethereum' | 'solana';
+
+export async function lookupAddress(
+  address: string,
+  network: TrackNetwork = 'ethereum',
+): Promise<LookupOutcome> {
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), 12000);
   try {
@@ -95,7 +100,7 @@ export async function lookupAddress(address: string): Promise<LookupOutcome> {
       credentials: 'same-origin',
       cache: 'no-store',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ network: 'ethereum', addresses: [address], currency: 'USD' }),
+      body: JSON.stringify({ network, addresses: [address], currency: 'USD' }),
       signal: ctl.signal,
     });
     if (res.ok) {
@@ -105,7 +110,13 @@ export async function lookupAddress(address: string): Promise<LookupOutcome> {
       } catch {
         data = null; // HTML from an Access redirect or a malformed body
       }
-      if (data && data.wallets[0]!.address.toLowerCase() !== address.toLowerCase()) data = null;
+      if (
+        data &&
+        (network === 'ethereum'
+          ? data.wallets[0]!.address.toLowerCase() !== address.toLowerCase()
+          : data.wallets[0]!.address !== address)
+      )
+        data = null;
       if (!data)
         return {
           kind: 'error',

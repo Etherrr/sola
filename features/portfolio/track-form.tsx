@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { ModeMarker } from '@/components/mode-marker';
-import { lookupAddress, type LookupOutcome } from './api-client';
+import { lookupAddress, type LookupOutcome, type TrackNetwork } from './api-client';
 import { differsWhenRounded, fmtAmount, fmtPrice, fmtUsd } from './format';
 
 const SAMPLES: { label: string; address: string }[] = [
@@ -12,10 +12,15 @@ const SAMPLES: { label: string; address: string }[] = [
   { label: 'Partial data', address: '0x1111111111111111111111111111111111111115' },
   { label: 'Source unavailable', address: '0x111111111111111111111111111111111111111f' },
 ];
+// A syntactically valid Solana address shape for simulated examples only; the mock fixture does
+// not read any chain, so any base58 string of the right length returns the same invented data.
+const SOL_SAMPLE = 'So11111111111111111111111111111111111111112';
+const SOL_ADDR = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
 const feedTime = (iso: string) => iso.slice(0, 16).replace('T', ' ') + ' UTC';
 export function TrackForm({ mode = 'mock' }: { mode?: 'checking' | 'mock' | 'live' | 'unknown' }) {
   const examples = mode === 'mock';
+  const [network, setNetwork] = useState<TrackNetwork>('ethereum');
   const [value, setValue] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -45,16 +50,23 @@ export function TrackForm({ mode = 'mock' }: { mode?: 'checking' | 'mock' | 'liv
     const address = raw.trim();
     setOutcome(null);
     setExact(false);
-    if (!/^0x[0-9a-fA-F]{40}$/.test(address)) {
+    if (network === 'ethereum' && !/^0x[0-9a-fA-F]{40}$/.test(address)) {
       setError(
         'Enter an Ethereum address: 0x followed by 40 hexadecimal characters. Names such as .eth are not supported yet.',
       );
       input.current?.focus();
       return;
     }
+    if (network === 'solana' && !SOL_ADDR.test(address)) {
+      setError(
+        'Enter a Solana address: 32 to 44 base58 characters (no 0x prefix). Names such as .sol are not supported yet.',
+      );
+      input.current?.focus();
+      return;
+    }
     setError(null);
     setBusy(true);
-    setOutcome(await lookupAddress(address));
+    setOutcome(await lookupAddress(address, network));
     setBusy(false);
   }
 
@@ -74,7 +86,30 @@ export function TrackForm({ mode = 'mock' }: { mode?: 'checking' | 'mock' | 'liv
           }}
           noValidate
         >
-          <label htmlFor="track-address">Public Ethereum address (Ethereum mainnet)</label>
+          <div className="actions" role="group" aria-label="Network">
+            {(['ethereum', 'solana'] as const).map((n) => (
+              <button
+                key={n}
+                type="button"
+                className="button secondary chip"
+                aria-pressed={network === n}
+                disabled={busy}
+                onClick={() => {
+                  setNetwork(n);
+                  setValue('');
+                  setOutcome(null);
+                  setError(null);
+                }}
+              >
+                {n === 'ethereum' ? 'Ethereum' : 'Solana (SOL only)'}
+              </button>
+            ))}
+          </div>
+          <label htmlFor="track-address">
+            {network === 'ethereum'
+              ? 'Public Ethereum address (Ethereum mainnet)'
+              : 'Public Solana address (Solana mainnet)'}
+          </label>
           <input
             id="track-address"
             ref={input}
@@ -92,10 +127,12 @@ export function TrackForm({ mode = 'mock' }: { mode?: 'checking' | 'mock' | 'liv
           />
           <p id="track-privacy" className="fine">
             {mode === 'live'
-              ? "A pasted address is sent to this app's lookup service and then to PublicNode, a public Ethereum node, to read its balances. PublicNode's policy text says it keeps data at most 24 hours; that is not verified. The address is not saved in your browser. It is observed, not proven to be yours."
+              ? network === 'solana'
+                ? "A pasted address is sent to this app's lookup service and then to PublicNode, a public Solana node, to read its SOL balance. PublicNode's policy text says it keeps data at most 24 hours; that is not verified. The address is not saved in your browser. It is observed, not proven to be yours."
+                : "A pasted address is sent to this app's lookup service and then to PublicNode, a public Ethereum node, to read its balances. PublicNode's policy text says it keeps data at most 24 hours; that is not verified. The address is not saved in your browser. It is observed, not proven to be yours."
               : mode === 'mock'
                 ? "A pasted address is sent to this app's own lookup service and is not saved in your browser. It is observed, not proven to be yours."
-                : "A pasted address is sent to this app's lookup service. This deployment's mode is not confirmed yet, so the lookup could be live, in which case the address is also sent to a public Ethereum node. It is not saved in your browser."}
+                : "A pasted address is sent to this app's lookup service. This deployment's mode is not confirmed yet, so the lookup could be live, in which case the address is also sent to a public node. It is not saved in your browser."}
           </p>
           {error && (
             <p id="track-error" role="alert" className="fine">
@@ -114,7 +151,10 @@ export function TrackForm({ mode = 'mock' }: { mode?: 'checking' | 'mock' | 'liv
               <strong>Simulated examples</strong> (fixed fixtures, not real wallets):
             </p>
             <div className="actions">
-              {SAMPLES.map((s) => (
+              {(network === 'solana'
+                ? [{ label: 'Example balance', address: SOL_SAMPLE }]
+                : SAMPLES
+              ).map((s) => (
                 <button
                   key={s.label}
                   type="button"
@@ -185,7 +225,9 @@ export function TrackForm({ mode = 'mock' }: { mode?: 'checking' | 'mock' | 'liv
                       ? 'Some balances could not be read. No nonzero balances are shown among the assets checked, but this result cannot tell whether the wallet is empty. See the notes below.'
                       : ok.simulated
                         ? 'No assets found for this fixture. An empty wallet is a valid result.'
-                        : 'No ETH, USDC, USDT, DAI or WETH balance was found. Other tokens, NFTs and DeFi positions were not checked, so this does not show that the wallet is empty.'}
+                        : network === 'solana'
+                          ? 'No SOL balance was found. SPL tokens, NFTs and DeFi positions were not checked, so this does not show that the wallet is empty.'
+                          : 'No ETH, USDC, USDT, DAI or WETH balance was found. Other tokens, NFTs and DeFi positions were not checked, so this does not show that the wallet is empty.'}
                   </p>
                 ) : (
                   <div
@@ -195,7 +237,10 @@ export function TrackForm({ mode = 'mock' }: { mode?: 'checking' | 'mock' | 'liv
                     aria-label="Wallet balances table, scrolls sideways when it is wider than the screen"
                   >
                     <table className="track-table" role="table">
-                      <caption>Wallet balances (Ethereum). Prices in USD.</caption>
+                      <caption>
+                        Wallet balances ({network === 'solana' ? 'Solana' : 'Ethereum'}). Prices in
+                        USD.
+                      </caption>
                       <thead role="rowgroup">
                         <tr role="row">
                           <th scope="col" role="columnheader">

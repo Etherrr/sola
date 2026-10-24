@@ -8,8 +8,9 @@ import {
   readExpiresAt,
   type KeyFetcher,
 } from './access';
-import { mockProvider, type Diag, type PortfolioProvider } from './provider';
+import { mockProvider, solanaMockProvider, type Diag, type PortfolioProvider } from './provider';
 import { createLiveProvider } from './live-provider';
+import { createSolanaLiveProvider } from './live-provider-solana';
 
 export type Env = {
   PORTFOLIO_API_ENABLED?: string;
@@ -21,6 +22,8 @@ export type Env = {
 export type Deps = {
   provider: PortfolioProvider;
   liveProvider: PortfolioProvider;
+  solanaProvider: PortfolioProvider;
+  solanaLiveProvider: PortfolioProvider;
   fetchKeys: KeyFetcher;
   now: () => Date;
   id: () => string;
@@ -31,6 +34,8 @@ export type Deps = {
 export const defaultDeps = (): Deps => ({
   provider: mockProvider,
   liveProvider: createLiveProvider(),
+  solanaProvider: solanaMockProvider,
+  solanaLiveProvider: createSolanaLiveProvider(),
   fetchKeys: fetchAccessKeys,
   now: () => new Date(),
   id: () => crypto.randomUUID(),
@@ -169,7 +174,12 @@ export async function handleResolve(
   let result;
   try {
     result = await Promise.race([
-      pick(env, d).fetchWallets(parsed.value.addresses, ctl.signal),
+      (parsed.value.network === 'solana'
+        ? env.PORTFOLIO_LIVE_DATA === '1'
+          ? d.solanaLiveProvider
+          : d.solanaProvider
+        : pick(env, d)
+      ).fetchWallets(parsed.value.addresses, ctl.signal),
       new Promise<never>((_, rej) =>
         ctl.signal.addEventListener('abort', () => rej(new Error('timeout'))),
       ),
@@ -242,7 +252,8 @@ export async function handleResolve(
     generatedAt: d.now().toISOString(),
     observedAt: result.observedAt,
     provider: result.provider,
-    chainId: 1,
+    chainId: parsed.value.network === 'ethereum' ? 1 : null,
+    network: parsed.value.network,
     mode: result.simulated ? 'mock' : 'live',
     simulated: result.simulated,
     wallets: result.wallets,
@@ -254,9 +265,13 @@ export async function handleResolve(
     partial: result.wallets.some((w) => w.partial),
     warnings: result.simulated
       ? ['SIMULATED fixture data. Not read from any blockchain.']
-      : [
-          'Live read-only Ethereum data. Only ETH, USDC, USDT, DAI and WETH are checked; other tokens, NFTs and DeFi positions are not shown.',
-        ],
+      : parsed.value.network === 'solana'
+        ? [
+            'Live read-only Solana data. Only the SOL balance is checked; SPL tokens (including USDC and USDT), NFTs and DeFi positions are not shown. A missing token is not a zero balance.',
+          ]
+        : [
+            'Live read-only Ethereum data. Only ETH, USDC, USDT, DAI and WETH are checked; other tokens, NFTs and DeFi positions are not shown.',
+          ],
   };
   return reply(200, body);
 }
@@ -285,7 +300,10 @@ export async function handleNetworks(
   const blocked = await gate(req, env, d, requestId);
   if (blocked) return blocked;
   return reply(200, {
-    networks: [{ id: 'ethereum', chainId: 1, status: pick(env, d).simulated ? 'mock' : 'live' }],
+    networks: [
+      { id: 'ethereum', chainId: 1, status: pick(env, d).simulated ? 'mock' : 'live' },
+      { id: 'solana', chainId: null, status: pick(env, d).simulated ? 'mock' : 'live' },
+    ],
     requestId,
   });
 }

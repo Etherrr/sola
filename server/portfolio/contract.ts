@@ -1,9 +1,10 @@
-import { checkEvmAddress } from './address';
+import { checkEvmAddress, checkSolanaAddress } from './address';
 
 export const MAX_ADDRESSES = 5;
 export const MAX_BODY_BYTES = 2048;
 
-export type ResolveRequest = { network: 'ethereum'; addresses: string[]; currency: 'USD' };
+export type Network = 'ethereum' | 'solana';
+export type ResolveRequest = { network: Network; addresses: string[]; currency: 'USD' };
 
 export type Asset = {
   assetId: string; // chain-qualified: eip155:1/native or eip155:1/erc20:0x...
@@ -30,7 +31,8 @@ export type ResolveResponse = {
   generatedAt: string;
   observedAt: string;
   provider: string;
-  chainId: 1;
+  chainId: number | null; // 1 for Ethereum mainnet; null where the EVM chain-id concept does not apply (Solana).
+  network: Network;
   mode: 'mock' | 'live';
   simulated: boolean;
   wallets: WalletResult[];
@@ -68,13 +70,14 @@ export function parseResolveRequest(
       code: 'unknown_field',
       message: 'Unexpected field in request.',
     };
-  if (o.network !== 'ethereum')
+  if (o.network !== 'ethereum' && o.network !== 'solana')
     return {
       ok: false,
       status: 400,
       code: 'unsupported_network',
-      message: 'Only "ethereum" is supported.',
+      message: 'Only "ethereum" and "solana" are supported.',
     };
+  const network: Network = o.network;
   if (o.currency !== 'USD')
     return {
       ok: false,
@@ -89,21 +92,36 @@ export function parseResolveRequest(
   const seen = new Set<string>();
   const out: string[] = [];
   for (const a of o.addresses) {
-    const c = checkEvmAddress(a);
-    if (!c.ok)
-      return {
-        ok: false,
-        status: 400,
-        code: c.reason === 'checksum' ? 'bad_checksum' : 'bad_address',
-        message:
-          c.reason === 'checksum'
-            ? 'An address has an invalid checksum.'
-            : 'An address is not a valid Ethereum address.',
-      };
-    if (!seen.has(c.address)) {
-      seen.add(c.address);
-      out.push(c.address);
+    if (network === 'ethereum') {
+      const c = checkEvmAddress(a);
+      if (!c.ok)
+        return {
+          ok: false,
+          status: 400,
+          code: c.reason === 'checksum' ? 'bad_checksum' : 'bad_address',
+          message:
+            c.reason === 'checksum'
+              ? 'An address has an invalid checksum.'
+              : 'An address is not a valid Ethereum address.',
+        };
+      if (!seen.has(c.address)) {
+        seen.add(c.address);
+        out.push(c.address);
+      }
+    } else {
+      const c = checkSolanaAddress(a);
+      if (!c.ok)
+        return {
+          ok: false,
+          status: 400,
+          code: 'bad_address',
+          message: 'An address is not a valid Solana address.',
+        };
+      if (!seen.has(c.address)) {
+        seen.add(c.address);
+        out.push(c.address);
+      }
     }
   }
-  return { ok: true, value: { network: 'ethereum', addresses: out, currency: 'USD' } };
+  return { ok: true, value: { network, addresses: out, currency: 'USD' } };
 }

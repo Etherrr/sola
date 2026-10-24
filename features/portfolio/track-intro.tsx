@@ -42,24 +42,27 @@ function TrackIntro({ mode }: { mode: Shown }) {
       {mode === 'live' ? (
         <>
           <p>
-            Look up an Ethereum address. This deployment reads real public Ethereum data: ETH and a
-            short list of tokens (USDC, USDT, DAI, WETH). Other tokens, NFTs and DeFi positions are
-            not shown, so a result is not a full portfolio and a missing token is not proof of an
-            empty wallet. WETH is priced with the ETH/USD feed, so it is a proxy and can differ from
-            the real WETH price if WETH trades off its peg. Chainlink marks its USDC and USDT feeds
-            as capped, with an upper limit of $1.05 per coin in the feed contract, so those prices
-            are reference values, not executable market prices.
+            Look up a public Ethereum or Solana address. This deployment reads real public data.
+            On Ethereum: ETH and a short list of tokens (USDC, USDT, DAI, WETH). On Solana: the SOL
+            balance only - SPL tokens (including USDC and USDT), NFTs and DeFi positions are not
+            read. On both networks a result is not a full portfolio and a missing token is not
+            proof of an empty wallet. WETH is priced with the ETH/USD feed, so it is a proxy and can
+            differ from the real WETH price if WETH trades off its peg. Chainlink marks its USDC and
+            USDT feeds as capped, with an upper limit of $1.05 per coin in the feed contract, so
+            those prices are reference values, not executable market prices.
           </p>
           <p className="notice">
             Live mode is on for this deployment. Read-only: no wallet connects and nothing is
-            signed. A pasted address is sent to a public Ethereum node to read its balances. Each
-            result below says when it was read.
+            signed. A pasted address is sent to a public node (PublicNode) for the chosen network
+            to read its balances; PublicNode's policy text says it keeps request data at most 24
+            hours, and that statement is not verified here. Each result below says when it was
+            read.
           </p>
         </>
       ) : mode === 'mock' ? (
         <>
           <p>
-            Look up an Ethereum address. Results are fixed simulated examples, not blockchain data.
+            Look up an Ethereum or Solana address. Results are fixed simulated examples, not blockchain data.
             Live data stays off until it is separately approved.
           </p>
           <ModeMarker
@@ -69,7 +72,7 @@ function TrackIntro({ mode }: { mode: Shown }) {
         </>
       ) : (
         <p>
-          Look up an Ethereum address.{' '}
+          Look up an Ethereum or Solana address.{' '}
           {mode === 'checking'
             ? 'Checking whether lookups are simulated or live…'
             : 'The data mode could not be confirmed. Each result states its own mode.'}
