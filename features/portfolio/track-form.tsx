@@ -159,7 +159,7 @@ export function TrackForm({ mode = 'mock' }: { mode?: 'checking' | 'mock' | 'liv
                 {w.assets.length === 0 ? (
                   <p>
                     {w.partial
-                      ? 'No balances could be read for this address, so nothing is known about it. This is not an empty wallet. See the notes below.'
+                      ? 'Some balances could not be read. No nonzero balances are shown among the assets checked, but this result cannot tell whether the wallet is empty. See the notes below.'
                       : ok.simulated
                         ? 'No assets found for this fixture. An empty wallet is a valid result.'
                         : 'No ETH, USDC, USDT, DAI or WETH balance was found. Other tokens, NFTs and DeFi positions were not checked, so this does not show that the wallet is empty.'}

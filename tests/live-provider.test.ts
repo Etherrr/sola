@@ -117,6 +117,24 @@ describe('live provider hardening (reviewer findings)', () => {
     expect(new Set(tags)).toEqual(new Set(['0x1312d00']));
     expect(r.wallets[0]!.warnings.join()).toMatch(/block 20000000/);
   });
+  it('the maximum 5 addresses stay within 2 subrequests and a 33-call batch', async () => {
+    let reqs = 0;
+    let biggest = 0;
+    const inner = rpc({});
+    const f = (async (u: string, init: RequestInit) => {
+      reqs += 1;
+      biggest = Math.max(biggest, (JSON.parse(String(init.body)) as unknown[]).length);
+      return inner(u, init);
+    }) as unknown as typeof fetch;
+    const addrs = [1, 2, 3, 4, 5].map((n) => '0x' + String(n).repeat(40));
+    const r = await createLiveProvider({ fetch: f, now: () => NOW }).fetchWallets(
+      addrs,
+      new AbortController().signal,
+    );
+    expect(r.ok).toBe(true);
+    expect(reqs).toBe(2);
+    expect(biggest).toBe(5 * 5 + 8);
+  });
   it('a bad block number is a bad_response, not a throw', async () => {
     for (const rawBlock of ['0x', '0x0', '0x' + 'f'.repeat(20)]) {
       const r = await run(rpc({ rawBlock }));

@@ -106,21 +106,28 @@ test.describe('/track data mode follows the server', () => {
     await expect(page.getByText(/Nothing was read from a blockchain/)).toHaveCount(0);
   });
   for (const [name, mode, sim, partial, want, not] of [
-    ['mock empty', 'mock', true, false, /An empty wallet is a valid result/, /not an empty wallet/],
+    [
+      'mock empty',
+      'mock',
+      true,
+      false,
+      /An empty wallet is a valid result/,
+      /cannot tell whether the wallet is empty/,
+    ],
     [
       'live covered-zero',
       'live',
       false,
       false,
       /does not show that the wallet is empty/,
-      /valid result|No balances could be read/,
+      /valid result|Some balances could not be read/,
     ],
     [
       'live all reads failed',
       'live',
       false,
       true,
-      /This is not an empty wallet/,
+      /this result cannot tell whether the wallet is empty/,
       /valid result|No ETH, USDC/,
     ],
   ] as const) {
@@ -152,6 +159,10 @@ test.describe('/track data mode follows the server', () => {
       await expect(page.getByRole('heading', { name: 'Result' })).toBeVisible();
       await expect(page.getByText(want)).toBeVisible();
       await expect(page.getByText(not)).toHaveCount(0);
+      if (partial)
+        await expect(
+          page.getByText('ETH balance could not be read; this is not a zero balance.'),
+        ).toBeVisible();
     });
   }
   test('while the mode is still being checked: no examples, submit disabled, nothing is sent', async ({
