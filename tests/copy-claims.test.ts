@@ -63,3 +63,43 @@ describe('the top-bar network selector never contradicts the track selection', (
     expect(shell).toContain('TrackNetworkProvider');
   });
 });
+
+describe('the DeFi app carries no education traces beyond one button to the separate area', () => {
+  const shell = readFileSync('components/app-shell.tsx', 'utf8');
+  const track = readFileSync('app/track/page.tsx', 'utf8');
+  it('the sidebar keeps a single Education link and drops Learn, Start and Explore', () => {
+    expect(shell).toContain("href: '/education'");
+    expect(shell).not.toMatch(/href: '\/(learn|start|explore)'/);
+    expect((shell.match(/\/education/g) || []).length).toBe(1);
+  });
+  it('the app footer no longer frames the whole app as a learning preview', () => {
+    expect(shell).not.toMatch(/Learning preview/);
+    expect(shell).not.toMatch(/Educational information only/);
+    expect(shell).toMatch(/Read-only/);
+  });
+  it('Track drops the demo and learn CTAs', () => {
+    expect(track).not.toMatch(/Explore the demo/);
+    expect(track).not.toMatch(/Learn DeFi/);
+    expect(track).not.toMatch(/ActionLink/);
+  });
+});
+
+describe('the entrance is truthful about live lookups and welcomes the verified account', () => {
+  const entrance = readFileSync('components/entrance.tsx', 'utf8');
+  it('drops the stale all-simulated claims', () => {
+    expect(entrance).not.toMatch(/Everything here is simulated/);
+    expect(entrance).not.toMatch(/no live balances yet/i);
+    expect(entrance).not.toMatch(/◇ SIMULATED/);
+    expect(entrance).toMatch(/◇ READ-ONLY/);
+  });
+  it('describes the live read-only lookup without overstating coverage', () => {
+    expect(entrance).toMatch(/live public balances/);
+    expect(entrance).toMatch(/clearly labeled sample/);
+    expect(entrance).toMatch(/No wallet connection/);
+  });
+  it('greets only the verified session email, never a guessed name', () => {
+    expect(entrance).toContain('useSession');
+    expect(entrance).toContain("session.kind === 'verified'");
+    expect(entrance).not.toMatch(/Bill|bill\.|Master/);
+  });
+});

@@ -10,31 +10,16 @@ const sections = [
   {
     id: 'defi',
     label: 'DeFi App',
-    note: 'Simulated',
+    note: '',
     items: [
       { href: '/portfolio', label: 'Overview', icon: '◧' },
       { href: '/track', label: 'Track', icon: '⌕' },
     ],
   },
-  {
-    id: 'edu',
-    label: 'Education',
-    note: '',
-    items: [
-      { href: '/education', label: 'Education', icon: '◎' },
-      { href: '/learn', label: 'Learn', icon: '✦' },
-      { href: '/start', label: 'Start', icon: '▸' },
-      { href: '/explore', label: 'Explore', icon: '⌖' },
-    ],
-  },
 ];
-const phoneTabs = [
-  { href: '/portfolio', label: 'Overview', icon: '◧' },
-  { href: '/track', label: 'Track', icon: '⌕' },
-  { href: '/education', label: 'Education', icon: '◎' },
-  { href: '/learn', label: 'Learn', icon: '✦' },
-  { href: '/settings', label: 'Settings', icon: '⚙' },
-];
+// The only education trace in the app: one button leading to the separate Education area.
+const educationLink = { href: '/education', label: 'Education', icon: '◎' };
+const settingsLink = { href: '/settings', label: 'Settings', icon: '⚙' };
 export function AppShell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
   const bar = useRef<HTMLElement>(null);
@@ -92,19 +77,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 ))}
               </div>
             ))}
-            {phoneTabs
-              .filter((t) => t.href === '/settings')
-              .map((t) => (
-                <Link
-                  key={t.href}
-                  href={t.href}
-                  className="nav-settings"
-                  aria-current={path.startsWith(t.href) ? 'page' : undefined}
-                >
-                  <span aria-hidden="true">{t.icon}</span>
-                  {t.label}
-                </Link>
-              ))}
+            {[educationLink, settingsLink].map((t) => (
+              <Link
+                key={t.href}
+                href={t.href}
+                className="nav-settings"
+                aria-current={path.startsWith(t.href) ? 'page' : undefined}
+              >
+                <span aria-hidden="true">{t.icon}</span>
+                {t.label}
+              </Link>
+            ))}
           </nav>
           <p className="side-foot">
             v0.1 · PREVIEW
@@ -134,9 +117,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </main>
           <footer className="app-foot">
             <p>
-              Learning preview · Educational information only. No financial advice, custody, or
-              performance guarantees. Demo figures are simulated, not market data; address lookups
-              state their own mode. <Link href="/settings">Privacy &amp; local data</Link>
+              Sola Lens preview · Read-only. No financial advice, custody, or performance
+              guarantees. Demo figures are simulated, not market data; address lookups state their
+              own mode. <Link href="/settings">Privacy &amp; local data</Link>
               {' · '}
               <a href="https://solacapitalpartners.com/" rel="noopener noreferrer">
                 Back to solacapitalpartners.com

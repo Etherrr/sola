@@ -2,12 +2,15 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { AccountMenu } from './account-menu';
+import { useSession } from '@/features/portfolio/session-context';
 
 const KEY = 'sola-welcomed';
 // The one entrance. Two real destinations. The intro (panels sliding apart) plays once per
 // browser session and never when the user prefers reduced motion. It gates nothing: Cloudflare
 // Access has already authenticated the visitor before this page loads.
 export function Entrance() {
+  const session = useSession();
+  const email = session.kind === 'verified' ? session.email : null;
   const [intro, setIntro] = useState(false);
   const [curtainDone, setCurtainDone] = useState(false);
   const curtain = intro && !curtainDone;
@@ -44,6 +47,9 @@ export function Entrance() {
             <span>
               SOLA <span className="brand-lens">LENS</span>
             </span>
+            <span className="curtain-welcome">
+              {email ? `Welcome, ${email}` : 'Welcome'}
+            </span>
           </span>
         </div>
       )}
@@ -54,7 +60,7 @@ export function Entrance() {
             SOLA <span className="brand-lens">LENS</span>
           </span>
         </Link>
-        <span className="sim-pill">◇ SIMULATED</span>
+        <span className="sim-pill">◇ READ-ONLY</span>
         <AccountMenu />
       </header>
       <main id="main" tabIndex={-1} className="entrance-main">
@@ -62,8 +68,10 @@ export function Entrance() {
           <span>Choose your</span> <em>lens.</em>
         </h1>
         <p className="entrance-sub">
-          Learn first, or open the app. Everything here is simulated and read-only.
+          Open the app, or learn first. Address lookups read live public balances; sample pages
+          stay clearly simulated. Everything is read-only.
         </p>
+        {email && <p className="entrance-account">Signed in as {email} · read-only access</p>}
         <div className="entrance-split">
           <Link href="/education" className="entrance-card edu">
             <span className="entrance-h">Education</span>
@@ -77,10 +85,10 @@ export function Entrance() {
           </Link>
           <Link href="/portfolio" className="entrance-card app">
             <span className="entrance-h">DeFi App</span>
-            <span className="card-kicker">PORTFOLIO VIEW · SIMULATED</span>
+            <span className="card-kicker">LIVE ADDRESS LOOKUP · READ-ONLY</span>
             <span className="entrance-p">
-              A sample portfolio and a simulated address lookup. No wallet connection and no live
-              balances yet.
+              Look up real ETH and SOL balances at public addresses. The overview portfolio is
+              still a clearly labeled sample. No wallet connection.
             </span>
             <span className="card-link">
               Enter DeFi App <span aria-hidden="true">→</span>

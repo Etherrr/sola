@@ -2643,6 +2643,31 @@ html {
   width: 64px;
   height: 70px;
 }
+.curtain-welcome {
+  font-family: var(--sans, system-ui, sans-serif);
+  font-size: 0.85rem;
+  letter-spacing: 0.03em;
+  color: var(--gold-light);
+  opacity: 0;
+  animation: welcome-up 600ms ease 900ms both;
+}
+@keyframes welcome-up {
+  from {
+    transform: translateY(10px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 0.92;
+  }
+}
+.entrance-account {
+  margin: 10px 0 0;
+  font-size: 0.85rem;
+  letter-spacing: 0.02em;
+  color: var(--gold-light);
+  opacity: 0.85;
+}
 @keyframes curtain-left {
   to {
     transform: translateX(-102%);

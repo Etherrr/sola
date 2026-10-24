@@ -1,4 +1,3 @@
-import { ActionLink } from '@/components/ui';
 import { TrackApp } from '@/features/portfolio/track-intro';
 export const metadata = { title: 'Address lookup' };
 export default function Track() {
@@ -20,12 +19,6 @@ export default function Track() {
           <li>A missing price will show as Unknown, never zero.</li>
         </ul>
       </details>
-      <div className="actions">
-        <ActionLink href="/portfolio">Explore the demo →</ActionLink>
-        <ActionLink href="/learn" secondary>
-          Learn DeFi →
-        </ActionLink>
-      </div>
     </div>
   );
 }
