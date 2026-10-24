@@ -2620,11 +2620,11 @@ html {
 .curtain-half.left {
   left: 0;
   border-right: 1px solid rgba(217, 189, 124, 0.5);
-  animation: curtain-left 900ms cubic-bezier(0.7, 0, 0.2, 1) 900ms both;
+  animation: curtain-left 900ms cubic-bezier(0.7, 0, 0.2, 1) 1700ms both;
 }
 .curtain-half.right {
   right: 0;
-  animation: curtain-right 900ms cubic-bezier(0.7, 0, 0.2, 1) 900ms both;
+  animation: curtain-right 900ms cubic-bezier(0.7, 0, 0.2, 1) 1700ms both;
 }
 .curtain-mark {
   position: absolute;
@@ -2637,7 +2637,7 @@ html {
   font-family: var(--serif, Georgia, serif);
   letter-spacing: 0.14em;
   font-size: 1.1rem;
-  animation: curtain-mark 700ms ease 700ms both;
+  animation: curtain-mark 700ms ease 1500ms both;
 }
 .curtain-mark .brand-symbol {
   width: 64px;
@@ -2649,7 +2649,7 @@ html {
   letter-spacing: 0.03em;
   color: var(--gold-light);
   opacity: 0;
-  animation: welcome-up 600ms ease 900ms both;
+  animation: welcome-up 600ms ease 400ms both;
 }
 @keyframes welcome-up {
   from {

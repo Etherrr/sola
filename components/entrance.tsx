@@ -30,7 +30,7 @@ export function Entrance() {
   // Remove the curtain after the animation so it can never linger over the page.
   useEffect(() => {
     if (!curtain) return;
-    const t = window.setTimeout(() => setCurtainDone(true), 2400);
+    const t = window.setTimeout(() => setCurtainDone(true), 3200);
     return () => window.clearTimeout(t);
   }, [curtain]);
   return (
