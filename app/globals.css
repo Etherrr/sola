@@ -2662,7 +2662,9 @@ html {
   }
 }
 .entrance-account {
-  margin: 10px 0 0;
+  width: min(1040px, 100%);
+  margin: 10px auto 0;
+  padding-inline: 16px;
   font-size: 0.85rem;
   letter-spacing: 0.02em;
   color: var(--gold-light);
