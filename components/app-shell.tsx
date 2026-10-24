@@ -4,10 +4,32 @@ import { usePathname } from 'next/navigation';
 import { ChainSelector } from './chain-selector';
 import { AccountMenu } from './account-menu';
 import { SessionProvider } from '@/features/portfolio/session-context';
-const items = [
+const sections = [
+  {
+    id: 'defi',
+    label: 'DeFi App',
+    note: 'Simulated',
+    items: [
+      { href: '/portfolio', label: 'Overview', icon: '◧' },
+      { href: '/track', label: 'Track', icon: '⌕' },
+    ],
+  },
+  {
+    id: 'edu',
+    label: 'Education',
+    note: '',
+    items: [
+      { href: '/education', label: 'Education', icon: '◎' },
+      { href: '/learn', label: 'Learn', icon: '✦' },
+      { href: '/start', label: 'Start', icon: '▸' },
+      { href: '/explore', label: 'Explore', icon: '⌖' },
+    ],
+  },
+];
+const phoneTabs = [
   { href: '/portfolio', label: 'Overview', icon: '◧' },
   { href: '/track', label: 'Track', icon: '⌕' },
-  { href: '/explore', label: 'Explore', icon: '◎' },
+  { href: '/education', label: 'Education', icon: '◎' },
   { href: '/learn', label: 'Learn', icon: '✦' },
   { href: '/settings', label: 'Settings', icon: '⚙' },
 ];
@@ -28,16 +50,43 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </span>
           </Link>
           <nav aria-label="Main" className="side-nav">
-            {items.map((i) => (
-              <Link
-                key={i.href}
-                href={i.href}
-                aria-current={path.startsWith(i.href) ? 'page' : undefined}
+            {sections.map((sec) => (
+              <div
+                key={sec.id}
+                role="group"
+                aria-labelledby={`nav-${sec.id}`}
+                className="nav-group"
               >
-                <span aria-hidden="true">{i.icon}</span>
-                {i.label}
-              </Link>
+                <p id={`nav-${sec.id}`} className="nav-group-label">
+                  {sec.label}
+                </p>
+                {sec.items.map((i) => (
+                  <Link
+                    key={i.href}
+                    href={i.href}
+                    data-section={sec.id}
+                    className={sec.id === 'defi' ? 'nav-defi' : 'nav-edu'}
+                    aria-current={path.startsWith(i.href) ? 'page' : undefined}
+                  >
+                    <span aria-hidden="true">{i.icon}</span>
+                    {i.label}
+                  </Link>
+                ))}
+              </div>
             ))}
+            {phoneTabs
+              .filter((t) => t.href === '/settings')
+              .map((t) => (
+                <Link
+                  key={t.href}
+                  href={t.href}
+                  className="nav-settings"
+                  aria-current={path.startsWith(t.href) ? 'page' : undefined}
+                >
+                  <span aria-hidden="true">{t.icon}</span>
+                  {t.label}
+                </Link>
+              ))}
           </nav>
           <p className="side-foot">
             v0.1 · PREVIEW

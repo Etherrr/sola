@@ -24,6 +24,9 @@ export function Entrance() {
   }, []);
   return (
     <div className={intro ? 'entrance intro' : 'entrance'}>
+      <a className="skip-link" href="#main">
+        Skip to content
+      </a>
       <header className="entrance-top">
         <Link className="brand" href="/" aria-label="Sola Lens home">
           <span className="brand-symbol" aria-hidden="true" />
@@ -40,25 +43,25 @@ export function Entrance() {
           Two sections, one lens. Everything here is simulated and read-only.
         </p>
         <div className="entrance-split">
-          <Link href="/start" className="entrance-card edu">
-            <span className="card-kicker">EDUCATION</span>
-            <span className="entrance-h">Learn DeFi at your own pace</span>
+          <Link href="/education" className="entrance-card edu">
+            <span className="entrance-h">Education</span>
+            <span className="card-kicker">LEARN DEFI AT YOUR OWN PACE</span>
             <span className="entrance-p">
               Wallets, networks, risks and a hands-on security lab. No wallet needed.
             </span>
             <span className="card-link">
-              Start learning <span aria-hidden="true">→</span>
+              Enter Education <span aria-hidden="true">→</span>
             </span>
           </Link>
           <Link href="/portfolio" className="entrance-card app">
-            <span className="card-kicker">DEFI APP · SIMULATED</span>
-            <span className="entrance-h">Portfolio view</span>
+            <span className="entrance-h">DeFi App</span>
+            <span className="card-kicker">PORTFOLIO VIEW · SIMULATED</span>
             <span className="entrance-p">
               A sample portfolio and a simulated address lookup. No wallet connection and no live
               balances yet.
             </span>
             <span className="card-link">
-              Open the app <span aria-hidden="true">→</span>
+              Enter DeFi App <span aria-hidden="true">→</span>
             </span>
           </Link>
         </div>

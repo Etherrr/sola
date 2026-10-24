@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 const routes = [
   '/',
+  '/education',
   '/start',
   '/start/wallets',
   '/start/security',
@@ -50,7 +51,9 @@ test('all routes render, remain responsive, and pass WCAG automated checks', asy
 });
 test('beginner, experienced and demo entry points work', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('link', { name: /Learn DeFi at your own pace/ }).click();
+  await page.getByRole('link', { name: /^Education/ }).click();
+  await expect(page).toHaveURL(/\/education\/?$/);
+  await page.getByRole('link', { name: /I’m new to DeFi/ }).click();
   await expect(page).toHaveURL(/\/start\/?$/);
   await page.getByRole('link', { name: 'Skip this lesson' }).click();
   await expect(page).toHaveURL(/\/start\/wallets\/?$/);
@@ -258,14 +261,56 @@ test.describe('entrance', () => {
     );
     await page.goto('/');
     await expect(page.locator('.entrance')).toHaveClass(/intro/);
-    await expect(page.getByRole('link', { name: /Learn DeFi at your own pace/ })).toBeVisible();
-    await expect(page.getByRole('link', { name: /Portfolio view/ })).toBeVisible();
+    await expect(page.getByRole('link', { name: /^Education/ })).toBeVisible();
+    await expect(page.getByRole('link', { name: /^DeFi App/ })).toBeVisible();
     await expect(page.locator('input')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Account: jun@example.com' })).toBeVisible();
     await page.reload();
     await expect(page.locator('.entrance')).not.toHaveClass(/intro/);
-    await page.getByRole('link', { name: /Portfolio view/ }).click();
+    await page.getByRole('link', { name: /^DeFi App/ }).click();
     await expect(page).toHaveURL(/\/portfolio\/?$/);
+  });
+  test('Tab out of the account control closes it; a route change rechecks the session', async ({
+    page,
+    isMobile,
+  }) => {
+    let calls = 0;
+    await page.route('**/api/v1/session', (r) => {
+      calls += 1;
+      return r.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          status: 'ok',
+          via: 'cloudflare-access',
+          identity: { email: 'a-very-long-address-for-wrapping-checks@example-long-domain.com' },
+        }),
+      });
+    });
+    await page.goto('/portfolio');
+    const btn = page.getByRole('button', { name: /^Account/ });
+    await expect(btn).toHaveAttribute('aria-label', /a-very-long-address/);
+    const before = calls;
+    // In-app navigation (no page reload) must trigger a fresh session check.
+    await page
+      .getByRole('navigation', { name: 'Main' })
+      .getByRole('link', { name: 'Track' })
+      .click();
+    await expect(page).toHaveURL(/\/track\/?$/);
+    await expect(btn).toHaveAttribute('aria-label', /a-very-long-address/);
+    await expect.poll(() => calls).toBeGreaterThan(before);
+    if (!isMobile) {
+      await btn.click();
+      await expect(btn).toHaveAttribute('aria-expanded', 'true');
+      await page.keyboard.press('Tab');
+      await page.keyboard.press('Tab');
+      await page.keyboard.press('Tab');
+      await page.keyboard.press('Tab');
+      await expect(btn).toHaveAttribute('aria-expanded', 'false');
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+      ).toBe(true);
+    }
   });
   test('reduced motion: no intro and no animation', async ({ page }) => {
     await page.addInitScript(() => window.sessionStorage.removeItem('sola-welcomed'));

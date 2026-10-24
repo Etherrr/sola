@@ -5,8 +5,9 @@ import { useSession } from '@/features/portfolio/session-context';
 
 // Account control. It shows an identity only after a verified 200 from /api/v1/session. There is
 // no photo or display name source yet, so the avatar is the first letter of the verified email and
-// the greeting is the email itself, not a name guessed from it. No sign-out item: no supported
-// Access logout route has been confirmed.
+// the greeting is the email itself, not a name guessed from it. No sign-out item on purpose: the
+// documented Access logout (/cdn-cgi/access/logout) ends the user's session for every Access app on
+// the team domain, so it is not an app-only control and needs an explicit decision and a clear label.
 export function AccountMenu() {
   const s = useSession();
   const [open, setOpen] = useState(false);
@@ -18,6 +19,10 @@ export function AccountMenu() {
     const onDown = (e: PointerEvent) => {
       if (!root.current?.contains(e.target as Node)) setOpen(false);
     };
+    // Keyboard focus leaving the control closes the panel, so it never stays open over content.
+    const onFocusIn = (e: FocusEvent) => {
+      if (!root.current?.contains(e.target as Node)) setOpen(false);
+    };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setOpen(false);
@@ -26,7 +31,9 @@ export function AccountMenu() {
     };
     document.addEventListener('pointerdown', onDown);
     document.addEventListener('keydown', onKey);
+    document.addEventListener('focusin', onFocusIn);
     return () => {
+      document.removeEventListener('focusin', onFocusIn);
       document.removeEventListener('pointerdown', onDown);
       document.removeEventListener('keydown', onKey);
     };
