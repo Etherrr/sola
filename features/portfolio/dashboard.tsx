@@ -20,21 +20,18 @@ export function Dashboard({ view = 'overview' }: { view?: View }) {
     <div className="page-container">
       <SimulatedNotice />
       <PageIntro
-        eyebrow="YOUR PORTFOLIO / DEMO"
+        eyebrow="DEMO · ALL NETWORKS"
         title={
           view === 'risk'
-            ? 'See the risks in context.'
+            ? 'Risk insights'
             : view === 'assets'
-              ? 'A closer look at your assets.'
+              ? 'Assets'
               : view === 'positions'
-                ? 'Understand each position.'
-                : 'A portfolio, in perspective.'
+                ? 'Positions'
+                : 'Overview'
         }
       >
-        <p>
-          An invented Ethereum and Solana portfolio. Explore the numbers and the context behind
-          them.
-        </p>
+        <p>Invented Ethereum and Solana holdings, not your wallet.</p>
       </PageIntro>
       <nav className="tabs" aria-label="Portfolio views">
         {views.map((item) => (

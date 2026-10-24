@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { AppShell } from '@/components/app-shell';
 import { ProgressProvider } from '@/features/onboarding/progress-provider';
 import './globals.css';
@@ -8,6 +8,7 @@ export const metadata: Metadata = {
     'Learn DeFi safely and explore a clearly simulated portfolio. A Sola Capital preview.',
   robots: { index: false, follow: false },
 };
+export const viewport: Viewport = { viewportFit: 'cover' };
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">

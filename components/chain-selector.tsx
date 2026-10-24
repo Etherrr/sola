@@ -1,5 +1,6 @@
 'use client';
 import { useId } from 'react';
+import { usePathname } from 'next/navigation';
 // Only Ethereum has any (simulated) support. Other chains are listed so the roadmap is honest,
 // but they are disabled and carry no data.
 export const CHAINS = [
@@ -10,6 +11,12 @@ export const CHAINS = [
 ] as const;
 export function ChainSelector() {
   const id = useId();
+  const path = usePathname();
+  // The overview demo spans invented Ethereum and Solana holdings, so a network filter there
+  // would be misleading. The selector only appears where a network actually applies.
+  if (path.startsWith('/portfolio'))
+    return <span className="scope-chip">Scope · All networks (invented demo)</span>;
+  if (!path.startsWith('/track')) return <span className="scope-chip">Sola Lens preview</span>;
   return (
     <div className="chain-select">
       <label htmlFor={id}>Network</label>

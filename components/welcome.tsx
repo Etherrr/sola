@@ -23,7 +23,18 @@ export function Welcome() {
   const open = !wasSeen;
   const btn = useRef<HTMLButtonElement>(null);
   useEffect(() => {
-    if (open) btn.current?.focus();
+    if (!open) return;
+    // Make everything behind the dialog inert so Tab, clicks and assistive tech cannot reach it.
+    const behind = Array.from(
+      document.querySelectorAll<HTMLElement>('.side, .app-body, .skip-link'),
+    );
+    behind.forEach((el) => el.setAttribute('inert', ''));
+    btn.current?.focus();
+    return () => {
+      behind.forEach((el) => el.removeAttribute('inert'));
+      // Focus would otherwise fall to <body>; hand it to the main landmark.
+      document.getElementById('main')?.focus({ preventScroll: true });
+    };
   }, [open]);
   function enter() {
     dismissed = true;

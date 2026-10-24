@@ -44,7 +44,7 @@ const mock = (page: Page, status: number, body: unknown, ct = 'application/json'
 
 test.beforeEach(async ({ page }) => {
   // The welcome screen has its own tests; skip it here.
-  await page.addInitScript(() => sessionStorage.setItem('sola-welcomed', '1'));
+  await page.addInitScript(() => window.sessionStorage.setItem('sola-welcomed', '1'));
 });
 test.describe('/track simulated lookup', () => {
   test('shows a simulated result with Unknown prices and no console errors', async ({ page }) => {
@@ -124,7 +124,7 @@ test.describe('/track simulated lookup', () => {
     expect(posted).toBe(0);
     const box = await input.boundingBox();
     expect(box!.height).toBeGreaterThanOrEqual(44);
-    expect(box!.width).toBeGreaterThan(Math.min(page.viewportSize()!.width - 60, 400));
+    expect(box!.width).toBeGreaterThan(Math.min(page.viewportSize()!.width - 60, 300));
     const skip = await page.locator('.skip-link').boundingBox();
     expect(skip!.y + skip!.height).toBeLessThanOrEqual(0);
   });

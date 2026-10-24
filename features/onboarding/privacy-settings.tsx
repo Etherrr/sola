@@ -10,6 +10,11 @@ export function PrivacySettings() {
         <code>sola-lens.progress.v1</code>. No account, addresses, wallet details, or analytics are
         collected by this app.
       </p>
+      <p>
+        Separately, the welcome screen keeps one flag, <code>sola-welcomed</code>, in this
+        browser&apos;s session storage so it shows once per session. It is cleared when you close
+        the tab and holds nothing about you.
+      </p>
       <label className="answer">
         <input type="checkbox" checked={enabled} onChange={toggle} />
         Save lesson progress on this browser

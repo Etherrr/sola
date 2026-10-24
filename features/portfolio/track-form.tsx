@@ -38,67 +38,74 @@ export function TrackForm() {
   const ok = outcome?.kind === 'ok' ? outcome.data : null;
   return (
     <div className="track">
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          void run(value);
-        }}
-        noValidate
-      >
-        <label htmlFor="track-address">Public Ethereum address (Ethereum mainnet)</label>
-        <input
-          id="track-address"
-          ref={input}
-          value={value}
-          onChange={(e) => {
-            setValue(e.target.value);
-            setOutcome(null);
+      <div className="track-input">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void run(value);
           }}
-          readOnly={busy}
-          autoComplete="off"
-          spellCheck={false}
-          inputMode="text"
-          aria-invalid={error ? true : undefined}
-          aria-describedby={error ? 'track-error track-privacy' : 'track-privacy'}
-        />
-        <p id="track-privacy" className="fine">
-          A pasted address is sent to this app&apos;s own lookup service and is not saved in your
-          browser. It is observed, not proven to be yours.
-        </p>
-        {error && (
-          <p id="track-error" role="alert" className="fine">
-            {error}
+          noValidate
+        >
+          <label htmlFor="track-address">Public Ethereum address (Ethereum mainnet)</label>
+          <input
+            id="track-address"
+            ref={input}
+            value={value}
+            onChange={(e) => {
+              setValue(e.target.value);
+              setOutcome(null);
+            }}
+            readOnly={busy}
+            autoComplete="off"
+            spellCheck={false}
+            inputMode="text"
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? 'track-error track-privacy' : 'track-privacy'}
+          />
+          <p id="track-privacy" className="fine">
+            A pasted address is sent to this app&apos;s own lookup service and is not saved in your
+            browser. It is observed, not proven to be yours.
           </p>
-        )}
-        <div className="actions">
-          <button className="button primary" type="submit" disabled={busy}>
-            {busy ? 'Looking up…' : 'Look up'}
-          </button>
-        </div>
-      </form>
-      <div className="notice">
-        <p>
-          <strong>Try a simulated example</strong> (fixed fixtures, not real wallets):
-        </p>
-        <div className="actions">
-          {SAMPLES.map((s) => (
-            <button
-              key={s.label}
-              type="button"
-              className="button secondary"
-              disabled={busy}
-              onClick={() => {
-                setValue(s.address);
-                void run(s.address);
-              }}
-            >
-              {s.label}
+          {error && (
+            <p id="track-error" role="alert" className="fine">
+              {error}
+            </p>
+          )}
+          <div className="actions">
+            <button className="button primary" type="submit" disabled={busy}>
+              {busy ? 'Looking up…' : 'Look up'}
             </button>
-          ))}
+          </div>
+        </form>
+        <div className="notice">
+          <p>
+            <strong>Simulated examples</strong> (fixed fixtures, not real wallets):
+          </p>
+          <div className="actions">
+            {SAMPLES.map((s) => (
+              <button
+                key={s.label}
+                type="button"
+                className="button secondary chip"
+                disabled={busy}
+                onClick={() => {
+                  setValue(s.address);
+                  void run(s.address);
+                }}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
-      <div role="status" aria-live="polite">
+      <div className="track-output" role="status" aria-live="polite">
         {busy && <p>Looking up…</p>}
+        {!busy && !outcome && (
+          <p className="fine track-hint">
+            Results appear here. Pick a simulated example or paste an address.
+          </p>
+        )}
         {outcome?.kind === 'error' && (
           <div className="notice">
             <ModeMarker
@@ -159,7 +166,7 @@ export function TrackForm() {
                 ))}
               </div>
             ))}
-            <p>
+            <p className="track-total">
               Recognized priced subtotal:{' '}
               {ok.totals.recognizedPricedSubtotalUsd === null
                 ? 'Unknown'

@@ -62,7 +62,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <p>
             Learning preview · Educational information only. No financial advice, custody, or
             performance guarantees. Simulated figures are not market data.{' '}
-            <Link href="/settings">Privacy & local data</Link>
+            <Link href="/settings">Privacy &amp; local data</Link>
+            {' · '}
+            <a href="https://solacapitalpartners.com/" rel="noopener noreferrer">
+              Back to solacapitalpartners.com
+            </a>
           </p>
         </footer>
       </div>

@@ -21,7 +21,7 @@ const routes = [
 ];
 test.beforeEach(async ({ page }) => {
   // The welcome screen has its own tests; skip it elsewhere.
-  await page.addInitScript(() => sessionStorage.setItem('sola-welcomed', '1'));
+  await page.addInitScript(() => window.sessionStorage.setItem('sola-welcomed', '1'));
 });
 test('all routes render, remain responsive, and pass WCAG automated checks', async ({ page }) => {
   test.setTimeout(120_000);
@@ -238,7 +238,7 @@ test('security decision lab: every outcome, keyboard use, retry, axe on revealed
 
 test.describe('welcome screen', () => {
   test.beforeEach(async ({ page }) => {
-    await page.addInitScript(() => sessionStorage.removeItem('sola-welcomed'));
+    await page.addInitScript(() => window.sessionStorage.removeItem('sola-welcomed'));
   });
   test('shows once per session, focuses Enter, and Escape dismisses it', async ({ page }) => {
     await page.goto('/track');
@@ -268,4 +268,40 @@ test('only Ethereum is selectable; other networks are disabled and say so', asyn
     await expect(option).toBeDisabled();
     await expect(option).toContainText('not supported yet');
   }
+});
+
+test.describe('welcome keyboard containment', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => window.sessionStorage.removeItem('sola-welcomed'));
+  });
+  test('Tab and Shift+Tab stay on Enter, background is inert, dismiss restores focus', async ({
+    page,
+    isMobile,
+  }) => {
+    test.skip(isMobile, 'keyboard path');
+    await page.goto('/portfolio');
+    const enter = page.getByRole('button', { name: 'Enter' });
+    await expect(enter).toBeFocused();
+    for (const key of ['Tab', 'Shift+Tab', 'Tab', 'Tab']) {
+      await page.keyboard.press(key);
+      const inside = await page.evaluate(() => !!document.activeElement?.closest('.welcome'));
+      const body = await page.evaluate(() => document.activeElement === document.body);
+      // Focus may leave the page to browser chrome (body) but never reach covered content.
+      expect(inside || body, key).toBe(true);
+    }
+    expect(
+      await page.evaluate(() => document.querySelector('.app-body')?.hasAttribute('inert')),
+    ).toBe(true);
+    await enter.focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('.welcome')).toHaveCount(0);
+    await expect(page.locator('#main')).toBeFocused();
+    expect(
+      await page.evaluate(() => document.querySelector('.app-body')?.hasAttribute('inert')),
+    ).toBe(false);
+  });
+});
+test('corporate site link is reachable on every width', async ({ page }) => {
+  await page.goto('/settings');
+  await expect(page.getByRole('link', { name: 'Back to solacapitalpartners.com' })).toBeVisible();
 });
