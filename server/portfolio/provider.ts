@@ -1,7 +1,26 @@
 import { formatUnits, valueUsd } from './units';
 import type { Asset, WalletResult } from './contract';
 
-export type ProviderError = { kind: 'rate_limited' | 'timeout' | 'unavailable' | 'bad_response' };
+/** Sanitized, bounded facts about an upstream failure: numbers and fixed step names only, never raw messages, addresses or URLs. */
+export type Diag = {
+  step:
+    | 'build'
+    | 'timeout'
+    | 'exception'
+    | 'request'
+    | 'response'
+    | 'rpc_error'
+    | 'decode'
+    | 'block_info'
+    | 'stale_node';
+  http?: number;
+  rpcCode?: number;
+  calls?: number;
+};
+export type ProviderError = {
+  kind: 'rate_limited' | 'timeout' | 'unavailable' | 'bad_response';
+  diag?: Diag;
+};
 export type ProviderResult =
   | { ok: true; provider: string; simulated: boolean; observedAt: string; wallets: WalletResult[] }
   | ({ ok: false; provider: string } & ProviderError);
@@ -73,7 +92,9 @@ const SCENARIOS: Record<
   '5': {
     name: 'partial data',
     raws: [ETH(10n ** 18n)],
-    warnings: ['Some token data could not be loaded. This is not an empty wallet.'],
+    warnings: [
+      'Some token data could not be loaded. This result cannot tell you whether the wallet is empty.',
+    ],
     partial: true,
   },
 };

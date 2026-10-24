@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { keccak256Utf8 } from '../server/portfolio/keccak';
 import { checkEvmAddress, toChecksumAddress } from '../server/portfolio/address';
 import { formatUnits, valueUsd } from '../server/portfolio/units';
@@ -14,6 +14,7 @@ import {
 } from '../server/portfolio/handler';
 import { mockProvider } from '../server/portfolio/provider';
 import { readExpiresAt } from '../server/portfolio/access';
+import { createLiveProvider } from '../server/portfolio/live-provider';
 
 const TEAM = 'team-example.cloudflareaccess.com';
 const AUD = 'aud123';
@@ -799,5 +800,127 @@ describe('readExpiresAt', () => {
   it('rejects a missing or garbage token', () => {
     expect(readExpiresAt(null)).toBeNull();
     expect(readExpiresAt('nope')).toBeNull();
+  });
+});
+
+describe('live data kill switch', () => {
+  const fakeRpc = (async (_u: string, init: RequestInit) => {
+    const req = JSON.parse(String(init.body)) as { id: number; params: [{ data: string }] };
+    const w = (x: bigint) => x.toString(16).padStart(64, '0');
+    // Count the calls from the aggregate3 array length word, then answer each with one word.
+    const n = Number(BigInt('0x' + req.params[0].data.slice(10 + 64, 10 + 128)));
+    const words = Array.from({ length: n }, (_, i) =>
+      i === 0
+        ? 20_000_000n
+        : i === 1
+          ? BigInt(Math.floor(NOW.getTime() / 1000))
+          : i === 2
+            ? 10n ** 18n
+            : 0n,
+    );
+    const els = words.map((x) => w(1n) + w(0x40n) + w(32n) + w(x));
+    let off = BigInt(n * 32);
+    const offs = els.map((e) => {
+      const o = off;
+      off += BigInt(e.length / 2);
+      return w(o);
+    });
+    const result = '0x' + w(0x20n) + w(BigInt(n)) + offs.join('') + els.join('');
+    return new Response(JSON.stringify({ jsonrpc: '2.0', id: req.id, result }));
+  }) as unknown as typeof fetch;
+  const call = async (env: Env) => {
+    const s = await signer();
+    const d = deps(s.keys, {
+      liveProvider: createLiveProvider({ fetch: fakeRpc, now: () => NOW }),
+    });
+    const jwt = await s.sign(good());
+    const r = await handleResolve(
+      post({ network: 'ethereum', addresses: [A('1')], currency: 'USD' }, jwt),
+      env,
+      d,
+    );
+    return { status: r.status, body: await r.json(), d, jwt, s };
+  };
+  it('is OFF unless the variable is exactly "1": the simulated fixtures answer', async () => {
+    for (const v of [undefined, '', 'true', 'yes', '0', ' 1', '01']) {
+      const { body } = await call({ ...ENV, PORTFOLIO_LIVE_DATA: v });
+      expect(body.mode).toBe('mock');
+      expect(body.simulated).toBe(true);
+    }
+  });
+  it('"1" selects the live provider and says what is and is not covered', async () => {
+    const { status, body } = await call({ ...ENV, PORTFOLIO_LIVE_DATA: '1' });
+    expect(status).toBe(200);
+    expect(body.mode).toBe('live');
+    expect(body.simulated).toBe(false);
+    expect(body.provider).toBe('publicnode-rpc+chainlink');
+    expect(body.warnings.join()).toMatch(/Only ETH, USDC, USDT, DAI and WETH/);
+    expect(body.totals.note).toMatch(/not total net worth/);
+  });
+  it('a provider that throws is a bad response, not a timeout', async () => {
+    const s = await signer();
+    const d = deps(s.keys, {
+      liveProvider: {
+        fetchWallets: async () => {
+          throw new Error('boom');
+        },
+      } as never,
+    });
+    const jwt = await s.sign(good());
+    const r = await handleResolve(
+      post({ network: 'ethereum', addresses: [A('1')], currency: 'USD' }, jwt),
+      { ...ENV, PORTFOLIO_LIVE_DATA: '1' },
+      d,
+    );
+    expect(r.status).not.toBe(504);
+    expect(r.status).toBeGreaterThanOrEqual(500);
+  });
+  it('a timeout and a provider throw are both logged with a sanitized diagnostic and request id', async () => {
+    const s = await signer();
+    const jwt = await s.sign(good());
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const run = async (fetchWallets: () => Promise<never>, extra: object) => {
+        const r = await handleResolve(
+          post({ network: 'ethereum', addresses: [A('1')], currency: 'USD' }, jwt),
+          { ...ENV, PORTFOLIO_LIVE_DATA: '1' },
+          deps(s.keys, { liveProvider: { fetchWallets } as never, ...extra }),
+        );
+        return { status: r.status, body: await r.json() };
+      };
+      const t = await run(() => new Promise<never>(() => {}), { timeoutMs: 20 });
+      const x = await run(async () => {
+        throw new Error('boom ' + A('1'));
+      }, {});
+      expect(t.status).toBe(504);
+      expect(t.body.diagnostic).toEqual({ step: 'timeout' });
+      expect(x.status).toBe(502);
+      expect(x.body.diagnostic).toEqual({ step: 'exception' });
+      const logs = warn.mock.calls
+        .map((c) => String(c[0]))
+        .filter((l) => l.includes('provider_failure'));
+      expect(logs).toHaveLength(2);
+      expect(logs[0]).toContain(t.body.requestId);
+      expect(logs.join()).not.toContain(A('1').slice(2));
+      expect(logs.join()).not.toContain('boom');
+    } finally {
+      warn.mockRestore();
+    }
+  });
+  it('health and networks report live only when the switch is on', async () => {
+    const s = await signer();
+    const d = deps(s.keys, {
+      liveProvider: createLiveProvider({ fetch: fakeRpc, now: () => NOW }),
+    });
+    const jwt = await s.sign(good());
+    const req = () =>
+      new Request('https://app.example/api/v1/networks', {
+        headers: { 'cf-access-jwt-assertion': jwt },
+      });
+    expect((await (await handleNetworks(req(), ENV, d)).json()).networks[0].status).toBe('mock');
+    expect(
+      (await (await handleNetworks(req(), { ...ENV, PORTFOLIO_LIVE_DATA: '1' }, d)).json())
+        .networks[0].status,
+    ).toBe('live');
   });
 });

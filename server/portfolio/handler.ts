@@ -8,15 +8,19 @@ import {
   readExpiresAt,
   type KeyFetcher,
 } from './access';
-import { mockProvider, type PortfolioProvider } from './provider';
+import { mockProvider, type Diag, type PortfolioProvider } from './provider';
+import { createLiveProvider } from './live-provider';
 
 export type Env = {
   PORTFOLIO_API_ENABLED?: string;
+  /** Live read-only data. Only the exact string '1' turns it on; anything else keeps the simulated fixtures. */
+  PORTFOLIO_LIVE_DATA?: string;
   ACCESS_TEAM_DOMAIN?: string;
   ACCESS_AUD?: string;
 };
 export type Deps = {
   provider: PortfolioProvider;
+  liveProvider: PortfolioProvider;
   fetchKeys: KeyFetcher;
   now: () => Date;
   id: () => string;
@@ -26,12 +30,16 @@ export type Deps = {
 
 export const defaultDeps = (): Deps => ({
   provider: mockProvider,
+  liveProvider: createLiveProvider(),
   fetchKeys: fetchAccessKeys,
   now: () => new Date(),
   id: () => crypto.randomUUID(),
   timeoutMs: 8000,
   bodyDeadlineMs: 3000,
 });
+
+/** The provider for this request: simulated unless the kill switch is exactly '1'. */
+const pick = (env: Env, d: Deps) => (env.PORTFOLIO_LIVE_DATA === '1' ? d.liveProvider : d.provider);
 
 const HEADERS = {
   'content-type': 'application/json; charset=utf-8',
@@ -50,7 +58,13 @@ const err = (
   message: string,
   requestId: string,
   extra: Record<string, string> = {},
-) => reply(status, { error: { code, message }, requestId }, extra);
+  diagnostic?: Diag,
+) =>
+  reply(
+    status,
+    { error: { code, message }, requestId, ...(diagnostic ? { diagnostic } : {}) },
+    extra,
+  );
 
 /** Reads at most `limit` bytes of the body; returns null as soon as it is exceeded (never buffers more). */
 async function readBounded(
@@ -155,22 +169,26 @@ export async function handleResolve(
   let result;
   try {
     result = await Promise.race([
-      d.provider.fetchWallets(parsed.value.addresses, ctl.signal),
+      pick(env, d).fetchWallets(parsed.value.addresses, ctl.signal),
       new Promise<never>((_, rej) =>
         ctl.signal.addEventListener('abort', () => rej(new Error('timeout'))),
       ),
     ]);
   } catch {
-    return err(
-      504,
-      'provider_timeout',
-      'The data source took too long. No data was substituted.',
-      requestId,
-    );
+    // Both paths fall through to the one failure branch below, so every failed lookup is logged.
+    result = (
+      ctl.signal.aborted
+        ? { ok: false, provider: 'unknown', kind: 'timeout', diag: { step: 'timeout' } }
+        : // An unexpected throw inside a provider is a bad response, not a timeout.
+          { ok: false, provider: 'unknown', kind: 'bad_response', diag: { step: 'exception' } }
+    ) as never;
   } finally {
     clearTimeout(timer);
   }
   if (!result.ok) {
+    const dg = result.diag;
+    // Numbers and fixed step names only: no address, payload, URL or provider text.
+    console.warn(JSON.stringify({ evt: 'provider_failure', requestId, kind: result.kind, ...dg }));
     if (result.kind === 'rate_limited')
       return err(
         429,
@@ -178,6 +196,7 @@ export async function handleResolve(
         'The data source is rate limiting. Try again later.',
         requestId,
         { 'retry-after': '30' },
+        dg,
       );
     if (result.kind === 'timeout')
       return err(
@@ -185,6 +204,8 @@ export async function handleResolve(
         'provider_timeout',
         'The data source took too long. No data was substituted.',
         requestId,
+        {},
+        dg,
       );
     if (result.kind === 'bad_response')
       return err(
@@ -192,12 +213,16 @@ export async function handleResolve(
         'provider_bad_response',
         'The data source returned an unusable answer.',
         requestId,
+        {},
+        dg,
       );
     return err(
       503,
       'provider_unavailable',
       'The data source is unavailable. No data was substituted.',
       requestId,
+      {},
+      dg,
     );
   }
   let subtotal: bigint | null = null; // micro-USD
@@ -227,7 +252,11 @@ export async function handleResolve(
       note: 'Wallet balances only: DeFi deposits, staking, debts, LP claims and other positions may be missing; the subtotal is not total net worth.',
     },
     partial: result.wallets.some((w) => w.partial),
-    warnings: result.simulated ? ['SIMULATED fixture data. Not read from any blockchain.'] : [],
+    warnings: result.simulated
+      ? ['SIMULATED fixture data. Not read from any blockchain.']
+      : [
+          'Live read-only Ethereum data. Only ETH, USDC, USDT, DAI and WETH are checked; other tokens, NFTs and DeFi positions are not shown.',
+        ],
   };
   return reply(200, body);
 }
@@ -242,7 +271,7 @@ export async function handleHealth(
     return err(405, 'method_not_allowed', 'Use GET.', requestId, { allow: 'GET' });
   const blocked = await gate(req, env, d, requestId);
   if (blocked) return blocked;
-  return reply(200, { status: 'ok', mode: d.provider.simulated ? 'mock' : 'live', requestId });
+  return reply(200, { status: 'ok', mode: pick(env, d).simulated ? 'mock' : 'live', requestId });
 }
 
 export async function handleNetworks(
@@ -256,7 +285,7 @@ export async function handleNetworks(
   const blocked = await gate(req, env, d, requestId);
   if (blocked) return blocked;
   return reply(200, {
-    networks: [{ id: 'ethereum', chainId: 1, status: d.provider.simulated ? 'mock' : 'live' }],
+    networks: [{ id: 'ethereum', chainId: 1, status: pick(env, d).simulated ? 'mock' : 'live' }],
     requestId,
   });
 }

@@ -2267,13 +2267,13 @@ code {
   }
 }
 .app .track-output {
-  scroll-margin-top: 72px;
+  scroll-margin-top: calc(var(--topbar-h, 72px) + 8px);
   scroll-margin-bottom: 84px;
 }
 /* Keyboard focus scrolling must keep the focused control clear of the sticky top bar and the
    phone tab bar. scroll-padding applies to focus-driven scrolling, not only to anchors. */
 html {
-  scroll-padding-top: 72px;
+  scroll-padding-top: calc(var(--topbar-h, 72px) + 8px);
   scroll-padding-bottom: 96px;
 }
 /* ===== Entrance (v0.2): one front door with two sections ===== */
@@ -2777,4 +2777,184 @@ html {
   .holdings .table-scroll {
     display: none;
   }
+}
+
+/* Per-feed provenance under a live price: wrap so it does not widen the table on phones. */
+.price-src {
+  display: block;
+  max-width: 11rem;
+  margin-left: auto;
+  white-space: normal;
+  text-align: right;
+}
+
+/* Live and simulated Track results on phones: one card per asset instead of a table that needs
+   sideways panning. Symbol and value lead; amount and price sit underneath and may wrap. The
+   header row is visually hidden (still read by screen readers); roles keep the table semantics. */
+.track-precision {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+@media (max-width: 640px) {
+  .track-table,
+  .track-table tbody {
+    display: block;
+    width: 100%;
+    table-layout: auto;
+  }
+  .track-table caption {
+    display: block;
+  }
+  .track-output .table-scroll {
+    position: relative;
+    overflow-x: hidden;
+  }
+  .track-table thead {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  .track-table tr {
+    display: grid;
+    grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+    grid-template-areas:
+      'sym val'
+      'amt amt'
+      'prc prc';
+    gap: 2px 12px;
+    padding: 10px 0;
+    border-top: 1px solid var(--line, rgba(255, 255, 255, 0.12));
+  }
+  .app .track-table th[scope='row'] {
+    grid-area: sym;
+    padding: 0;
+    border: 0;
+    overflow-wrap: anywhere;
+  }
+  .app .track-table .t-value {
+    grid-area: val;
+    padding: 0;
+    border: 0;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+  .app .track-table .t-amount {
+    grid-area: amt;
+    padding: 0;
+    border: 0;
+    overflow-wrap: anywhere;
+    font-variant-numeric: tabular-nums;
+    text-align: left;
+  }
+  .app .track-table .t-price {
+    grid-area: prc;
+    padding: 0;
+    border: 0;
+    font-size: 0.85rem;
+    color: var(--muted);
+    text-align: left;
+  }
+  .app .track-table .t-amount::after {
+    content: ' ' attr(data-unit);
+    color: var(--muted);
+  }
+  .track-table .price-src {
+    display: inline;
+    max-width: none;
+    margin: 0 0 0 6px;
+    text-align: left;
+  }
+  .app .track-output .track-table td:nth-child(n + 2),
+  .app .track-output .track-table th:nth-child(n + 2) {
+    text-align: left;
+  }
+  .app .track-output .track-table .t-value {
+    text-align: right;
+  }
+}
+
+/* Exact view and summary: long digits wrap inside their cell instead of pushing the value past the
+   edge; the value stays on one line; the summary stacks on phones. The network selector keeps its
+   whole label next to the mode pill on narrow screens. */
+.track-table .t-amount,
+.track-table .t-price {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.track-table {
+  table-layout: fixed;
+}
+.track-table thead th:nth-child(1) {
+  width: 14%;
+}
+.track-table thead th:nth-child(2) {
+  width: 27%;
+}
+.track-table thead th:nth-child(3) {
+  width: 27%;
+}
+.track-table thead th:nth-child(4) {
+  width: 32%;
+}
+.track-table th,
+.track-table td {
+  overflow-wrap: anywhere;
+}
+.track-table .t-value {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.app .track-total {
+  grid-template-columns: minmax(8rem, 1fr) minmax(0, max-content);
+}
+.app .track-total dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 640px) {
+  .app .track-total {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+  .app .track-total dd {
+    text-align: left;
+    overflow-wrap: anywhere;
+  }
+  .app .track-total div:not(:first-child) dd {
+    margin-bottom: 6px;
+  }
+}
+@media (max-width: 520px) {
+  .topbar {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+  .chain-select {
+    flex: 0 0 auto;
+  }
+  .chain-select select {
+    width: 9.75rem;
+    min-width: 0;
+  }
+  .sim-pill {
+    flex: 1 1 8rem;
+    min-width: min-content;
+    white-space: normal;
+    overflow-wrap: normal;
+    text-align: center;
+    line-height: 1.25;
+    letter-spacing: 0.03em;
+    padding: 4px 6px;
+  }
+}
+.track-table caption {
+  white-space: normal;
 }

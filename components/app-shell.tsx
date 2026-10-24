@@ -1,4 +1,5 @@
 'use client';
+import { useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ChainSelector } from './chain-selector';
@@ -35,6 +36,21 @@ const phoneTabs = [
 ];
 export function AppShell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
+  const bar = useRef<HTMLElement>(null);
+  // Publish the real sticky-bar height so focus and scroll offsets follow it when the bar wraps
+  // to two rows on narrow screens.
+  useEffect(() => {
+    const el = bar.current;
+    if (!el) return;
+    const root = document.documentElement;
+    const set = () =>
+      root.style.setProperty('--topbar-h', `${Math.ceil(el.getBoundingClientRect().height)}px`);
+    set();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(set);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [path]);
   if (path === '/' || path === '') return <SessionProvider>{children}</SessionProvider>;
   return (
     <SessionProvider>
@@ -91,13 +107,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <p className="side-foot">
             v0.1 · PREVIEW
             <br />
-            Simulated data
+            Demo data is simulated.
+            <br />
+            Address lookups show their own mode.
           </p>
         </aside>
         <div className="app-body">
-          <header className="topbar">
+          <header className="topbar" ref={bar}>
             <ChainSelector />
-            <span className="sim-pill">◇ SIMULATED</span>
+            <span className="sim-pill">
+              {path.startsWith('/track') ? '◇ MODE SHOWN WITH RESULT' : '◇ SIMULATED'}
+            </span>
             <AccountMenu />
             <a
               className="top-return"
@@ -113,8 +133,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <footer className="app-foot">
             <p>
               Learning preview · Educational information only. No financial advice, custody, or
-              performance guarantees. Simulated figures are not market data.{' '}
-              <Link href="/settings">Privacy &amp; local data</Link>
+              performance guarantees. Demo figures are simulated, not market data; address lookups
+              state their own mode. <Link href="/settings">Privacy &amp; local data</Link>
               {' · '}
               <a href="https://solacapitalpartners.com/" rel="noopener noreferrer">
                 Back to solacapitalpartners.com
