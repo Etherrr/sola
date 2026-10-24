@@ -49,12 +49,34 @@ async function signer() {
 }
 
 type Up = (init: RequestInit) => Promise<Response>;
+type Seen = {
+  url: string;
+  method?: string;
+  redirect?: RequestRedirect;
+  signal?: AbortSignal | null;
+};
 async function lookup(up: Up, timeoutMs = 8000) {
   const s = await signer();
   let upstream = 0;
-  const f = (async (_u: string, init: RequestInit) => {
+  const seen: Seen[] = [];
+  // A fake fetch with real redirect semantics: unless the caller says redirect 'manual', a 3xx is
+  // followed (a second upstream request to the Location), as the platform fetch would.
+  const f = (async (u: string, init: RequestInit) => {
     upstream++;
-    return up(init);
+    seen.push({
+      url: String(u),
+      method: init.method,
+      redirect: init.redirect,
+      signal: init.signal,
+    });
+    const res = await up(init);
+    const loc = res.headers.get('location');
+    if (res.status >= 300 && res.status < 400 && loc && init.redirect !== 'manual') {
+      upstream++;
+      seen.push({ url: loc, method: 'GET', redirect: init.redirect, signal: init.signal });
+      return new Response('{}', { status: 200 });
+    }
+    return res;
   }) as unknown as typeof fetch;
   const d: Deps = {
     ...defaultDeps(),
@@ -65,6 +87,7 @@ async function lookup(up: Up, timeoutMs = 8000) {
     liveProvider: createLiveProvider({ fetch: f, now: () => NOW, rpcUrl: 'https://rpc.example/' }),
   };
   const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  const t0 = Date.now();
   try {
     const r = await handleResolve(
       new Request('https://app.example/api/v1/portfolio/resolve', {
@@ -76,8 +99,18 @@ async function lookup(up: Up, timeoutMs = 8000) {
       d,
     );
     const text = await r.text();
+    const elapsed = Date.now() - t0;
     const logs = warn.mock.calls.map((c) => String(c[0])).join('\n');
-    return { status: r.status, headers: r.headers, text, json: JSON.parse(text), upstream, logs };
+    return {
+      status: r.status,
+      headers: r.headers,
+      text,
+      json: JSON.parse(text),
+      upstream,
+      logs,
+      seen,
+      elapsed,
+    };
   } finally {
     warn.mockRestore();
   }
@@ -87,6 +120,26 @@ const json =
   async () =>
     new Response(JSON.stringify(o), { status, headers: { 'content-type': 'application/json' } });
 
+function expectClean(r: Awaited<ReturnType<typeof lookup>>, status: number, code: string) {
+  expect(r.status).toBe(status);
+  expect(r.json.error.code).toBe(code);
+  expect(r.upstream).toBe(1);
+  expect(r.json.wallets).toBeUndefined();
+  expect(r.json.totals).toBeUndefined();
+  expect(r.headers.get('cache-control')).toContain('no-store');
+  for (const secret of ['SECRET', ADDR.slice(2), 'rpc.example', 'evil.example']) {
+    expect(r.text).not.toContain(secret);
+    expect(r.logs).not.toContain(secret);
+  }
+  expect(r.logs).toContain('provider_failure');
+  expect(r.logs).toContain('req-drill');
+  // Every lookup goes to the configured endpoint only, as a manual-redirect POST with the deadline signal.
+  expect(r.seen).toHaveLength(1);
+  expect(r.seen[0]!.url).toBe('https://rpc.example/');
+  expect(r.seen[0]!.method).toBe('POST');
+  expect(r.seen[0]!.redirect).toBe('manual');
+  expect(r.seen[0]!.signal).toBeTruthy();
+}
 const CASES: [string, Up, number, string][] = [
   ['HTTP 429', json({ error: 'slow down 0xSECRET' }, 429), 429, 'rate_limited'],
   [
@@ -132,19 +185,7 @@ const CASES: [string, Up, number, string][] = [
 describe('live failure drill (mocked upstream, handler level)', () => {
   for (const [name, up, status, code] of CASES) {
     it(`${name}: ${status} ${code}, one upstream request, no data, nothing private`, async () => {
-      const r = await lookup(up);
-      expect(r.status).toBe(status);
-      expect(r.json.error.code).toBe(code);
-      expect(r.upstream).toBe(1);
-      expect(r.json.wallets).toBeUndefined();
-      expect(r.json.totals).toBeUndefined();
-      expect(r.headers.get('cache-control')).toContain('no-store');
-      for (const secret of ['SECRET', ADDR.slice(2), 'rpc.example', 'evil.example']) {
-        expect(r.text).not.toContain(secret);
-        expect(r.logs).not.toContain(secret);
-      }
-      expect(r.logs).toContain('provider_failure');
-      expect(r.logs).toContain('req-drill');
+      expectClean(await lookup(up), status, code);
     });
   }
   it('a hung upstream that honours abort becomes 504 at the deadline, once', async () => {
@@ -155,9 +196,10 @@ describe('live failure drill (mocked upstream, handler level)', () => {
         ),
       40,
     );
-    expect(r.status).toBe(504);
-    expect(r.json.error.code).toBe('provider_timeout');
-    expect(r.upstream).toBe(1);
+    expectClean(r, 504, 'provider_timeout');
+    expect(r.elapsed).toBeGreaterThanOrEqual(35);
+    expect(r.elapsed).toBeLessThan(1000);
+    expect(r.seen[0]!.signal?.aborted).toBe(true);
   });
   it('an upstream that sends headers and then stalls the body becomes 504, not a hang', async () => {
     const r = await lookup(async (init) => {
@@ -169,15 +211,17 @@ describe('live failure drill (mocked upstream, handler level)', () => {
       });
       return new Response(body, { status: 200 });
     }, 40);
-    expect(r.status).toBe(504);
-    expect(r.upstream).toBe(1);
+    expectClean(r, 504, 'provider_timeout');
+    expect(r.elapsed).toBeGreaterThanOrEqual(35);
+    expect(r.elapsed).toBeLessThan(1000);
   });
   it('an upstream that ignores abort entirely still gets a 504 at the deadline', async () => {
     const r = await lookup(() => new Promise<Response>(() => {}), 40);
-    expect(r.status).toBe(504);
-    expect(r.upstream).toBe(1);
+    expectClean(r, 504, 'provider_timeout');
+    expect(r.elapsed).toBeGreaterThanOrEqual(35);
+    expect(r.elapsed).toBeLessThan(1000);
   });
-  it('a burst of 25 concurrent failing lookups makes exactly 25 upstream requests (no retries, no amplification)', async () => {
+  it('a burst of 25 concurrent failing lookups makes 25 outbound requests, one per lookup (1:1, no retry; this is NOT an admission limit)', async () => {
     const s = await signer();
     let upstream = 0;
     const f = (async () => {
