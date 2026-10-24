@@ -74,6 +74,8 @@ export function decodeAggregate3(hex: string, expected: number): Result3[] | nul
     const l = Number(len);
     const padded = Math.ceil(l / 32) * 32;
     if (bStart + 32 + padded > size) return null;
+    // Padding after the bytes must be zero in canonical encoding.
+    if (/[^0]/.test(body.slice((bStart + 32 + l) * 2, (bStart + 32 + padded) * 2))) return null;
     out.push({
       success: ok === 1n,
       data: '0x' + body.slice((bStart + 32) * 2, (bStart + 32 + l) * 2),

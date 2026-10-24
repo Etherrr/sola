@@ -345,6 +345,12 @@ describe('failure diagnostics are sanitized', () => {
     expect(all).not.toContain('key123');
     expect(all).not.toContain('x.example');
   });
+  it('rejects a response with the wrong JSON-RPC version or id', async () => {
+    for (const patch of [{ jsonrpc: '1.0' }, { id: 2 }, { id: '1' }, { jsonrpc: undefined }]) {
+      const r = await run(rpc({}, 200, (o) => ({ ...(o as object), ...patch })));
+      expect(r.ok).toBe(false);
+    }
+  });
   it('a non-integer or absent RPC code adds no code field', async () => {
     const r = await run(rpc({ rpcError: { code: 'boom', message: 'x' } }));
     if (r.ok) throw new Error('x');

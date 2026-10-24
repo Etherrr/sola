@@ -75,7 +75,7 @@ export const TOKENS: { symbol: string; address: string; decimals: number; feed: 
 ];
 
 const HEX = /^0x[0-9a-fA-F]+$/; // a bare "0x" is not a value
-type Rpc = { id: number; result?: unknown; error?: unknown };
+type Rpc = { jsonrpc?: unknown; id?: unknown; result?: unknown; error?: unknown };
 const word = (hex: string, i: number) => hex.slice(2 + i * 64, 2 + (i + 1) * 64);
 
 async function readCapped(res: Response, limit: number): Promise<string | null> {
@@ -186,6 +186,10 @@ export function createLiveProvider(over: Partial<LiveDeps> = {}): PortfolioProvi
       }
       if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed))
         return fail('bad_response');
+      if (parsed.jsonrpc !== '2.0' || parsed.id !== 1) {
+        diag = { ...diag, step: 'decode' };
+        return fail('bad_response');
+      }
       if (parsed.error !== undefined) {
         // Numeric JSON-RPC code only: the message can echo addresses, URLs or provider text.
         const code = (parsed.error as { code?: unknown } | null)?.code;

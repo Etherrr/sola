@@ -175,15 +175,13 @@ export async function handleResolve(
       ),
     ]);
   } catch {
-    if (ctl.signal.aborted)
-      return err(
-        504,
-        'provider_timeout',
-        'The data source took too long. No data was substituted.',
-        requestId,
-      );
-    // An unexpected throw inside a provider is a bad response, not a timeout.
-    result = { ok: false, provider: 'unknown', kind: 'bad_response' } as never;
+    // Both paths fall through to the one failure branch below, so every failed lookup is logged.
+    result = (
+      ctl.signal.aborted
+        ? { ok: false, provider: 'unknown', kind: 'timeout', diag: { step: 'timeout' } }
+        : // An unexpected throw inside a provider is a bad response, not a timeout.
+          { ok: false, provider: 'unknown', kind: 'bad_response', diag: { step: 'exception' } }
+    ) as never;
   } finally {
     clearTimeout(timer);
   }

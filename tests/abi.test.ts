@@ -145,3 +145,21 @@ describe('hostile return data', () => {
     expect(abi.decodeAggregate3('0x' + '00'.repeat(1_000_000), 35)).toBeNull();
   });
 });
+
+describe('reviewer fixtures and padding', () => {
+  const w = (x: number) => x.toString(16).padStart(64, '0');
+  it('rejects aliased result offsets', () => {
+    const x = '0x' + w(32) + w(2) + w(64) + w(64) + w(1) + w(64) + w(32) + w(8);
+    expect(abi.decodeAggregate3(x, 2)).toBeNull();
+  });
+  it('rejects a bytes offset pointing into the tuple head', () => {
+    const x = '0x' + w(32) + w(1) + w(32) + w(1) + w(0);
+    expect(abi.decodeAggregate3(x, 1)).toBeNull();
+  });
+  it('rejects non-zero padding after bytes', () => {
+    const r = V.dec.mixed.returndata;
+    // element 3 holds 33 bytes (0x22...), so its second word is 1 byte of data plus 31 padding bytes
+    const i = r.indexOf('22'.repeat(33)) + 66;
+    expect(abi.decodeAggregate3(r.slice(0, i + 2) + '01' + r.slice(i + 4), 5)).toBeNull();
+  });
+});

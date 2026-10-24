@@ -3,7 +3,16 @@ import type { Asset, WalletResult } from './contract';
 
 /** Sanitized, bounded facts about an upstream failure: numbers and fixed step names only, never raw messages, addresses or URLs. */
 export type Diag = {
-  step: 'build' | 'request' | 'response' | 'rpc_error' | 'decode' | 'block_info' | 'stale_node';
+  step:
+    | 'build'
+    | 'timeout'
+    | 'exception'
+    | 'request'
+    | 'response'
+    | 'rpc_error'
+    | 'decode'
+    | 'block_info'
+    | 'stale_node';
   http?: number;
   rpcCode?: number;
   calls?: number;
