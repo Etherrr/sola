@@ -54,20 +54,30 @@ export function networkAllocation(positions: readonly Position[]) {
   }));
 }
 
-/** Gross priced asset allocation by symbol (debt and unpriced exposure excluded). Exact cents; one bounded percent per row. */
+/**
+ * Gross priced allocation by holding, keyed by assetId (never by ticker: two assets can share a
+ * symbol). Debt, unpriced and receipt rows are excluded. Exact cents; one bounded percent per row.
+ */
 export function assetAllocation(positions: readonly Position[]) {
-  const bySymbol = new Map<string, bigint>();
+  const byAsset = new Map<string, { symbol: string; value: bigint }>();
   for (const position of uniqueExposures(positions)) {
     if (position.kind === 'Debt' || position.valueCents === null) continue;
-    bySymbol.set(position.symbol, (bySymbol.get(position.symbol) ?? 0n) + position.valueCents);
+    const cur = byAsset.get(position.assetId);
+    byAsset.set(position.assetId, {
+      symbol: position.symbol,
+      value: (cur?.value ?? 0n) + position.valueCents,
+    });
   }
-  const total = [...bySymbol.values()].reduce((sum, value) => sum + value, 0n);
-  return [...bySymbol]
-    .sort((a, b) => (a[1] === b[1] ? a[0].localeCompare(b[0]) : a[1] > b[1] ? -1 : 1))
-    .map(([symbol, value]) => ({
-      symbol,
-      value,
-      percent: total === 0n ? 0 : Number((value * 1000n + total / 2n) / total) / 10,
+  const total = [...byAsset.values()].reduce((sum, v) => sum + v.value, 0n);
+  return [...byAsset]
+    .sort((a, b) =>
+      a[1].value === b[1].value ? a[0].localeCompare(b[0]) : a[1].value > b[1].value ? -1 : 1,
+    )
+    .map(([assetId, v]) => ({
+      assetId,
+      symbol: v.symbol,
+      value: v.value,
+      percent: total === 0n ? 0 : Number((v.value * 1000n + total / 2n) / total) / 10,
     }));
 }
 /** Stable palette index per symbol so a symbol keeps its colour in the donut, legend and table. */

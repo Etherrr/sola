@@ -65,6 +65,39 @@ it('asset allocation groups by symbol, excludes debt and unpriced, sorts by valu
   for (let i = 1; i < rows.length; i++) expect(rows[i - 1]!.value >= rows[i]!.value).toBe(true);
   expect(assetAllocation([])).toEqual([]);
 });
+const P = (o: Partial<Position>): Position => ({
+  id: 'i',
+  exposureId: 'e',
+  assetId: 'a',
+  symbol: 'X',
+  network: 'Ethereum',
+  kind: 'Wallet',
+  quantity: '1',
+  valueCents: 100n,
+  ...o,
+});
+it('allocation: exact percents, debt/unpriced/receipt excluded, same ticker stays separate by assetId', () => {
+  const rows = assetAllocation([
+    P({ id: '1', exposureId: '1', assetId: 'a1', symbol: 'USDC', valueCents: 100n }),
+    P({ id: '2', exposureId: '2', assetId: 'a2', symbol: 'USDC', valueCents: 200n }),
+    P({
+      id: '3',
+      exposureId: '3',
+      assetId: 'a1',
+      symbol: 'USDC',
+      valueCents: 100n,
+      kind: 'Supplied',
+    }),
+    P({ id: '4', exposureId: '4', assetId: 'd', symbol: 'D', kind: 'Debt', valueCents: 999n }),
+    P({ id: '5', exposureId: '5', assetId: 'u', symbol: 'U', valueCents: null }),
+    P({ id: '6', exposureId: '6', assetId: 'r', symbol: 'R', kind: 'Receipt', valueCents: 999n }),
+    P({ id: '7', exposureId: '1', assetId: 'a1', symbol: 'USDC', valueCents: 100n }),
+  ]);
+  expect(rows.map((r) => [r.assetId, r.value, r.percent])).toEqual([
+    ['a1', 200n, 50],
+    ['a2', 200n, 50],
+  ]);
+});
 it('symbol colour is stable', () => {
   expect(symbolColor('ETH')).toBe(symbolColor('ETH'));
   expect(symbolColor('ETH')).toMatch(/^#[0-9a-f]{6}$/);

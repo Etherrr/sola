@@ -2739,3 +2739,42 @@ html {
     width: 100%;
   }
 }
+
+.pos-cards {
+  display: none;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+@media (max-width: 640px) {
+  .pos-cards {
+    display: grid;
+    gap: 0;
+  }
+  .pos-cards li {
+    display: grid;
+    grid-template-columns: 34px 1fr auto;
+    gap: 12px;
+    align-items: center;
+    padding: 12px 0;
+    border-top: 1px solid var(--line);
+  }
+  .pos-main {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+  }
+  .pos-main small {
+    color: var(--muted, #9aa3b5);
+    font-size: 0.72rem;
+  }
+  .pos-val {
+    display: grid;
+    justify-items: end;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+  }
+  .table-scroll {
+    display: none;
+  }
+}

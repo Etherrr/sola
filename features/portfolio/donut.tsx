@@ -1,4 +1,4 @@
-export type Slice = { label: string; percent: number; color: string };
+export type Slice = { label: string; key?: string; percent: number; color: string };
 const R = 42;
 const C = 2 * Math.PI * R;
 /** Dependency-free SVG donut. The meaning is carried by the aria-label and the adjacent list, not by colour. */
@@ -13,7 +13,7 @@ export function Donut({ slices, caption }: { slices: Slice[]; caption: string })
         const len = lens[i]!;
         const el = (
           <circle
-            key={s.label}
+            key={s.key ?? s.label}
             cx="50"
             cy="50"
             r={R}
