@@ -25,6 +25,12 @@ Statements about Cloudflare below are from those pages. Anything marked UNTESTED
    also stops the lookup (same redeploy rule).
 4. Detaching the app hostname or revoking the Access policy stops users reaching it (see CLOUDFLARE_PREVIEW.md).
 
+## Verifying a switch-off
+
+- Edge propagation is not instant even when the control is: a reviewer observed 3+ minutes before a changed or deleted preview stopped being served at the edge. After any switch-off, re-check from a fresh request for several minutes before saying it is off.
+- A deleted deployment or a failing API URL is not proof the Function stopped. Prove OFF by a request that returns the simulated label (or health reporting mock), not by absence of an answer.
+- Routine rollback never touches Access policy or app/hostname Access settings. Access changes are a separate, reviewed action for access incidents only (a leaked link, a revoked user), not a way to switch live data off.
+
 ## Rehearsal (do once on a disposable deployment before any ON; UNTESTED today)
 
 1. Deploy a disposable preview with the flag OFF. Verify `/api/v1/health` reports mock and a lookup is simulated.
