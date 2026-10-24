@@ -351,6 +351,23 @@ describe('failure diagnostics are sanitized', () => {
       expect(r.ok).toBe(false);
     }
   });
+  it('requires exactly one of result and error, and copies only small integer codes', async () => {
+    const both = await run(rpc({}, 200, (o) => ({ ...(o as object), error: { code: -1 } })));
+    expect(both.ok).toBe(false);
+    if (!both.ok) expect(both.diag).toMatchObject({ step: 'decode' });
+    const none = await run(rpc({}, 200, () => ({ jsonrpc: '2.0', id: 1 })));
+    expect(none.ok).toBe(false);
+    const wrong = await run(rpc({}, 200, (o) => ({ ...(o as object), jsonrpc: '1.0', id: 999 })));
+    expect(wrong.ok).toBe(false);
+    for (const code of [1e100, 2 ** 53, 1e7, -1e7, 1.5, NaN]) {
+      const r = await run(rpc({ rpcError: { code } }));
+      if (r.ok) throw new Error('x');
+      expect(r.diag).toEqual({ step: 'rpc_error', http: 200, calls: 15 });
+    }
+    const small = await run(rpc({ rpcError: { code: -32005 } }));
+    if (small.ok) throw new Error('x');
+    expect(small.diag?.rpcCode).toBe(-32005);
+  });
   it('a non-integer or absent RPC code adds no code field', async () => {
     const r = await run(rpc({ rpcError: { code: 'boom', message: 'x' } }));
     if (r.ok) throw new Error('x');

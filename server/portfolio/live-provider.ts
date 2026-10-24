@@ -76,6 +76,9 @@ export const TOKENS: { symbol: string; address: string; decimals: number; feed: 
 
 const HEX = /^0x[0-9a-fA-F]+$/; // a bare "0x" is not a value
 type Rpc = { jsonrpc?: unknown; id?: unknown; result?: unknown; error?: unknown };
+// Only small integers are copied into diagnostics (JSON-RPC codes are within about +/-100000).
+const isSafeRpcCode = (c: unknown): c is number =>
+  typeof c === 'number' && Number.isSafeInteger(c) && Math.abs(c) <= 1_000_000;
 const word = (hex: string, i: number) => hex.slice(2 + i * 64, 2 + (i + 1) * 64);
 
 async function readCapped(res: Response, limit: number): Promise<string | null> {
@@ -190,13 +193,18 @@ export function createLiveProvider(over: Partial<LiveDeps> = {}): PortfolioProvi
         diag = { ...diag, step: 'decode' };
         return fail('bad_response');
       }
+      // JSON-RPC 2.0: exactly one of result and error.
+      if ((parsed.error === undefined) === (parsed.result === undefined)) {
+        diag = { ...diag, step: 'decode' };
+        return fail('bad_response');
+      }
       if (parsed.error !== undefined) {
         // Numeric JSON-RPC code only: the message can echo addresses, URLs or provider text.
         const code = (parsed.error as { code?: unknown } | null)?.code;
         diag = {
           ...diag,
           step: 'rpc_error',
-          ...(Number.isInteger(code) ? { rpcCode: code as number } : {}),
+          ...(isSafeRpcCode(code) ? { rpcCode: code } : {}),
         };
         return fail(code === -32005 || code === -32029 ? 'rate_limited' : 'unavailable');
       }
