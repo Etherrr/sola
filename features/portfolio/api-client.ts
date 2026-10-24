@@ -7,6 +7,9 @@ export type ApiAsset = {
   amount: string;
   price: string | null;
   value: string | null;
+  /** Where the price came from and the time that source itself last updated it (not the request time). */
+  priceSource?: string | null;
+  priceObservedAt?: string | null;
 };
 export type ApiWallet = {
   address: string;
@@ -58,6 +61,11 @@ export function parseApiSuccess(raw: unknown): ApiSuccess | null {
       if (!isObj(a) || !isStr(a.assetId) || !isStr(a.symbol) || !Number.isInteger(a.decimals))
         return null;
       if (!isDec(a.amount) || !isDecOrNull(a.price) || !isDecOrNull(a.value)) return null;
+      for (const k of ['priceSource', 'priceObservedAt'] as const) {
+        const v = a[k];
+        if (v !== undefined && v !== null && (!isStr(v) || v.length > 80)) return null;
+      }
+      if (isStr(a.priceObservedAt) && Number.isNaN(Date.parse(a.priceObservedAt))) return null;
     }
   }
   return raw as unknown as ApiSuccess;
@@ -193,5 +201,22 @@ export async function fetchSession(signal?: AbortSignal): Promise<SessionState> 
   } finally {
     clearTimeout(timer);
     signal?.removeEventListener('abort', onAbort);
+  }
+}
+
+export type DataMode = 'mock' | 'live' | 'unknown';
+/** Which data mode lookups use on this deployment (same-origin health endpoint; no address is sent). */
+export async function fetchDataMode(signal?: AbortSignal): Promise<DataMode> {
+  try {
+    const r = await fetch('/api/v1/health', {
+      cache: 'no-store',
+      credentials: 'same-origin',
+      signal,
+    });
+    const j: unknown = r.ok ? await r.json() : null;
+    const m = (j as { mode?: unknown } | null)?.mode;
+    return m === 'mock' || m === 'live' ? m : 'unknown';
+  } catch {
+    return 'unknown';
   }
 }

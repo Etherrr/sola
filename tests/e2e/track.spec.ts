@@ -45,7 +45,14 @@ const mock = (page: Page, status: number, body: unknown, ct = 'application/json'
 test.beforeEach(async ({ page }) => {
   // The welcome screen has its own tests; skip it here.
   await page.addInitScript(() => window.sessionStorage.setItem('sola-welcomed', '1'));
-  // The static test server has no API; answer the session check so it is not a console error.
+  // The static test server has no API; answer the health and session checks so they are not console errors.
+  await page.route('**/api/v1/health', (r) =>
+    r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'ok', mode: 'mock', requestId: 'r' }),
+    }),
+  );
   await page.route('**/api/v1/session', (r) =>
     r.fulfill({
       status: 200,
@@ -53,6 +60,147 @@ test.beforeEach(async ({ page }) => {
       body: JSON.stringify({ status: 'ok', via: 'cloudflare-access', identity: null }),
     }),
   );
+});
+test.describe('/track data mode follows the server', () => {
+  test('live mode: labelled live, lists the covered tokens, discloses where the address goes', async ({
+    page,
+  }) => {
+    await page.route('**/api/v1/health', (r) =>
+      r.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ status: 'ok', mode: 'live', requestId: 'r' }),
+      }),
+    );
+    await mock(page, 200, {
+      ...okBody,
+      provider: 'publicnode-rpc+chainlink',
+      mode: 'live',
+      simulated: false,
+      warnings: ['Live read-only Ethereum data. Only ETH, USDC, USDT, DAI and WETH are checked.'],
+      wallets: okBody.wallets.map((w) => ({
+        ...w,
+        assets: w.assets.map((a) =>
+          a.price
+            ? { ...a, priceSource: 'chainlink:ETH/USD', priceObservedAt: '2026-10-23T11:58:00Z' }
+            : a,
+        ),
+      })),
+    });
+    await page.goto('/track/');
+    await expect(page.getByText('WATCH-ONLY · LIVE READ')).toBeVisible();
+    await expect(page.getByText(/USDC, USDT, DAI, WETH/)).toBeVisible();
+    await expect(page.locator('.sim-pill')).toContainText('MODE SHOWN WITH RESULT');
+    // Fixture example buttons would be real addresses in live mode, so they are not offered.
+    await expect(page.getByRole('button', { name: 'Mixed tokens' })).toHaveCount(0);
+    // Disclosure, token limits and the WETH proxy caveat are all shown BEFORE any lookup.
+    await expect(page.getByText(/then to PublicNode/)).toBeVisible();
+    await expect(page.getByText(/not proof of an empty wallet/)).toBeVisible();
+    await expect(page.getByText(/WETH is priced with the ETH\/USD feed/)).toBeVisible();
+    await expect(page.getByText(/USDC and USDT feeds as capped/)).toBeVisible();
+    await page.getByRole('textbox').fill(ADDR);
+    await page.getByRole('button', { name: /look up/i }).click();
+    await expect(page.getByRole('heading', { name: 'Result' })).toBeVisible();
+    await expect(page.getByText(/sent the address to a public Ethereum node/)).toBeVisible();
+    await expect(page.getByText(/not market quotes/)).toBeVisible();
+    await expect(page.getByText(/Chainlink ETH\/USD · feed updated/)).toBeVisible();
+    await expect(page.getByText(/Nothing was read from a blockchain/)).toHaveCount(0);
+  });
+  for (const [name, mode, sim, partial, want, not] of [
+    [
+      'mock empty',
+      'mock',
+      true,
+      false,
+      /An empty wallet is a valid result/,
+      /cannot tell whether the wallet is empty/,
+    ],
+    [
+      'live covered-zero',
+      'live',
+      false,
+      false,
+      /does not show that the wallet is empty/,
+      /valid result|Some balances could not be read/,
+    ],
+    [
+      'live all reads failed',
+      'live',
+      false,
+      true,
+      /this result cannot tell whether the wallet is empty/,
+      /valid result|No ETH, USDC/,
+    ],
+  ] as const) {
+    test(`empty result wording: ${name}`, async ({ page }) => {
+      await page.route('**/api/v1/health', (r) =>
+        r.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ status: 'ok', mode, requestId: 'r' }),
+        }),
+      );
+      await mock(page, 200, {
+        ...okBody,
+        mode,
+        simulated: sim,
+        partial,
+        wallets: [
+          {
+            address: ADDR,
+            assets: [],
+            partial,
+            warnings: partial ? ['ETH balance could not be read; this is not a zero balance.'] : [],
+          },
+        ],
+      });
+      await page.goto('/track/');
+      await page.getByRole('textbox').fill(ADDR);
+      await page.getByRole('button', { name: /look up/i }).click();
+      await expect(page.getByRole('heading', { name: 'Result' })).toBeVisible();
+      await expect(page.getByText(want)).toBeVisible();
+      await expect(page.getByText(not)).toHaveCount(0);
+      if (partial)
+        await expect(
+          page.getByText('ETH balance could not be read; this is not a zero balance.'),
+        ).toBeVisible();
+    });
+  }
+  test('while the mode is still being checked: no examples, submit disabled, nothing is sent', async ({
+    page,
+  }) => {
+    let release: () => void = () => {};
+    const gate = new Promise<void>((res) => (release = res));
+    let posted = 0;
+    await page.route('**/api/v1/portfolio/resolve', (r) => ((posted += 1), r.abort()));
+    await page.route('**/api/v1/health', async (r) => {
+      await gate;
+      await r.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ status: 'ok', mode: 'mock', requestId: 'r' }),
+      });
+    });
+    await page.goto('/track/');
+    await expect(page.getByRole('button', { name: 'Checking mode…' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Mixed tokens' })).toHaveCount(0);
+    await page.getByRole('textbox').fill(ADDR);
+    await page.getByRole('textbox').press('Enter');
+    expect(posted).toBe(0);
+    release();
+    await expect(page.getByRole('button', { name: 'Mixed tokens' })).toBeVisible();
+  });
+  test('health unavailable: no mode claim, no fixture examples, disclosure says it may be live', async ({
+    page,
+  }) => {
+    await page.route('**/api/v1/health', (r) => r.fulfill({ status: 503, body: '{}' }));
+    await page.goto('/track/');
+    await expect(page.getByRole('button', { name: 'Mixed tokens' })).toHaveCount(0);
+    await expect(page.getByText(/could be live/)).toBeVisible();
+    await expect(page.getByText(/could not be confirmed/)).toBeVisible();
+    await expect(page.getByText('WATCH-ONLY · LIVE READ')).toHaveCount(0);
+    await expect(page.getByText('WATCH-ONLY · SIMULATED')).toHaveCount(0);
+  });
 });
 test.describe('/track simulated lookup', () => {
   test('shows a simulated result with Unknown prices and no console errors', async ({ page }) => {

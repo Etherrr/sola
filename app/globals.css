@@ -2778,3 +2778,12 @@ html {
     display: none;
   }
 }
+
+/* Per-feed provenance under a live price: wrap so it does not widen the table on phones. */
+.price-src {
+  display: block;
+  max-width: 11rem;
+  margin-left: auto;
+  white-space: normal;
+  text-align: right;
+}
