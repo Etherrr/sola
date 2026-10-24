@@ -11,14 +11,25 @@ const FEED_DECIMALS = 8;
 const MAX_FUTURE_S = 30;
 
 type FeedId = 'ETH/USD' | 'USDC/USD' | 'USDT/USD' | 'DAI/USD';
-// Feed addresses and descriptions were read on-chain on 2026-10-23 (description() matched). Max ages
-// follow each feed's heartbeat with margin: ETH/USD 1 h, the stablecoin feeds 24 h.
-export const FEEDS: Record<FeedId, { address: string; maxAgeS: number }> = {
-  'ETH/USD': { address: '0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419', maxAgeS: 2 * 3600 },
-  'USDC/USD': { address: '0x8fFfFfd4AfB6115b954Bd326cbe7B4BA576818f6', maxAgeS: 25 * 3600 },
-  'USDT/USD': { address: '0x3E7d1eAB13ad0104d2750B8863b489D65364e32D', maxAgeS: 25 * 3600 },
-  'DAI/USD': { address: '0xAed0c38402a5d19df6E4c03F4E2DcEd6e29c1ee9', maxAgeS: 25 * 3600 },
+// Feed addresses and descriptions were read on-chain on 2026-10-23 (description() matched) and match
+// the data.chain.link and docs.chain.link address listings.
+// Configured heartbeats come from Chainlink's own feed data (reviewer-sourced from
+// https://data.chain.link/feeds, 23 Oct 2026): ETH/USD 3600 s, DAI/USD 3600 s, USDC/USD 82800 s,
+// USDT/USD 86400 s. A price older than heartbeat + grace is Unknown. The grace covers a late
+// transaction and clock skew; it is our choice, not a Chainlink figure.
+export const HEARTBEAT_GRACE_S = 15 * 60;
+const feed = (address: string, heartbeatS: number) => ({
+  address,
+  heartbeatS,
+  maxAgeS: heartbeatS + HEARTBEAT_GRACE_S,
+});
+export const FEEDS = {
+  'ETH/USD': feed('0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419', 3600),
+  'USDC/USD': feed('0x8fFfFfd4AfB6115b954Bd326cbe7B4BA576818f6', 82800),
+  'USDT/USD': feed('0x3E7d1eAB13ad0104d2750B8863b489D65364e32D', 86400),
+  'DAI/USD': feed('0xAed0c38402a5d19df6E4c03F4E2DcEd6e29c1ee9', 3600),
 };
+
 // symbol() and decimals() of each contract were read on-chain on 2026-10-23.
 export const TOKENS: { symbol: string; address: string; decimals: number; feed: FeedId }[] = [
   {

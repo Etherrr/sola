@@ -71,6 +71,41 @@ const ethPrice = async (cfg: Cfg) => {
   if (!r.ok) throw new Error('x');
   return r.wallets[0]!.assets[0]!.price;
 };
+describe('per-feed freshness follows each configured heartbeat', () => {
+  const G = 15 * 60;
+  const price = async (symbol: string, feed: keyof typeof FEEDS, age: number) => {
+    const r = await run(
+      rpc({
+        tokens: { USDC: hex(1_000_000n), USDT: hex(1_000_000n), DAI: hex(10n ** 18n) },
+        feedAge: { [feed]: age },
+      }),
+    );
+    if (!r.ok) throw new Error('x');
+    return r.wallets[0]!.assets.find((a) => a.symbol === symbol)!.price;
+  };
+  it('configured heartbeats', () => {
+    expect(
+      [FEEDS['ETH/USD'], FEEDS['DAI/USD'], FEEDS['USDC/USD'], FEEDS['USDT/USD']].map(
+        (f) => f.heartbeatS,
+      ),
+    ).toEqual([3600, 3600, 82800, 86400]);
+  });
+  it('DAI is Unknown just past 1 h + grace and priced just inside it', async () => {
+    expect(await price('DAI', 'DAI/USD', 3600 + G + 1)).toBeNull();
+    expect(await price('DAI', 'DAI/USD', 3600 + G - 5)).toBe('1');
+    expect(await price('DAI', 'DAI/USD', 24 * 3600)).toBeNull();
+  });
+  it('ETH is Unknown just past 1 h + grace', async () => {
+    expect(await ethPrice({ feedAge: { 'ETH/USD': 3600 + G + 1 } })).toBeNull();
+    expect(await ethPrice({ feedAge: { 'ETH/USD': 3600 + G - 5 } })).toBe('1');
+  });
+  it('USDC (23 h) and USDT (24 h) use their own limits', async () => {
+    expect(await price('USDC', 'USDC/USD', 82800 + G - 5)).toBe('1');
+    expect(await price('USDC', 'USDC/USD', 82800 + G + 1)).toBeNull();
+    expect(await price('USDT', 'USDT/USD', 86400 + G - 5)).toBe('1');
+    expect(await price('USDT', 'USDT/USD', 86400 + G + 1)).toBeNull();
+  });
+});
 describe('live provider hardening (reviewer findings)', () => {
   it('a bare 0x from the feed or the balance is not a value and does not throw', async () => {
     expect(await ethPrice({ rawFeed: () => '0x' })).toBeNull();
