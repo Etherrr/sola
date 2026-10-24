@@ -146,7 +146,9 @@ export async function lookupAddress(address: string): Promise<LookupOutcome> {
 }
 
 export type SessionState =
-  { kind: 'verified'; email: string } | { kind: 'rejected' } | { kind: 'none' };
+  | { kind: 'verified'; email: string; expiresAtMs: number }
+  | { kind: 'rejected' }
+  | { kind: 'none' };
 // Same plain-email contract the server enforces (server/portfolio/access.ts).
 const SESSION_EMAIL = /^[^\s@<>"'`]{1,64}@[A-Za-z0-9.-]{1,190}\.[A-Za-z]{2,}$/;
 export function isSessionEmail(v: unknown): v is string {
@@ -180,7 +182,10 @@ export async function fetchSession(signal?: AbortSignal): Promise<SessionState> 
       (j as { via?: unknown }).via === 'cloudflare-access'
     ) {
       const id = (j as { identity?: { email?: unknown } | null }).identity;
-      if (id && isSessionEmail(id.email)) return { kind: 'verified', email: id.email };
+      const exp = Date.parse(String((j as { expiresAt?: unknown }).expiresAt ?? ''));
+      // No usable identity without a real future expiry: a missing, malformed or past time is none.
+      if (id && isSessionEmail(id.email) && Number.isFinite(exp) && exp > Date.now())
+        return { kind: 'verified', email: id.email, expiresAtMs: exp };
     }
     return { kind: 'none' };
   } catch {

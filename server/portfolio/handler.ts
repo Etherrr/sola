@@ -5,6 +5,7 @@ import {
   fetchAccessKeys,
   isValidTeamHost,
   readEmailClaim,
+  readExpiresAt,
   type KeyFetcher,
 } from './access';
 import { mockProvider, type PortfolioProvider } from './provider';
@@ -271,11 +272,13 @@ export async function handleSession(
     return err(405, 'method_not_allowed', 'Use GET.', requestId, { allow: 'GET' });
   const blocked = await gate(req, env, d, requestId);
   if (blocked) return blocked;
-  const email = readEmailClaim(req.headers.get('cf-access-jwt-assertion'));
+  const token = req.headers.get('cf-access-jwt-assertion');
+  const email = readEmailClaim(token);
   return reply(200, {
     status: 'ok',
     via: 'cloudflare-access',
     identity: email === null ? null : { email },
+    expiresAt: readExpiresAt(token),
     requestId,
   });
 }

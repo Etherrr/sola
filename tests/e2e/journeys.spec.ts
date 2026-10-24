@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 const routes = [
   '/',
+  '/education',
   '/start',
   '/start/wallets',
   '/start/security',
@@ -50,15 +51,15 @@ test('all routes render, remain responsive, and pass WCAG automated checks', asy
 });
 test('beginner, experienced and demo entry points work', async ({ page }) => {
   await page.goto('/');
+  await page.getByRole('link', { name: /^Education/ }).click();
+  await expect(page).toHaveURL(/\/education\/?$/);
   await page.getByRole('link', { name: /I’m new to DeFi/ }).click();
   await expect(page).toHaveURL(/\/start\/?$/);
   await page.getByRole('link', { name: 'Skip this lesson' }).click();
   await expect(page).toHaveURL(/\/start\/wallets\/?$/);
   await page.getByRole('radio', { name: 'Keeping keys on a separate device' }).check();
   await expect(page.getByRole('status')).toContainText('Research hardware');
-  await page.goto('/');
-  await page.getByRole('link', { name: /I know my way around/ }).click();
-  await expect(page).toHaveURL(/\/connect\/?$/);
+  await page.goto('/connect');
   await expect(page.locator('input')).toHaveCount(0);
   await page.getByRole('link', { name: 'Open simulated portfolio' }).click();
   await expect(page.getByText('$11,000.00', { exact: true })).toBeVisible();
@@ -110,7 +111,7 @@ test('keyboard navigation, mobile menu, reduced motion, and missing page', async
   isMobile,
 }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.goto('/');
+  await page.goto('/portfolio');
   await page.keyboard.press('Tab');
   await expect(page.getByRole('link', { name: 'Skip to content' })).toBeFocused();
   await page.keyboard.press('Enter');
@@ -236,27 +237,217 @@ test('security decision lab: every outcome, keyboard use, retry, axe on revealed
   expect(await page.evaluate(() => JSON.stringify({ ...localStorage }))).toBe(before);
 });
 
-test.describe('welcome screen', () => {
-  test.beforeEach(async ({ page }) => {
+test.describe('entrance', () => {
+  test('two real entrances, account control, no inputs, and the intro plays once', async ({
+    page,
+  }) => {
+    // Clear the flag only on the first navigation so the reload sees the stored flag.
+    await page.addInitScript(() => {
+      if (!window.sessionStorage.getItem('__t')) {
+        window.sessionStorage.removeItem('sola-welcomed');
+        window.sessionStorage.setItem('__t', '1');
+      }
+    });
+    await page.route('**/api/v1/session', (r) =>
+      r.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          status: 'ok',
+          via: 'cloudflare-access',
+          identity: { email: 'jun@example.com' },
+          expiresAt: '2099-01-01T00:00:00.000Z',
+        }),
+      }),
+    );
+    await page.goto('/');
+    await expect(page.locator('.entrance')).toHaveClass(/intro/);
+    await expect(page.locator('.entrance-curtain')).toHaveCount(1);
+    // The curtain never intercepts input and is gone once the animation is over.
+    expect(
+      await page.locator('.entrance-curtain').evaluate((el) => getComputedStyle(el).pointerEvents),
+    ).toBe('none');
+    await expect(page.locator('.entrance-curtain')).toHaveCount(0, { timeout: 5000 });
+    await expect(page.getByRole('link', { name: /^Education/ })).toBeVisible();
+    await expect(page.getByRole('link', { name: /^DeFi App/ })).toBeVisible();
+    await expect(page.locator('input')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Account: jun@example.com' })).toBeVisible();
+    await page.reload();
+    await expect(page.locator('.entrance')).not.toHaveClass(/intro/);
+    await page.getByRole('link', { name: /^DeFi App/ }).click();
+    await expect(page).toHaveURL(/\/portfolio\/?$/);
+  });
+  test('the identity is cleared at the token expiry, with no polling before it', async ({
+    page,
+  }) => {
+    let calls = 0;
+    let expired = false;
+    const expiresAt = new Date(Date.now() + 3 * 60 * 1000).toISOString();
+    await page.clock.install();
+    await page.route('**/api/v1/session', (r) => {
+      calls += 1;
+      if (expired) {
+        return r.fulfill({
+          status: 401,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: { code: 'unauthorized' } }),
+        });
+      }
+      return r.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          status: 'ok',
+          via: 'cloudflare-access',
+          identity: { email: 'jun@example.com' },
+          expiresAt,
+        }),
+      });
+    });
+    await page.goto('/portfolio');
+    const btn = page.getByRole('button', { name: /^Account/ });
+    await expect(btn).toHaveAttribute('aria-label', /jun@example.com/);
+    const before = calls;
+    await page.clock.fastForward('02:00');
+    expect(calls).toBe(before); // no polling, and the chip is not cleared early
+    await expect(btn).toHaveAttribute('aria-label', /jun@example.com/);
+    expired = true;
+    await page.clock.fastForward('01:30');
+    await expect.poll(() => calls).toBeGreaterThan(before);
+    await expect(page.getByRole('button', { name: /^Account/ })).not.toHaveAttribute(
+      'aria-label',
+      /jun@example.com/,
+    );
+  });
+  test('a renewed session replaces the expiry: identity returns and the next deadline is the new one', async ({
+    page,
+  }) => {
+    let calls = 0;
+    const first = Date.now() + 3 * 60 * 1000;
+    const second = first + 10 * 60 * 1000;
+    await page.clock.install();
+    await page.route('**/api/v1/session', (r) => {
+      calls += 1;
+      return r.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          status: 'ok',
+          via: 'cloudflare-access',
+          identity: { email: 'jun@example.com' },
+          expiresAt: new Date(calls === 1 ? first : second).toISOString(),
+        }),
+      });
+    });
+    await page.goto('/portfolio');
+    const btn = page.getByRole('button', { name: /^Account/ });
+    await expect(btn).toHaveAttribute('aria-label', /jun@example.com/);
+    await page.clock.fastForward('03:30'); // past the first deadline: one renewal
+    await expect.poll(() => calls).toBe(2);
+    await expect(btn).toHaveAttribute('aria-label', /jun@example.com/);
+    await page.clock.fastForward('05:00'); // before the new deadline: no further request
+    expect(calls).toBe(2);
+    await page.clock.fastForward('06:00'); // past the new deadline: renewed again
+    await expect.poll(() => calls).toBe(3);
+  });
+  test('a response with a missing or past expiry shows no identity', async ({ page }) => {
+    await page.route('**/api/v1/session', (r) =>
+      r.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          status: 'ok',
+          via: 'cloudflare-access',
+          identity: { email: 'jun@example.com' },
+          expiresAt: '2001-01-01T00:00:00.000Z',
+        }),
+      }),
+    );
+    await page.goto('/portfolio');
+    await expect(page.getByRole('button', { name: /^Account/ })).not.toHaveAttribute(
+      'aria-label',
+      /jun@example.com/,
+    );
+  });
+
+  test('Tab out of the account control closes it; a route change rechecks the session', async ({
+    page,
+    isMobile,
+  }) => {
+    let calls = 0;
+    await page.route('**/api/v1/session', (r) => {
+      calls += 1;
+      return r.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          status: 'ok',
+          via: 'cloudflare-access',
+          identity: { email: 'a-very-long-address-for-wrapping-checks@example-long-domain.com' },
+          expiresAt: '2099-01-01T00:00:00.000Z',
+        }),
+      });
+    });
+    await page.goto('/portfolio');
+    const btn = page.getByRole('button', { name: /^Account/ });
+    await expect(btn).toHaveAttribute('aria-label', /a-very-long-address/);
+    const before = calls;
+    // In-app navigation (no page reload) must trigger a fresh session check.
+    await page
+      .getByRole('navigation', { name: 'Main' })
+      .getByRole('link', { name: 'Track' })
+      .click();
+    await expect(page).toHaveURL(/\/track\/?$/);
+    await expect(btn).toHaveAttribute('aria-label', /a-very-long-address/);
+    await expect.poll(() => calls).toBeGreaterThan(before);
+    if (!isMobile) {
+      await btn.click();
+      await expect(btn).toHaveAttribute('aria-expanded', 'true');
+      await page.keyboard.press('Tab');
+      await page.keyboard.press('Tab');
+      await page.keyboard.press('Tab');
+      await page.keyboard.press('Tab');
+      await expect(btn).toHaveAttribute('aria-expanded', 'false');
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+      ).toBe(true);
+    }
+  });
+  test('reduced motion: no intro and no animation', async ({ page }) => {
     await page.addInitScript(() => window.sessionStorage.removeItem('sola-welcomed'));
-  });
-  test('shows once per session, focuses Enter, and Escape dismisses it', async ({ page }) => {
-    await page.goto('/track');
-    const dialog = page.getByRole('dialog', { name: 'Welcome.' });
-    await expect(dialog).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Enter' })).toBeFocused();
-    await expect(dialog).toContainText('Protected by Cloudflare Access');
-    await expect(dialog.locator('input')).toHaveCount(0);
-    await page.keyboard.press('Escape');
-    await expect(dialog).toHaveCount(0);
-  });
-  test('reduced motion removes the animation', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
-    await page.goto('/track');
+    await page.goto('/');
+    await expect(page.locator('.entrance')).not.toHaveClass(/intro/);
+    await expect(page.locator('.entrance-curtain')).toHaveCount(0);
     const name = await page
-      .locator('.welcome')
+      .locator('.entrance-card.edu')
       .evaluate((el) => getComputedStyle(el).animationName);
     expect(name).toBe('none');
+  });
+  test('account menu opens, Escape closes and returns focus, outside click closes', async ({
+    page,
+    isMobile,
+  }) => {
+    await page.route('**/api/v1/session', (r) =>
+      r.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ status: 'ok', via: 'cloudflare-access', identity: null }),
+      }),
+    );
+    await page.goto('/');
+    const btn = page.getByRole('button', { name: /^Account/ });
+    await btn.click();
+    await expect(btn).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.getByText('Identity not available right now')).toBeVisible();
+    if (!isMobile) {
+      await page.keyboard.press('Escape');
+      await expect(btn).toHaveAttribute('aria-expanded', 'false');
+      await expect(btn).toBeFocused();
+      await btn.click();
+    }
+    await page.locator('.entrance-main').click({ position: { x: 4, y: 500 } });
+    await expect(btn).toHaveAttribute('aria-expanded', 'false');
   });
 });
 test('only Ethereum is selectable; other networks are disabled and say so', async ({ page }) => {
@@ -270,36 +461,6 @@ test('only Ethereum is selectable; other networks are disabled and say so', asyn
   }
 });
 
-test.describe('welcome keyboard containment', () => {
-  test.beforeEach(async ({ page }) => {
-    await page.addInitScript(() => window.sessionStorage.removeItem('sola-welcomed'));
-  });
-  test('Tab and Shift+Tab stay on Enter, background is inert, dismiss restores focus', async ({
-    page,
-    isMobile,
-  }) => {
-    test.skip(isMobile, 'keyboard path');
-    await page.goto('/portfolio');
-    const enter = page.getByRole('button', { name: 'Enter' });
-    await expect(enter).toBeFocused();
-    for (const key of ['Tab', 'Shift+Tab', 'Tab', 'Tab']) {
-      await page.keyboard.press(key);
-      const inside = await page.evaluate(() => !!document.activeElement?.closest('.welcome'));
-      expect(inside, key).toBe(true);
-      await expect(enter, key).toBeFocused();
-    }
-    expect(
-      await page.evaluate(() => document.querySelector('.app-body')?.hasAttribute('inert')),
-    ).toBe(true);
-    await enter.focus();
-    await page.keyboard.press('Enter');
-    await expect(page.locator('.welcome')).toHaveCount(0);
-    await expect(page.locator('#main')).toBeFocused();
-    expect(
-      await page.evaluate(() => document.querySelector('.app-body')?.hasAttribute('inert')),
-    ).toBe(false);
-  });
-});
 test('corporate site link is reachable on every width', async ({ page }) => {
   await page.goto('/settings');
   await expect(page.getByRole('link', { name: 'Back to solacapitalpartners.com' })).toBeVisible();
@@ -317,23 +478,25 @@ test.describe('session status', () => {
         contentType: 'application/json',
         body: JSON.stringify(
           status === 200
-            ? { status: 'ok', via: 'cloudflare-access', identity: { email: 'jun@example.com' } }
+            ? {
+                status: 'ok',
+                via: 'cloudflare-access',
+                identity: { email: 'jun@example.com' },
+                expiresAt: '2099-01-01T00:00:00.000Z',
+              }
             : { error: { code: 'unauthorized' } },
         ),
       }),
     );
     await page.goto('/track');
-    await expect(page.locator('.session-chip')).toContainText('jun@example.com', {
-      useInnerText: false,
-    });
+    await expect(page.getByRole('button', { name: 'Account: jun@example.com' })).toBeVisible();
     // The email stays in the accessibility tree on every width (visually hidden on phones).
-    await expect(page.locator('.session-email')).toHaveText(
-      /Signed in via Cloudflare Access as\s*jun@example\.com/,
-    );
+    // The verified email is part of the control's accessible name on every width.
+    await expect(page.getByRole('button', { name: 'Account: jun@example.com' })).toBeVisible();
     status = 401;
     await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
-    await expect(page.getByText('Session not verified')).toBeVisible();
-    await expect(page.getByText('jun@example.com')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Account: session not verified' })).toBeVisible();
+    await expect(page.getByRole('button', { name: /jun@example\.com/ })).toHaveCount(0);
     expect(isMobile !== undefined).toBe(true);
   });
   test('a slow older 200 cannot bring back an email after a newer 401', async ({ page }) => {
@@ -347,6 +510,7 @@ test.describe('session status', () => {
         status: 'ok',
         via: 'cloudflare-access',
         identity: { email: 'jun@example.com' },
+        expiresAt: '2099-01-01T00:00:00.000Z',
       }),
     };
     await page.route('**/api/v1/session', async (r) => {
@@ -359,19 +523,17 @@ test.describe('session status', () => {
       return r.fulfill({ status: 401, contentType: 'application/json', body: '{}' });
     });
     await page.goto('/track');
-    await expect(page.locator('.session-chip')).toContainText('jun@example.com', {
-      useInnerText: false,
-    });
+    await expect(page.getByRole('button', { name: 'Account: jun@example.com' })).toBeVisible();
     const ping = () => page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
     await ping(); // request 2 is held
     // The shown identity is dropped as soon as the recheck starts, not when it finishes.
-    await expect(page.getByText('jun@example.com')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /jun@example\.com/ })).toHaveCount(0);
     await ping(); // request 3 answers 401
-    await expect(page.getByText('Session not verified')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Account: session not verified' })).toBeVisible();
     releaseSecond();
     await page.waitForTimeout(300);
-    await expect(page.getByText('Session not verified')).toBeVisible();
-    await expect(page.getByText('jun@example.com')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Account: session not verified' })).toBeVisible();
+    await expect(page.getByRole('button', { name: /jun@example\.com/ })).toHaveCount(0);
   });
   test('no identity is shown when the API is absent or answers with the wrong shape', async ({
     page,
@@ -385,6 +547,6 @@ test.describe('session status', () => {
     );
     await page.goto('/track');
     await page.waitForTimeout(400);
-    await expect(page.locator('.session-chip')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Account', exact: true })).toBeVisible();
   });
 });

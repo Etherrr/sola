@@ -13,6 +13,7 @@ import {
   type Env,
 } from '../server/portfolio/handler';
 import { mockProvider } from '../server/portfolio/provider';
+import { readExpiresAt } from '../server/portfolio/access';
 
 const TEAM = 'team-example.cloudflareaccess.com';
 const AUD = 'aud123';
@@ -750,6 +751,7 @@ describe('/api/v1/session', () => {
       status: 'ok',
       via: 'cloudflare-access',
       identity: { email: 'jun@example.com' },
+      expiresAt: new Date(NOW.getTime() + 600_000).toISOString(),
       requestId: 'req-1',
     });
     expect(text).not.toContain(jwt);
@@ -780,5 +782,22 @@ describe('/api/v1/session', () => {
       deps(s.keys),
     );
     expect(r.status).toBe(503);
+  });
+});
+
+describe('readExpiresAt', () => {
+  const tok = (payload: unknown) =>
+    `e30.${Buffer.from(JSON.stringify(payload)).toString('base64url')}.x`;
+  it('returns an ISO time for a finite positive exp and nothing else', () => {
+    expect(readExpiresAt(tok({ exp: 1_800_000_000, email: 'a@b.co' }))).toBe(
+      '2027-01-15T08:00:00.000Z',
+    );
+  });
+  it.each([[undefined], ['soon'], [0], [-5], [1e20], [null]])('rejects exp %s', (v) => {
+    expect(readExpiresAt(tok(v === undefined ? {} : { exp: v }))).toBeNull();
+  });
+  it('rejects a missing or garbage token', () => {
+    expect(readExpiresAt(null)).toBeNull();
+    expect(readExpiresAt('nope')).toBeNull();
   });
 });
