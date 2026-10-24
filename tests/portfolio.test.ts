@@ -3,6 +3,8 @@ import { fixture } from '../features/portfolio/fixture';
 import {
   money,
   networkAllocation,
+  assetAllocation,
+  symbolColor,
   summarize,
   uniqueExposures,
   type Position,
@@ -53,4 +55,21 @@ it('derives gross network allocation without debt, receipts, or missing prices',
     { network: 'Solana', value: 500000n, percent: 41.7 },
   ]);
   expect(networkAllocation([])).toEqual([]);
+});
+
+it('asset allocation groups by symbol, excludes debt and unpriced, sorts by value, exact percents', () => {
+  const rows = assetAllocation(fixture.positions);
+  expect(rows.some((r) => r.symbol === 'DEMO')).toBe(false);
+  const sum = rows.reduce((a, r) => a + r.value, 0n);
+  expect(sum).toBe(12000_00n);
+  for (let i = 1; i < rows.length; i++) expect(rows[i - 1]!.value >= rows[i]!.value).toBe(true);
+  expect(assetAllocation([])).toEqual([]);
+});
+it('symbol colour is stable', () => {
+  expect(symbolColor('ETH')).toBe(symbolColor('ETH'));
+  expect(symbolColor('ETH')).toMatch(/^#[0-9a-f]{6}$/);
+});
+it('the sample symbols get distinct colours', () => {
+  const c = ['ETH', 'SOL', 'USDC', 'SOL / USDC', 'DEMO'].map(symbolColor);
+  expect(new Set(c).size).toBe(c.length);
 });

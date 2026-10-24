@@ -14,8 +14,7 @@ export function ChainSelector() {
   const path = usePathname();
   // The overview demo spans invented Ethereum and Solana holdings, so a network filter there
   // would be misleading. The selector only appears where a network actually applies.
-  if (path.startsWith('/portfolio'))
-    return <span className="scope-chip">Scope · All networks (invented demo)</span>;
+  if (path.startsWith('/portfolio')) return <span className="scope-chip">Demo · all networks</span>;
   if (!path.startsWith('/track')) return <span className="scope-chip">Sola Lens preview</span>;
   return (
     <div className="chain-select">

@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { money, type Position } from './model';
+import { money, symbolColor, type Position } from './model';
 export function PositionTable({ positions }: { positions: Position[] }) {
   if (!positions.length)
     return (
@@ -32,7 +32,8 @@ export function PositionTable({ positions }: { positions: Position[] }) {
             <tr key={item.id}>
               <th scope="row">
                 <span
-                  className={`asset-icon ${item.network === 'Solana' ? 'purple' : ''}`}
+                  className="asset-icon"
+                  style={{ background: symbolColor(item.symbol) }}
                   aria-hidden="true"
                 >
                   {item.symbol[0]}
