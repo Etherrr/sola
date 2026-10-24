@@ -2873,3 +2873,43 @@ html {
     text-align: right;
   }
 }
+
+/* Exact view and summary: long digits wrap inside their cell instead of pushing the value past the
+   edge; the value stays on one line; the summary stacks on phones. The network selector keeps its
+   whole label next to the mode pill on narrow screens. */
+.track-table .t-amount,
+.track-table .t-price {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.track-table .t-value {
+  white-space: nowrap;
+}
+@media (max-width: 640px) {
+  .app .track-total {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+  .app .track-total dd {
+    text-align: left;
+    overflow-wrap: anywhere;
+  }
+  .app .track-total div:not(:first-child) dd {
+    margin-bottom: 6px;
+  }
+}
+@media (max-width: 520px) {
+  .chain-select {
+    flex: 0 0 auto;
+  }
+  .chain-select select {
+    width: 8.5rem;
+  }
+  .sim-pill {
+    flex: 1 1 0;
+    min-width: 0;
+    white-space: normal;
+    text-align: center;
+    line-height: 1.25;
+  }
+}
