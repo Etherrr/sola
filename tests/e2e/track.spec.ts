@@ -313,6 +313,89 @@ test.describe('/track live-shaped result readability (mocked response)', () => {
     expect(axe.violations).toEqual([]);
   });
 });
+test.describe('/track huge values at every width (mocked response)', () => {
+  const big = '123456789012345678901234567890.123456';
+  const body = {
+    ...okBody,
+    provider: 'publicnode-rpc+chainlink',
+    mode: 'live',
+    simulated: false,
+    wallets: [
+      {
+        address: '0x' + 'ab'.repeat(20),
+        partial: false,
+        warnings: [],
+        assets: [
+          {
+            assetId: 'eth',
+            symbol: 'ETH',
+            decimals: 18,
+            amount: big + '678',
+            price: '2378.12345678',
+            value: big,
+            priceSource: 'chainlink:ETH/USD',
+            priceObservedAt: '2026-10-24T03:00:00.000Z',
+          },
+          {
+            assetId: 'u',
+            symbol: 'USDT',
+            decimals: 6,
+            amount: '291.368219',
+            price: null,
+            value: null,
+          },
+        ],
+      },
+    ],
+    totals: { recognizedPricedSubtotalUsd: big, unpricedAssetCount: 1, note: 'n' },
+  };
+  for (const exact of [false, true]) {
+    test(`no overflow, symbol and value visible at 320, 390, 768, 1280 (${exact ? 'exact' : 'rounded'})`, async ({
+      page,
+    }) => {
+      await page.route('**/api/v1/health', (r) =>
+        r.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ status: 'ok', mode: 'live', requestId: 'r' }),
+        }),
+      );
+      await mock(page, 200, body);
+      await page.goto('/track/');
+      await page.getByLabel(/Public Ethereum address/).fill('0x' + 'ab'.repeat(20));
+      await page.getByRole('button', { name: 'Look up' }).click();
+      await expect(page.getByRole('heading', { name: 'Result' })).toBeVisible();
+      if (exact) await page.getByRole('button', { name: 'Show exact values' }).click();
+      for (const w of [320, 390, 768, 1280]) {
+        await page.setViewportSize({ width: w, height: 900 });
+        const m = await page.evaluate(() => {
+          const vw = window.innerWidth;
+          const inView = (e: Element | null) => {
+            if (!e) return false;
+            const r = e.getBoundingClientRect();
+            return r.width > 0 && r.left >= 0 && r.right <= vw + 0.5;
+          };
+          const eth = document.querySelector('.track-table tbody tr th');
+          const val = document.querySelector('.track-table tbody tr .t-value');
+          const dd = document.querySelector('.track-total dd');
+          const box = document.querySelector('.track-output .table-scroll') as HTMLElement;
+          return {
+            page: document.documentElement.scrollWidth <= vw,
+            scroller: box.scrollWidth <= box.clientWidth + 1,
+            symbolWidth: Math.round(eth?.getBoundingClientRect().width ?? 0),
+            value: inView(val),
+            subtotal: inView(dd),
+          };
+        });
+        expect(m.page, `page overflow at ${w}`).toBe(true);
+        expect(m.scroller, `scroller overflow at ${w}`).toBe(true);
+        expect(m.symbolWidth, `symbol width at ${w}`).toBeGreaterThan(20);
+        expect(m.value, `value in view at ${w}`).toBe(true);
+        expect(m.subtotal, `subtotal in view at ${w}`).toBe(true);
+      }
+    });
+  }
+});
 test.describe('/track simulated lookup', () => {
   test('shows a simulated result with Unknown prices and no console errors', async ({ page }) => {
     // Smooth scrolling to the result would move targets while axe measures them.

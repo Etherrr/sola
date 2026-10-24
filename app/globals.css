@@ -2802,12 +2802,19 @@ html {
   .track-table tbody {
     display: block;
     width: 100%;
+    table-layout: auto;
   }
   .track-table caption {
     display: block;
   }
+  .track-output .table-scroll {
+    position: relative;
+    overflow-x: hidden;
+  }
   .track-table thead {
     position: absolute;
+    top: 0;
+    left: 0;
     width: 1px;
     height: 1px;
     overflow: hidden;
@@ -2816,7 +2823,7 @@ html {
   }
   .track-table tr {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
     grid-template-areas:
       'sym val'
       'amt amt'
@@ -2882,8 +2889,35 @@ html {
   white-space: normal;
   overflow-wrap: anywhere;
 }
+.track-table {
+  table-layout: fixed;
+}
+.track-table thead th:nth-child(1) {
+  width: 14%;
+}
+.track-table thead th:nth-child(2) {
+  width: 27%;
+}
+.track-table thead th:nth-child(3) {
+  width: 27%;
+}
+.track-table thead th:nth-child(4) {
+  width: 32%;
+}
+.track-table th,
+.track-table td {
+  overflow-wrap: anywhere;
+}
 .track-table .t-value {
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.app .track-total {
+  grid-template-columns: minmax(8rem, 1fr) minmax(0, max-content);
+}
+.app .track-total dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 @media (max-width: 640px) {
   .app .track-total {
@@ -2912,4 +2946,7 @@ html {
     text-align: center;
     line-height: 1.25;
   }
+}
+.track-table caption {
+  white-space: normal;
 }
