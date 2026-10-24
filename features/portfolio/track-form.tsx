@@ -178,7 +178,7 @@ export function TrackForm({ mode = 'mock' }: { mode?: 'checking' | 'mock' | 'liv
                             <td>
                               {a.price === null ? 'Unknown' : `$${a.price}`}
                               {a.price !== null && !ok.simulated && a.priceObservedAt && (
-                                <small className="muted">
+                                <small className="muted price-src">
                                   {(a.priceSource ?? 'price feed').replace(
                                     'chainlink:',
                                     'Chainlink ',

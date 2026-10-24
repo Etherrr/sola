@@ -78,6 +78,14 @@ test.describe('/track data mode follows the server', () => {
       mode: 'live',
       simulated: false,
       warnings: ['Live read-only Ethereum data. Only ETH, USDC, USDT, DAI and WETH are checked.'],
+      wallets: okBody.wallets.map((w) => ({
+        ...w,
+        assets: w.assets.map((a) =>
+          a.price
+            ? { ...a, priceSource: 'chainlink:ETH/USD', priceObservedAt: '2026-10-23T11:58:00Z' }
+            : a,
+        ),
+      })),
     });
     await page.goto('/track/');
     await expect(page.getByText('WATCH-ONLY · LIVE READ')).toBeVisible();
@@ -94,6 +102,7 @@ test.describe('/track data mode follows the server', () => {
     await expect(page.getByRole('heading', { name: 'Result' })).toBeVisible();
     await expect(page.getByText(/sent the address to a public Ethereum node/)).toBeVisible();
     await expect(page.getByText(/not market quotes/)).toBeVisible();
+    await expect(page.getByText(/Chainlink ETH\/USD · feed updated/)).toBeVisible();
     await expect(page.getByText(/Nothing was read from a blockchain/)).toHaveCount(0);
   });
   test('while the mode is still being checked: no examples, submit disabled, nothing is sent', async ({
