@@ -364,6 +364,8 @@ test.describe('session status', () => {
     });
     const ping = () => page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
     await ping(); // request 2 is held
+    // The shown identity is dropped as soon as the recheck starts, not when it finishes.
+    await expect(page.getByText('jun@example.com')).toHaveCount(0);
     await ping(); // request 3 answers 401
     await expect(page.getByText('Session not verified')).toBeVisible();
     releaseSecond();

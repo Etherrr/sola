@@ -159,6 +159,7 @@ export const SESSION_TIMEOUT_MS = 8000;
  * nothing is stored. Aborts after a bounded time and when the caller's signal aborts.
  */
 export async function fetchSession(signal?: AbortSignal): Promise<SessionState> {
+  if (signal?.aborted) return { kind: 'none' };
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), SESSION_TIMEOUT_MS);
   const onAbort = () => ctl.abort();
