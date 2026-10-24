@@ -204,3 +204,20 @@ export function readEmailClaim(token: string | null): string | null {
     return null;
   }
 }
+
+/**
+ * Reads the `exp` claim (seconds since the epoch) from a token that has ALREADY passed
+ * checkAccessJwt, and returns it as an ISO time. Returns null when it is not a finite positive
+ * number. Never call this on an unverified token; it returns no other claim.
+ */
+export function readExpiresAt(token: string | null): string | null {
+  if (!token) return null;
+  try {
+    const v = decodeJwt(token).exp;
+    if (typeof v !== 'number' || !Number.isFinite(v) || v <= 0) return null;
+    const d = new Date(v * 1000);
+    return Number.isNaN(d.getTime()) ? null : d.toISOString();
+  } catch {
+    return null;
+  }
+}

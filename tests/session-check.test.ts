@@ -19,17 +19,17 @@ describe('session checker', () => {
       (s) => seen.push(s),
     );
     c.run();
-    d[0].resolve({ kind: 'verified', email: 'a@b.co' });
+    d[0].resolve({ kind: 'verified', email: 'a@b.co', expiresAtMs: 1 });
     await flush();
     c.run(); // req2 held
     c.run(); // req3
     d[2].resolve({ kind: 'rejected' });
     await flush();
-    d[1].resolve({ kind: 'verified', email: 'stale@b.co' });
+    d[1].resolve({ kind: 'verified', email: 'stale@b.co', expiresAtMs: 1 });
     await flush();
     expect(seen).toEqual([
       { kind: 'checking' },
-      { kind: 'verified', email: 'a@b.co' },
+      { kind: 'verified', email: 'a@b.co', expiresAtMs: 1 },
       { kind: 'checking' },
       { kind: 'checking' },
       { kind: 'rejected' },
@@ -56,7 +56,7 @@ describe('session checker', () => {
     );
     c.run();
     c.dispose();
-    d.resolve({ kind: 'verified', email: 'a@b.co' });
+    d.resolve({ kind: 'verified', email: 'a@b.co', expiresAtMs: 1 });
     await flush();
     c.run();
     expect(sig.aborted).toBe(true);
@@ -71,7 +71,7 @@ describe('session checker', () => {
       (s) => seen.push(s),
     );
     c.run();
-    d[0].resolve({ kind: 'verified', email: 'a@b.co' });
+    d[0].resolve({ kind: 'verified', email: 'a@b.co', expiresAtMs: 1 });
     await flush();
     c.run();
     d[1].resolve({ kind: 'none' });

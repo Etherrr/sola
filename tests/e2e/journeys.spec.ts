@@ -256,6 +256,7 @@ test.describe('entrance', () => {
           status: 'ok',
           via: 'cloudflare-access',
           identity: { email: 'jun@example.com' },
+          expiresAt: '2099-01-01T00:00:00.000Z',
         }),
       }),
     );
@@ -276,11 +277,12 @@ test.describe('entrance', () => {
     await page.getByRole('link', { name: /^DeFi App/ }).click();
     await expect(page).toHaveURL(/\/portfolio\/?$/);
   });
-  test('a visible tab rechecks the session as time passes and clears identity when it ends', async ({
+  test('the identity is cleared at the token expiry, with no polling before it', async ({
     page,
   }) => {
     let calls = 0;
     let expired = false;
+    const expiresAt = new Date(Date.now() + 3 * 60 * 1000).toISOString();
     await page.clock.install();
     await page.route('**/api/v1/session', (r) => {
       calls += 1;
@@ -288,11 +290,7 @@ test.describe('entrance', () => {
         return r.fulfill({
           status: 401,
           contentType: 'application/json',
-          body: JSON.stringify({
-            status: 'unauthenticated',
-            via: 'cloudflare-access',
-            identity: null,
-          }),
+          body: JSON.stringify({ error: { code: 'unauthorized' } }),
         });
       }
       return r.fulfill({
@@ -302,6 +300,7 @@ test.describe('entrance', () => {
           status: 'ok',
           via: 'cloudflare-access',
           identity: { email: 'jun@example.com' },
+          expiresAt,
         }),
       });
     });
@@ -309,9 +308,62 @@ test.describe('entrance', () => {
     const btn = page.getByRole('button', { name: /^Account/ });
     await expect(btn).toHaveAttribute('aria-label', /jun@example.com/);
     const before = calls;
+    await page.clock.fastForward('02:00');
+    expect(calls).toBe(before); // no polling, and the chip is not cleared early
+    await expect(btn).toHaveAttribute('aria-label', /jun@example.com/);
     expired = true;
-    await page.clock.fastForward('06:00');
+    await page.clock.fastForward('01:30');
     await expect.poll(() => calls).toBeGreaterThan(before);
+    await expect(page.getByRole('button', { name: /^Account/ })).not.toHaveAttribute(
+      'aria-label',
+      /jun@example.com/,
+    );
+  });
+  test('a renewed session replaces the expiry: identity returns and the next deadline is the new one', async ({
+    page,
+  }) => {
+    let calls = 0;
+    const first = Date.now() + 3 * 60 * 1000;
+    const second = first + 10 * 60 * 1000;
+    await page.clock.install();
+    await page.route('**/api/v1/session', (r) => {
+      calls += 1;
+      return r.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          status: 'ok',
+          via: 'cloudflare-access',
+          identity: { email: 'jun@example.com' },
+          expiresAt: new Date(calls === 1 ? first : second).toISOString(),
+        }),
+      });
+    });
+    await page.goto('/portfolio');
+    const btn = page.getByRole('button', { name: /^Account/ });
+    await expect(btn).toHaveAttribute('aria-label', /jun@example.com/);
+    await page.clock.fastForward('03:30'); // past the first deadline: one renewal
+    await expect.poll(() => calls).toBe(2);
+    await expect(btn).toHaveAttribute('aria-label', /jun@example.com/);
+    await page.clock.fastForward('05:00'); // before the new deadline: no further request
+    expect(calls).toBe(2);
+    await page.clock.fastForward('06:00'); // past the new deadline: renewed again
+    await expect.poll(() => calls).toBe(3);
+  });
+  test('a response with a missing or past expiry shows no identity', async ({ page }) => {
+    await page.route('**/api/v1/session', (r) =>
+      r.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          status: 'ok',
+          via: 'cloudflare-access',
+          identity: { email: 'jun@example.com' },
+          expiresAt: '2001-01-01T00:00:00.000Z',
+        }),
+      }),
+    );
+    await page.goto('/portfolio');
     await expect(page.getByRole('button', { name: /^Account/ })).not.toHaveAttribute(
       'aria-label',
       /jun@example.com/,
@@ -332,6 +384,7 @@ test.describe('entrance', () => {
           status: 'ok',
           via: 'cloudflare-access',
           identity: { email: 'a-very-long-address-for-wrapping-checks@example-long-domain.com' },
+          expiresAt: '2099-01-01T00:00:00.000Z',
         }),
       });
     });
@@ -425,7 +478,12 @@ test.describe('session status', () => {
         contentType: 'application/json',
         body: JSON.stringify(
           status === 200
-            ? { status: 'ok', via: 'cloudflare-access', identity: { email: 'jun@example.com' } }
+            ? {
+                status: 'ok',
+                via: 'cloudflare-access',
+                identity: { email: 'jun@example.com' },
+                expiresAt: '2099-01-01T00:00:00.000Z',
+              }
             : { error: { code: 'unauthorized' } },
         ),
       }),
@@ -452,6 +510,7 @@ test.describe('session status', () => {
         status: 'ok',
         via: 'cloudflare-access',
         identity: { email: 'jun@example.com' },
+        expiresAt: '2099-01-01T00:00:00.000Z',
       }),
     };
     await page.route('**/api/v1/session', async (r) => {
