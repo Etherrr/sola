@@ -8,7 +8,7 @@ import type { PortfolioProvider, ProviderResult } from './provider';
 export const RPC_URL = 'https://ethereum-rpc.publicnode.com';
 export const MAX_RESPONSE_BYTES = 64 * 1024;
 const FEED_DECIMALS = 8;
-const MAX_FUTURE_S = 300;
+const MAX_FUTURE_S = 30;
 
 type FeedId = 'ETH/USD' | 'USDC/USD' | 'USDT/USD' | 'DAI/USD';
 // Feed addresses and descriptions were read on-chain on 2026-10-23 (description() matched). Max ages
@@ -48,7 +48,7 @@ export const TOKENS: { symbol: string; address: string; decimals: number; feed: 
   },
 ];
 
-const HEX = /^0x[0-9a-fA-F]*$/;
+const HEX = /^0x[0-9a-fA-F]+$/; // a bare "0x" is not a value
 type Rpc = { id: number; result?: unknown; error?: unknown };
 const word = (hex: string, i: number) => hex.slice(2 + i * 64, 2 + (i + 1) * 64);
 const pad = (hex: string) => hex.replace(/^0x/, '').toLowerCase().padStart(64, '0');
@@ -92,17 +92,72 @@ export function createLiveProvider(over: Partial<LiveDeps> = {}): PortfolioProvi
     async fetchWallets(addresses, signal): Promise<ProviderResult> {
       const fail = (kind: 'rate_limited' | 'timeout' | 'unavailable' | 'bad_response') =>
         ({ ok: false, provider: 'publicnode-rpc+chainlink', kind }) as const;
+      type Call = { method: string; params: unknown[] };
+      const rpc = async (
+        batch: Call[],
+      ): Promise<
+        { ok: true; out: Map<number, string | null> } | { ok: false; r: ReturnType<typeof fail> }
+      > => {
+        let res: Response;
+        try {
+          res = await d.fetch(d.rpcUrl, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(
+              batch.map((c, id) => ({ jsonrpc: '2.0', id, method: c.method, params: c.params })),
+            ),
+            signal,
+            redirect: 'manual',
+          });
+        } catch {
+          return { ok: false, r: fail(signal.aborted ? 'timeout' : 'unavailable') };
+        }
+        if (res.status === 429) return { ok: false, r: fail('rate_limited') };
+        if (!res.ok) return { ok: false, r: fail('unavailable') };
+        let text: string | null;
+        try {
+          text = await readCapped(res, MAX_RESPONSE_BYTES);
+        } catch {
+          return { ok: false, r: fail(signal.aborted ? 'timeout' : 'unavailable') };
+        }
+        if (text === null) return { ok: false, r: fail('bad_response') };
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(text);
+        } catch {
+          return { ok: false, r: fail('bad_response') };
+        }
+        if (!Array.isArray(parsed) || parsed.length > batch.length)
+          return { ok: false, r: fail('bad_response') };
+        const o = new Map<number, string | null>();
+        for (const r of parsed as Rpc[]) {
+          if (typeof r !== 'object' || r === null || !Number.isInteger(r.id))
+            return { ok: false, r: fail('bad_response') };
+          const id = r.id;
+          if (id < 0 || id >= batch.length || o.has(id))
+            return { ok: false, r: fail('bad_response') };
+          o.set(id, typeof r.result === 'string' && HEX.test(r.result) ? r.result : null);
+        }
+        return { ok: true, out: o };
+      };
+      // Step 1: pin one block so every balance and feed read in step 2 comes from the same state.
+      const head = await rpc([{ method: 'eth_blockNumber', params: [] }]);
+      if (!head.ok) return head.r;
+      const bn = head.out.get(0);
+      if (!bn || bn.length > 18 || BigInt(bn) === 0n) return fail('bad_response');
+      const BLOCK = '0x' + BigInt(bn).toString(16);
+      const blockNumber = BigInt(bn).toString();
       // One batch: per address ETH balance and each token balance, then each feed's decimals and latest round.
-      const calls: { method: string; params: unknown[] }[] = [];
+      const calls: Call[] = [];
       const plan: { addr: number; token: number | null; idx: number }[] = [];
       addresses.forEach((a, ai) => {
         plan.push({ addr: ai, token: null, idx: calls.length });
-        calls.push({ method: 'eth_getBalance', params: [a.toLowerCase(), 'latest'] });
+        calls.push({ method: 'eth_getBalance', params: [a.toLowerCase(), BLOCK] });
         TOKENS.forEach((t, ti) => {
           plan.push({ addr: ai, token: ti, idx: calls.length });
           calls.push({
             method: 'eth_call',
-            params: [{ to: t.address, data: '0x70a08231' + pad(a) }, 'latest'],
+            params: [{ to: t.address, data: '0x70a08231' + pad(a) }, BLOCK],
           });
         });
       });
@@ -112,51 +167,16 @@ export function createLiveProvider(over: Partial<LiveDeps> = {}): PortfolioProvi
         feedAt.set(f, { dec: calls.length, round: calls.length + 1 });
         calls.push({
           method: 'eth_call',
-          params: [{ to: FEEDS[f].address, data: '0x313ce567' }, 'latest'],
+          params: [{ to: FEEDS[f].address, data: '0x313ce567' }, BLOCK],
         });
         calls.push({
           method: 'eth_call',
-          params: [{ to: FEEDS[f].address, data: '0xfeaf968c' }, 'latest'],
+          params: [{ to: FEEDS[f].address, data: '0xfeaf968c' }, BLOCK],
         });
       }
-      let res: Response;
-      try {
-        res = await d.fetch(d.rpcUrl, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(
-            calls.map((c, id) => ({ jsonrpc: '2.0', id, method: c.method, params: c.params })),
-          ),
-          signal,
-          redirect: 'manual',
-        });
-      } catch {
-        return fail(signal.aborted ? 'timeout' : 'unavailable');
-      }
-      if (res.status === 429) return fail('rate_limited');
-      if (!res.ok) return fail('unavailable');
-      let text: string | null;
-      try {
-        text = await readCapped(res, MAX_RESPONSE_BYTES);
-      } catch {
-        return fail(signal.aborted ? 'timeout' : 'unavailable');
-      }
-      if (text === null) return fail('bad_response');
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(text);
-      } catch {
-        return fail('bad_response');
-      }
-      if (!Array.isArray(parsed) || parsed.length > calls.length) return fail('bad_response');
-      const out = new Map<number, string | null>();
-      for (const r of parsed as Rpc[]) {
-        if (typeof r !== 'object' || r === null || !Number.isInteger(r.id))
-          return fail('bad_response');
-        const id = r.id;
-        if (id < 0 || id >= calls.length || out.has(id)) return fail('bad_response');
-        out.set(id, typeof r.result === 'string' && HEX.test(r.result) ? r.result : null);
-      }
+      const body = await rpc(calls);
+      if (!body.ok) return body.r;
+      const out = body.out;
       const nowS = Math.floor(d.now().getTime() / 1000);
       // Prices: valid only when decimals are 8, the answer is positive and the round is fresh.
       const prices = new Map<FeedId, { price: string; at: string }>();
@@ -164,17 +184,19 @@ export function createLiveProvider(over: Partial<LiveDeps> = {}): PortfolioProvi
         const at = feedAt.get(f)!;
         const dec = out.get(at.dec);
         const round = out.get(at.round);
-        if (!dec || !round || round.length !== 2 + 5 * 64 || BigInt(dec) !== BigInt(FEED_DECIMALS))
-          continue;
+        // Exact ABI shapes only: decimals() is one 32-byte word, latestRoundData() is five.
+        if (!dec || dec.length !== 66 || !round || round.length !== 2 + 5 * 64) continue;
+        if (BigInt(dec) !== BigInt(FEED_DECIMALS)) continue;
+        // answeredInRound (word 4) is documented by Chainlink as deprecated, so it is not used.
+        const roundId = BigInt('0x' + word(round, 0));
         const answer = BigInt('0x' + word(round, 1));
-        const updated = Number(BigInt('0x' + word(round, 3)));
+        const started = BigInt('0x' + word(round, 2));
+        const updatedBig = BigInt('0x' + word(round, 3));
+        if (roundId === 0n || started === 0n || updatedBig === 0n || started > updatedBig) continue;
         if (answer <= 0n || answer >= 1n << 255n) continue;
-        if (
-          !Number.isFinite(updated) ||
-          nowS - updated > FEEDS[f].maxAgeS ||
-          updated - nowS > MAX_FUTURE_S
-        )
-          continue;
+        if (updatedBig > BigInt(Number.MAX_SAFE_INTEGER)) continue;
+        const updated = Number(updatedBig);
+        if (nowS - updated > FEEDS[f].maxAgeS || updated - nowS > MAX_FUTURE_S) continue;
         prices.set(f, {
           price: formatUnits(answer, FEED_DECIMALS),
           at: new Date(updated * 1000).toISOString(),
@@ -227,6 +249,9 @@ export function createLiveProvider(over: Partial<LiveDeps> = {}): PortfolioProvi
             ? mk(t.symbol, `eip155:1/erc20:${t.address}`, t.decimals, raw, t.feed)
             : mk('ETH', 'eip155:1/native', 18, raw, 'ETH/USD'),
         );
+      }
+      for (const w of wallets) {
+        w.warnings.push(`Balances and prices were read together at Ethereum block ${blockNumber}.`);
       }
       for (const w of wallets)
         if (w.assets.some((a) => a.price === null))

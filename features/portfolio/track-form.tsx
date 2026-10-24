@@ -12,7 +12,9 @@ const SAMPLES: { label: string; address: string }[] = [
   { label: 'Source unavailable', address: '0x111111111111111111111111111111111111111f' },
 ];
 
-export function TrackForm({ examples = true }: { examples?: boolean }) {
+const feedTime = (iso: string) => iso.slice(0, 16).replace('T', ' ') + ' UTC';
+export function TrackForm({ mode = 'mock' }: { mode?: 'checking' | 'mock' | 'live' | 'unknown' }) {
+  const examples = mode === 'mock';
   const [value, setValue] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -34,6 +36,8 @@ export function TrackForm({ examples = true }: { examples?: boolean }) {
   }, [outcome]);
 
   async function run(raw: string) {
+    // Never send an address before the mode is known: it could be a live lookup.
+    if (mode === 'checking') return;
     const address = raw.trim();
     setOutcome(null);
     if (!/^0x[0-9a-fA-F]{40}$/.test(address)) {
@@ -77,8 +81,11 @@ export function TrackForm({ examples = true }: { examples?: boolean }) {
             aria-describedby={error ? 'track-error track-privacy' : 'track-privacy'}
           />
           <p id="track-privacy" className="fine">
-            A pasted address is sent to this app&apos;s own lookup service and is not saved in your
-            browser. It is observed, not proven to be yours.
+            {mode === 'live'
+              ? "A pasted address is sent to this app's lookup service and then to PublicNode, a public Ethereum node, to read its balances. PublicNode's policy text says it keeps data at most 24 hours; that is not verified. The address is not saved in your browser. It is observed, not proven to be yours."
+              : mode === 'mock'
+                ? "A pasted address is sent to this app's own lookup service and is not saved in your browser. It is observed, not proven to be yours."
+                : "A pasted address is sent to this app's lookup service. This deployment's mode is not confirmed yet, so the lookup could be live, in which case the address is also sent to a public Ethereum node. It is not saved in your browser."}
           </p>
           {error && (
             <p id="track-error" role="alert" className="fine">
@@ -86,8 +93,8 @@ export function TrackForm({ examples = true }: { examples?: boolean }) {
             </p>
           )}
           <div className="actions">
-            <button className="button primary" type="submit" disabled={busy}>
-              {busy ? 'Looking up…' : 'Look up'}
+            <button className="button primary" type="submit" disabled={busy || mode === 'checking'}>
+              {busy ? 'Looking up…' : mode === 'checking' ? 'Checking mode…' : 'Look up'}
             </button>
           </div>
         </form>
@@ -119,7 +126,9 @@ export function TrackForm({ examples = true }: { examples?: boolean }) {
         {busy && <p>Looking up…</p>}
         {!busy && !outcome && (
           <p className="fine track-hint">
-            Results appear here. Pick a simulated example or paste an address.
+            {mode === 'mock'
+              ? 'Results appear here. Pick a simulated example or paste an address.'
+              : 'Results appear here. Paste an address.'}
           </p>
         )}
         {outcome?.kind === 'error' && (
@@ -141,7 +150,7 @@ export function TrackForm({ examples = true }: { examples?: boolean }) {
               note={
                 ok.simulated
                   ? 'Fixed fixture data from this app. Nothing was read from a blockchain and these are not real balances.'
-                  : undefined
+                  : `Balances were read when you pressed Look up (${ok.generatedAt.slice(0, 19).replace('T', ' ')} UTC). Each price shows when its own feed last updated, which can be hours earlier.`
               }
             />
             {ok.wallets.map((w) => (
@@ -166,7 +175,18 @@ export function TrackForm({ examples = true }: { examples?: boolean }) {
                           <tr key={a.assetId}>
                             <th scope="row">{a.symbol}</th>
                             <td>{a.amount}</td>
-                            <td>{a.price === null ? 'Unknown' : `$${a.price}`}</td>
+                            <td>
+                              {a.price === null ? 'Unknown' : `$${a.price}`}
+                              {a.price !== null && !ok.simulated && a.priceObservedAt && (
+                                <small className="muted">
+                                  {(a.priceSource ?? 'price feed').replace(
+                                    'chainlink:',
+                                    'Chainlink ',
+                                  )}{' '}
+                                  · feed updated {feedTime(a.priceObservedAt)}
+                                </small>
+                              )}
+                            </td>
                             <td>{a.value === null ? 'Unknown' : `$${a.value}`}</td>
                           </tr>
                         ))}

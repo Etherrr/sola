@@ -22,8 +22,8 @@ export function TrackApp() {
   return (
     <>
       <TrackIntro mode={mode} />
-      {/* Fixture examples are offered only when lookups are simulated: in live mode they would be real addresses. */}
-      <TrackForm examples={mode !== 'live'} />
+      {/* Fixture examples are offered only when the mode is confirmed simulated: otherwise they could be real addresses. */}
+      <TrackForm mode={mode} />
     </>
   );
 }
@@ -44,13 +44,15 @@ function TrackIntro({ mode }: { mode: Shown }) {
           <p>
             Look up an Ethereum address. This deployment reads real public Ethereum data: ETH and a
             short list of tokens (USDC, USDT, DAI, WETH). Other tokens, NFTs and DeFi positions are
-            not shown, so a result is not a full portfolio.
+            not shown, so a result is not a full portfolio and a missing token is not proof of an
+            empty wallet. WETH is priced with the ETH/USD feed, so it is a proxy and can differ from
+            the real WETH price if WETH trades off its peg.
           </p>
-          <ModeMarker
-            mode="LIVE_REFRESHED"
-            context="data mode"
-            note="Read-only. No wallet connects and nothing is signed. The pasted address is sent to a public Ethereum node to read its balances."
-          />
+          <p className="notice">
+            Live mode is on for this deployment. Nothing has been looked up yet. Read-only: no
+            wallet connects and nothing is signed. A pasted address is sent to a public Ethereum
+            node to read its balances.
+          </p>
         </>
       ) : mode === 'mock' ? (
         <>

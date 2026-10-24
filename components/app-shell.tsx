@@ -91,7 +91,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <p className="side-foot">
             v0.1 · PREVIEW
             <br />
-            Simulated data
+            Demo data is simulated.
+            <br />
+            Address lookups show their own mode.
           </p>
         </aside>
         <div className="app-body">
@@ -115,8 +117,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <footer className="app-foot">
             <p>
               Learning preview · Educational information only. No financial advice, custody, or
-              performance guarantees. Simulated figures are not market data.{' '}
-              <Link href="/settings">Privacy &amp; local data</Link>
+              performance guarantees. Demo figures are simulated, not market data; address lookups
+              state their own mode. <Link href="/settings">Privacy &amp; local data</Link>
               {' · '}
               <a href="https://solacapitalpartners.com/" rel="noopener noreferrer">
                 Back to solacapitalpartners.com

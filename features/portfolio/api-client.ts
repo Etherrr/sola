@@ -7,6 +7,9 @@ export type ApiAsset = {
   amount: string;
   price: string | null;
   value: string | null;
+  /** Where the price came from and the time that source itself last updated it (not the request time). */
+  priceSource?: string | null;
+  priceObservedAt?: string | null;
 };
 export type ApiWallet = {
   address: string;
@@ -58,6 +61,11 @@ export function parseApiSuccess(raw: unknown): ApiSuccess | null {
       if (!isObj(a) || !isStr(a.assetId) || !isStr(a.symbol) || !Number.isInteger(a.decimals))
         return null;
       if (!isDec(a.amount) || !isDecOrNull(a.price) || !isDecOrNull(a.value)) return null;
+      for (const k of ['priceSource', 'priceObservedAt'] as const) {
+        const v = a[k];
+        if (v !== undefined && v !== null && (!isStr(v) || v.length > 80)) return null;
+      }
+      if (isStr(a.priceObservedAt) && Number.isNaN(Date.parse(a.priceObservedAt))) return null;
     }
   }
   return raw as unknown as ApiSuccess;

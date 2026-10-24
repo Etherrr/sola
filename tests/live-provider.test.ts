@@ -10,9 +10,11 @@ const NOW = new Date('2026-10-24T03:00:00.000Z');
 const nowS = Math.floor(NOW.getTime() / 1000);
 const ADDR = '0x' + 'ab'.repeat(20);
 const hex = (n: bigint) => '0x' + n.toString(16).padStart(64, '0');
-const round = (answer: bigint, updated: number) =>
+const round = (answer: bigint, updated: number, id = 7n, started = updated - 10, air = 7n) =>
   '0x' +
-  [1n, answer, 0n, BigInt(updated), 1n].map((x) => x.toString(16).padStart(64, '0')).join('');
+  [id, answer, BigInt(started), BigInt(updated), air]
+    .map((x) => x.toString(16).padStart(64, '0'))
+    .join('');
 
 type Cfg = {
   eth?: string | null;
@@ -20,6 +22,8 @@ type Cfg = {
   feedAge?: Partial<Record<keyof typeof FEEDS, number>>;
   feedDec?: bigint;
   answer?: bigint;
+  rawFeed?: (data: string, def: string) => string;
+  rawBlock?: string;
 };
 /** A fake JSON-RPC endpoint answering by method and call data. */
 function rpc(cfg: Cfg = {}, status = 200, mutate?: (r: unknown) => unknown): typeof fetch {
@@ -31,17 +35,20 @@ function rpc(cfg: Cfg = {}, status = 200, mutate?: (r: unknown) => unknown): typ
     }[];
     const out = reqs.map((r) => {
       let result: string | null;
-      if (r.method === 'eth_getBalance') result = cfg.eth === undefined ? hex(10n ** 18n) : cfg.eth;
+      if (r.method === 'eth_blockNumber') result = cfg.rawBlock ?? '0x1312d00';
+      else if (r.method === 'eth_getBalance')
+        result = cfg.eth === undefined ? hex(10n ** 18n) : cfg.eth;
       else {
         const p = r.params[0] as { to: string; data: string };
         const feed = (Object.keys(FEEDS) as (keyof typeof FEEDS)[]).find(
           (f) => FEEDS[f].address.toLowerCase() === p.to.toLowerCase(),
         );
         if (feed) {
-          result =
+          const def =
             p.data === '0x313ce567'
               ? hex(cfg.feedDec ?? 8n)
               : round(cfg.answer ?? 100_000_000n, nowS - (cfg.feedAge?.[feed] ?? 60));
+          result = cfg.rawFeed ? cfg.rawFeed(p.data, def) : def;
         } else {
           const tok = TOKENS.find((t) => t.address === p.to.toLowerCase())!;
           const v = cfg.tokens?.[tok.symbol];
@@ -52,13 +59,71 @@ function rpc(cfg: Cfg = {}, status = 200, mutate?: (r: unknown) => unknown): typ
         ? { jsonrpc: '2.0', id: r.id, error: { code: -1 } }
         : { jsonrpc: '2.0', id: r.id, result };
     });
-    const body = JSON.stringify(mutate ? mutate(out) : out);
+    const body = JSON.stringify(mutate && reqs.length > 1 ? mutate(out) : out);
     return new Response(body, { status });
   }) as unknown as typeof fetch;
 }
 const run = (f: typeof fetch, signal = new AbortController().signal) =>
   createLiveProvider({ fetch: f, now: () => NOW }).fetchWallets([ADDR], signal);
 
+const ethPrice = async (cfg: Cfg) => {
+  const r = await run(rpc(cfg));
+  if (!r.ok) throw new Error('x');
+  return r.wallets[0]!.assets[0]!.price;
+};
+describe('live provider hardening (reviewer findings)', () => {
+  it('a bare 0x from the feed or the balance is not a value and does not throw', async () => {
+    expect(await ethPrice({ rawFeed: () => '0x' })).toBeNull();
+    const r = await run(rpc({ eth: '0x' }));
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.wallets[0]!.partial).toBe(true);
+  });
+  it('rejects short or long ABI words for decimals and latestRoundData', async () => {
+    expect(
+      await ethPrice({ rawFeed: (d, def) => (d === '0x313ce567' ? def + '00' : def) }),
+    ).toBeNull();
+    expect(
+      await ethPrice({ rawFeed: (d, def) => (d === '0xfeaf968c' ? def.slice(0, -64) : def) }),
+    ).toBeNull();
+    expect(
+      await ethPrice({ rawFeed: (d, def) => (d === '0xfeaf968c' ? def + '0'.repeat(64) : def) }),
+    ).toBeNull();
+  });
+  it('rejects roundId 0, startedAt 0 or after updatedAt; does not use answeredInRound', async () => {
+    const mk = (id: bigint, st: number, air: bigint) => ({
+      rawFeed: (d: string, def: string) =>
+        d === '0xfeaf968c' ? round(100_000_000n, nowS - 60, id, st, air) : def,
+    });
+    expect(await ethPrice(mk(0n, nowS - 70, 7n))).toBeNull();
+    expect(await ethPrice(mk(7n, 0, 7n))).toBeNull();
+    expect(await ethPrice(mk(7n, nowS - 30, 7n))).toBeNull();
+    // answeredInRound is documented deprecated by Chainlink, so a mismatch alone does not reject.
+    expect(await ethPrice(mk(7n, nowS - 70, 3n))).toBe('1');
+  });
+  it('rejects a feed timestamp more than 30 s in the future', async () => {
+    expect(await ethPrice({ feedAge: { 'ETH/USD': -240 } })).toBeNull();
+    expect(await ethPrice({ feedAge: { 'ETH/USD': -10 } })).toBe('1');
+  });
+  it('pins one block for the whole batch and reports it', async () => {
+    const tags: unknown[] = [];
+    const inner = rpc({});
+    const f = (async (u: string, init: RequestInit) => {
+      for (const c of JSON.parse(String(init.body)) as { method: string; params: unknown[] }[])
+        if (c.method !== 'eth_blockNumber') tags.push(c.params[1]);
+      return inner(u, init);
+    }) as unknown as typeof fetch;
+    const r = await run(f);
+    if (!r.ok) throw new Error('x');
+    expect(new Set(tags)).toEqual(new Set(['0x1312d00']));
+    expect(r.wallets[0]!.warnings.join()).toMatch(/block 20000000/);
+  });
+  it('a bad block number is a bad_response, not a throw', async () => {
+    for (const rawBlock of ['0x', '0x0', '0x' + 'f'.repeat(20)]) {
+      const r = await run(rpc({ rawBlock }));
+      expect(r.ok).toBe(false);
+    }
+  });
+});
 describe('live provider (default-off, read-only)', () => {
   it('reads ETH and listed tokens, prices from fresh feeds, omits zero balances', async () => {
     const r = await run(

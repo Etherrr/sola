@@ -812,9 +812,11 @@ describe('live data kill switch', () => {
           jsonrpc: '2.0',
           id: r.id,
           result:
-            r.method === 'eth_getBalance'
-              ? '0x' + (10n ** 18n).toString(16)
-              : '0x' + '0'.repeat(64),
+            r.method === 'eth_blockNumber'
+              ? '0x1312d00'
+              : r.method === 'eth_getBalance'
+                ? '0x' + (10n ** 18n).toString(16)
+                : '0x' + '0'.repeat(64),
         })),
       ),
     );
@@ -847,6 +849,24 @@ describe('live data kill switch', () => {
     expect(body.provider).toBe('publicnode-rpc+chainlink');
     expect(body.warnings.join()).toMatch(/Only ETH, USDC, USDT, DAI and WETH/);
     expect(body.totals.note).toMatch(/not total net worth/);
+  });
+  it('a provider that throws is a bad response, not a timeout', async () => {
+    const s = await signer();
+    const d = deps(s.keys, {
+      liveProvider: {
+        fetchWallets: async () => {
+          throw new Error('boom');
+        },
+      } as never,
+    });
+    const jwt = await s.sign(good());
+    const r = await handleResolve(
+      post({ network: 'ethereum', addresses: [A('1')], currency: 'USD' }, jwt),
+      { ...ENV, PORTFOLIO_LIVE_DATA: '1' },
+      d,
+    );
+    expect(r.status).not.toBe(504);
+    expect(r.status).toBeGreaterThanOrEqual(500);
   });
   it('health and networks report live only when the switch is on', async () => {
     const s = await signer();

@@ -85,6 +85,10 @@ test.describe('/track data mode follows the server', () => {
     await expect(page.locator('.sim-pill')).toContainText('MODE SHOWN WITH RESULT');
     // Fixture example buttons would be real addresses in live mode, so they are not offered.
     await expect(page.getByRole('button', { name: 'Mixed tokens' })).toHaveCount(0);
+    // Disclosure, token limits and the WETH proxy caveat are all shown BEFORE any lookup.
+    await expect(page.getByText(/then to PublicNode/)).toBeVisible();
+    await expect(page.getByText(/not proof of an empty wallet/)).toBeVisible();
+    await expect(page.getByText(/WETH is priced with the ETH\/USD feed/)).toBeVisible();
     await page.getByRole('textbox').fill(ADDR);
     await page.getByRole('button', { name: /look up/i }).click();
     await expect(page.getByRole('heading', { name: 'Result' })).toBeVisible();
@@ -92,9 +96,37 @@ test.describe('/track data mode follows the server', () => {
     await expect(page.getByText(/not market quotes/)).toBeVisible();
     await expect(page.getByText(/Nothing was read from a blockchain/)).toHaveCount(0);
   });
-  test('health unavailable: no mode claim is made', async ({ page }) => {
+  test('while the mode is still being checked: no examples, submit disabled, nothing is sent', async ({
+    page,
+  }) => {
+    let release: () => void = () => {};
+    const gate = new Promise<void>((res) => (release = res));
+    let posted = 0;
+    await page.route('**/api/v1/portfolio/resolve', (r) => ((posted += 1), r.abort()));
+    await page.route('**/api/v1/health', async (r) => {
+      await gate;
+      await r.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ status: 'ok', mode: 'mock', requestId: 'r' }),
+      });
+    });
+    await page.goto('/track/');
+    await expect(page.getByRole('button', { name: 'Checking mode…' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Mixed tokens' })).toHaveCount(0);
+    await page.getByRole('textbox').fill(ADDR);
+    await page.getByRole('textbox').press('Enter');
+    expect(posted).toBe(0);
+    release();
+    await expect(page.getByRole('button', { name: 'Mixed tokens' })).toBeVisible();
+  });
+  test('health unavailable: no mode claim, no fixture examples, disclosure says it may be live', async ({
+    page,
+  }) => {
     await page.route('**/api/v1/health', (r) => r.fulfill({ status: 503, body: '{}' }));
     await page.goto('/track/');
+    await expect(page.getByRole('button', { name: 'Mixed tokens' })).toHaveCount(0);
+    await expect(page.getByText(/could be live/)).toBeVisible();
     await expect(page.getByText(/could not be confirmed/)).toBeVisible();
     await expect(page.getByText('WATCH-ONLY · LIVE READ')).toHaveCount(0);
     await expect(page.getByText('WATCH-ONLY · SIMULATED')).toHaveCount(0);
