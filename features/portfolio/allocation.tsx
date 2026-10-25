@@ -18,6 +18,7 @@ export function Allocation() {
             label: r.symbol,
             percent: r.percent,
             roundedZero: r.roundedZero,
+            share: r.share,
             color: symbolColor(r.symbol),
           }))}
           caption="holdings"

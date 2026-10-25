@@ -81,6 +81,7 @@ export function AllocationV2() {
             percent: c.percent,
             color: c.color,
             roundedZero: c.roundedZero,
+            share: c.share,
           }))}
           caption={chains.length === 1 ? '' : 'by chain'}
           center={chains.length === 1 ? '1 chain' : undefined}

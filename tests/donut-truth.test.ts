@@ -42,6 +42,23 @@ it('a sub-0.1% slice reads <0.1 in the donut aria and never 0', () => {
   expect(html).not.toContain('Solana 0 percent');
 });
 
+it('a sub-0.05% slice keeps its RAW-RATIO arc - geometry never collapses to zero from rounded display', () => {
+  const html = renderToStaticMarkup(
+    createElement(Donut, {
+      caption: 'chains',
+      slices: [
+        { label: 'Ethereum', percent: 100, share: 0.9996, color: '#627eea' },
+        { label: 'Solana', percent: 0, share: 0.0004, roundedZero: true, color: '#9945ff' },
+      ],
+    }),
+  );
+  const d = dashes(html);
+  expect(d[1]).toBeCloseTo(0.0004 * C, 6); // 0.106px true arc, not 0
+  expect(d[1]).toBeGreaterThan(0);
+  expect(d[0]).toBeCloseTo(0.9996 * C - 0.6, 3);
+  expect(html).toContain('Solana &lt;0.1 percent');
+});
+
 const pos = (over: Partial<Position>): Position => ({
   id: 'p',
   exposureId: 'e',
@@ -61,6 +78,7 @@ it('model: a true nonzero share below 0.05% keeps percent 0 plus roundedZero, di
   const d = rows.find((r) => r.symbol === 'D')!;
   expect(d.percent).toBe(0); // rounded to 0.1 - the raw truth is preserved by the flag
   expect(d.roundedZero).toBe(true);
+  expect(d.share).toBeCloseTo(0.0004, 6); // raw ratio survives for geometry
   expect(fmtPercent(d.percent, d.roundedZero)).toBe('<0.1');
   expect(fmtPercent(58.3, false)).toBe('58.3');
   expect(fmtPercent(0, false)).toBe('0'); // a truly zero value still reads 0

@@ -5,6 +5,9 @@ export type Slice = {
   color: string;
   /** True when the true share rounds to 0.0% - the legend/aria must say '<0.1', never '0'. */
   roundedZero?: boolean;
+  /** Exact raw fraction (0..1) for geometry; falls back to percent/100. A sub-0.05% slice
+   *  keeps its true raw-ratio arc instead of collapsing to zero from the rounded display. */
+  share?: number;
 };
 const R = 42;
 const C = 2 * Math.PI * R;
@@ -19,7 +22,7 @@ export function Donut({
   /** Optional center text replacing the slice count (e.g. '1 chain'). */
   center?: string;
 }) {
-  const lens = slices.map((s) => (Math.max(0, Math.min(100, s.percent)) * C) / 100);
+  const lens = slices.map((s) => Math.max(0, Math.min(1, s.share ?? s.percent / 100)) * C);
   const starts = lens.map((_, i) => lens.slice(0, i).reduce((x, y) => x + y, 0));
   const pct = (s: Slice) => (s.roundedZero ? '<0.1' : `${s.percent}`);
   const label = slices.map((s) => `${s.label} ${pct(s)} percent`).join(', ');

@@ -52,6 +52,9 @@ export function networkAllocation(positions: readonly Position[]) {
     // Only the bounded percentage becomes a Number; monetary calculations remain exact.
     percent: total === 0n ? 0 : Number((value * 1000n + total / 2n) / total) / 10,
     roundedZero: total !== 0n && value > 0n && (value * 1000n + total / 2n) / total === 0n,
+    // Exact raw fraction (6dp) for GEOMETRY: a 0.04% slice keeps its true 0.0004 share in the
+    // ring even though its rounded display percent is 0. Display never reads geometry.
+    share: total === 0n ? 0 : Number((value * 1000000n + total / 2n) / total) / 1000000,
   }));
 }
 
@@ -84,6 +87,7 @@ export function assetAllocation(positions: readonly Position[]) {
       value: v.value,
       percent: total === 0n ? 0 : Number((v.value * 1000n + total / 2n) / total) / 10,
       roundedZero: total !== 0n && v.value > 0n && (v.value * 1000n + total / 2n) / total === 0n,
+      share: total === 0n ? 0 : Number((v.value * 1000000n + total / 2n) / total) / 1000000,
     }));
 }
 /** Stable palette index per symbol so a symbol keeps its colour in the donut, legend and table. */
