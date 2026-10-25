@@ -3120,3 +3120,42 @@ html {
 .bfcache-mask [data-sensitive] {
   visibility: hidden;
 }
+
+/* Combined-view proof section (simulated aggregation) */
+.combined .metric-grid {
+  margin: 14px 0;
+}
+.combined-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+  font-size: 14px;
+}
+.combined-table caption {
+  text-align: left;
+  margin-bottom: 6px;
+}
+.combined-table th,
+.combined-table td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid #2b2b33;
+  vertical-align: middle;
+}
+.combined-table th {
+  font-weight: 600;
+  color: var(--muted, #9a97a3);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.combined .badge-ok {
+  border-color: #2f6b4f;
+  background: #12251c;
+  color: #7fd6a8;
+}
+.combined .badge-warn {
+  border-color: #8a6d2f;
+  background: #2b210f;
+  color: #f0c36d;
+}

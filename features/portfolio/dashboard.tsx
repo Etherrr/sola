@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { Allocation } from './allocation';
 import { PositionTable } from './position-table';
 import { PageIntro, SimulatedNotice } from '@/components/ui';
+import { CombinedWallets } from './combined-wallets';
 import { fixture } from './fixture';
 import { money, summarize, uniqueExposures } from './model';
 type View = 'overview' | 'assets' | 'positions' | 'risk';
@@ -62,6 +63,7 @@ export function Dashboard({ view = 'overview' }: { view?: View }) {
         DEMO has no sample price. Its value is unknown, so these totals are incomplete. LP receipts
         are excluded to avoid counting the same exposure twice.
       </p>
+      {view === 'overview' ? <CombinedWallets /> : null}
       {view === 'risk' ? (
         <div className="risk-grid">
           <section className="panel">
