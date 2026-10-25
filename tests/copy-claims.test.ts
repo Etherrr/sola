@@ -10,6 +10,33 @@ describe('copy never claims a wallet is empty when the read failed', () => {
   );
 });
 
+describe('Aave V3 preparatory scope language', () => {
+  const read = readFileSync('server/portfolio/aave-v3-read.ts', 'utf8');
+  const mod = readFileSync('server/portfolio/aave-v3.ts', 'utf8');
+  it('never claims all debt: the interface reads variable debt only and the module says so', () => {
+    expect(mod).toContain('variable-debt balances per reserve');
+    expect(mod).toContain('must never describe the result as all debt');
+    expect(read).not.toMatch(/all (of )?(your |the )?debt/i);
+  });
+  it('observation time is the stored-index time, never "current now"', () => {
+    // The phrase wraps a comment line; pin the contiguous binding parts.
+    expect(read).toContain("lastUpdateTimestamp (the index used for its balances), not the fetch time");
+    // The binding statement lives in the decoder module header; pin it there.
+    expect(mod).toContain("never as 'current now'");
+    expect(read).not.toMatch(/as of now|live balance/i);
+  });
+  it('positions carry no value until the verified feed layer prices them', () => {
+    expect(read).toContain('valueUsd: null');
+    expect(read).not.toContain('priceInMarketReferenceCurrency: r');
+  });
+  it('no account-total or comprehensive-exposure claim exists in the preparatory layer', () => {
+    for (const src of [read, mod]) {
+      expect(src).not.toMatch(/total (account|portfolio|exposure|net worth)/i);
+      expect(src).not.toMatch(/comprehensive|complete (exposure|picture|view)/i);
+    }
+  });
+});
+
 describe('education privacy copy matches live Track behavior', () => {
   it('the security lesson scopes "sends nothing" to the exercise, never to real lookups', () => {
     const lessons = readFileSync('content/lessons/index.ts', 'utf8');
