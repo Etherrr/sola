@@ -32,7 +32,7 @@ test('all routes render, remain responsive, and pass WCAG automated checks', asy
   for (const route of routes) {
     const response = await page.goto(route);
     expect(response?.status(), route).toBe(200);
-    await expect(page.locator('h1')).toBeVisible();
+    await expect(page.locator('#main h1')).toBeVisible();
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
       route,
@@ -59,18 +59,18 @@ test('beginner, experienced and demo entry points work', async ({ page, isMobile
   await page.getByRole('link', { name: 'Skip this lesson' }).click();
   await expect(page).toHaveURL(/\/start\/wallets\/?$/);
   await page.getByRole('radio', { name: 'Keeping keys on a separate device' }).check();
-  await expect(page.getByRole('status')).toContainText('Research hardware');
+  await expect(page.locator('#main').getByRole('status')).toContainText('Research hardware');
   await page.goto('/connect');
   await expect(page.locator('input')).toHaveCount(0);
   await page.getByRole('link', { name: 'Open simulated portfolio' }).click();
-  await expect(page.getByText('$11,000.00', { exact: true })).toBeVisible();
+  await expect(page.locator('#main').getByText('$11,000.00', { exact: true })).toBeVisible();
   // Phones show the holdings as a list; larger screens show the table. Same data either way.
   await expect(
     isMobile
-      ? page.locator('.pos-cards li', { hasText: 'Price unavailable' })
-      : page.getByRole('cell', { name: /Unknown.*Price unavailable/ }),
+      ? page.locator('#main .pos-cards li', { hasText: 'Price unavailable' })
+      : page.locator('#main').getByRole('cell', { name: /Unknown.*Price unavailable/ }),
   ).toBeVisible();
-  await expect(page.locator('.mode-marker')).toContainText('SIMULATED');
+  await expect(page.locator('#main .mode-marker')).toContainText('SIMULATED');
 });
 test('security quiz gives feedback and optional local progress can be cleared', async ({
   page,
@@ -78,10 +78,10 @@ test('security quiz gives feedback and optional local progress can be cleared', 
   await page.goto('/start/security');
   await page.getByRole('radio', { name: 'Enter it to verify the account' }).check();
   await page.getByRole('button', { name: 'Check answer' }).click();
-  await expect(page.getByText(/Try again\./)).toBeVisible();
+  await expect(page.locator('#main').getByText(/Try again\./)).toBeVisible();
   await page.getByRole('radio', { name: 'Stop and leave the site' }).check();
   await page.getByRole('button', { name: 'Check answer' }).click();
-  await expect(page.getByText(/That’s right\./)).toBeVisible();
+  await expect(page.locator('#main').getByText(/That’s right\./)).toBeVisible();
   expect(await page.evaluate(() => localStorage.length)).toBe(0);
   await page.goto('/settings');
   await page.getByRole('checkbox').check();
@@ -90,7 +90,7 @@ test('security quiz gives feedback and optional local progress can be cleared', 
   await page.getByRole('button', { name: 'Check answer' }).click();
   await page.reload();
   await page.goto('/learn');
-  await expect(page.getByText('1 of 6 modules completed')).toBeVisible();
+  await expect(page.locator('#main').getByText('1 of 6 modules completed')).toBeVisible();
   await page.goto('/settings');
   await page.getByRole('button', { name: 'Clear all lesson progress' }).click();
   expect(await page.evaluate(() => localStorage.length)).toBe(0);
@@ -104,9 +104,9 @@ test('swap exercise is educational and never exposes a signing action', async ({
   });
   await page.goto('/start/defi');
   await page.getByRole('button', { name: 'Next step' }).click();
-  await expect(page.getByText(/148.50 USDC/)).toBeVisible();
+  await expect(page.locator('#main').getByText(/148.50 USDC/)).toBeVisible();
   await page.getByRole('button', { name: 'Next step' }).click();
-  await expect(page.getByRole('button', { name: 'Restart exercise' })).toBeVisible();
+  await expect(page.locator('#main').getByRole('button', { name: 'Restart exercise' })).toBeVisible();
   await expect(
     page.getByRole('button', { name: /sign|connect|approve|submit transaction/i }),
   ).toHaveCount(0);
@@ -133,7 +133,7 @@ test('keyboard navigation, mobile menu, reduced motion, and missing page', async
   }
   const response = await page.goto('/missing-page');
   expect(response?.status()).toBe(404);
-  await expect(page.getByRole('heading', { name: 'That page isn’t here.' })).toBeVisible();
+  await expect(page.locator('#main').getByRole('heading', { name: 'That page isn’t here.' })).toBeVisible();
 });
 test('storage failures preserve a usable learning session', async ({ page }) => {
   await page.addInitScript(() => {
@@ -144,12 +144,12 @@ test('storage failures preserve a usable learning session', async ({ page }) => 
     });
   });
   await page.goto('/settings');
-  await expect(page.getByRole('status')).toContainText('unavailable');
+  await expect(page.locator('#main').getByRole('status')).toContainText('unavailable');
   await page.getByRole('checkbox').click();
-  await expect(page.getByRole('status')).toContainText('could not be saved');
+  await expect(page.locator('#main').getByRole('status')).toContainText('could not be saved');
   await expect(page.getByRole('checkbox')).not.toBeChecked();
   await page.getByRole('button', { name: 'Clear all lesson progress' }).click();
-  await expect(page.getByRole('status')).toContainText('Clear site data');
+  await expect(page.locator('#main').getByRole('status')).toContainText('Clear site data');
 });
 test('preview responses include privacy and framing protections', async ({ request }) => {
   const response = await request.get('/portfolio');
@@ -178,7 +178,7 @@ test('security decision lab: choices reveal consequences in place, with no text 
   page,
 }) => {
   await page.goto('/learn/security-lab');
-  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  await expect(page.locator('#main').getByRole('heading', { level: 1 })).toBeVisible();
   await expect(page.locator('input:not([type="radio"]), textarea')).toHaveCount(0);
   const seed = page.getByRole('group', { name: /Support asks for your recovery phrase/ });
   const check = seed.getByRole('button', { name: 'Check my choice' });
@@ -378,8 +378,10 @@ test.describe('entrance', () => {
     isMobile,
   }) => {
     await page.goto('/portfolio');
+    // Scope to #main: Next streams a hidden duplicate segment (#S:0) for ~170-190ms
+    // after navigation; unscoped locators can transiently resolve to both copies.
     const vis = (sel: string) =>
-      page.locator(sel).evaluateAll((els) =>
+      page.locator(`#main ${sel}`).evaluateAll((els) =>
         els.some((e) => {
           const r = e.getBoundingClientRect();
           return r.width > 0 && r.right <= window.innerWidth && r.left >= 0;
@@ -387,15 +389,15 @@ test.describe('entrance', () => {
       );
     if (isMobile) {
       expect(await vis('.pos-cards li .pos-val')).toBe(true);
-      await expect(page.locator('.pos-cards')).toBeVisible();
-      await expect(page.locator('.pos-cards .debt')).toContainText('−$1,000.00');
-      await expect(page.locator('.pos-cards')).toContainText('Price unavailable');
-      await expect(page.locator('.table-scroll')).toBeHidden();
+      await expect(page.locator('#main .pos-cards')).toBeVisible();
+      await expect(page.locator('#main .pos-cards .debt')).toContainText('−$1,000.00');
+      await expect(page.locator('#main .pos-cards')).toContainText('Price unavailable');
+      await expect(page.locator('#main .table-scroll')).toBeHidden();
     } else {
-      await expect(page.locator('.pos-cards')).toBeHidden();
-      await expect(page.locator('.table-scroll')).toBeVisible();
+      await expect(page.locator('#main .pos-cards')).toBeHidden();
+      await expect(page.locator('#main .table-scroll')).toBeVisible();
     }
-    await expect(page.locator('svg.donut')).toHaveAttribute('aria-label', /ETH 37.5 percent/);
+    await expect(page.locator('#main svg.donut')).toHaveAttribute('aria-label', /ETH 37.5 percent/);
   });
 
   test('Tab out of the account control closes it; a route change rechecks the session', async ({
@@ -446,7 +448,7 @@ test.describe('entrance', () => {
     await expect(page.locator('.entrance')).not.toHaveClass(/intro/);
     await expect(page.locator('.entrance-curtain')).toHaveCount(0);
     const name = await page
-      .locator('.entrance-card.edu')
+      .locator('#main .entrance-card.edu')
       .evaluate((el) => getComputedStyle(el).animationName);
     expect(name).toBe('none');
   });
@@ -514,7 +516,7 @@ test('the top-bar network selector and the track form share one selection', asyn
   await expect(select.locator('option[disabled]')).toHaveCount(0);
   // Selecting Solana in the top bar switches the form to the Solana label and coverage.
   await select.selectOption('solana');
-  await expect(page.getByText('Public Solana address (Solana mainnet)')).toBeVisible();
+  await expect(page.locator('#main').getByText('Public Solana address (Solana mainnet)')).toBeVisible();
   // And the form chip reflects the same single selection.
   await expect(page.getByRole('button', { name: 'Solana (SOL only)' })).toHaveAttribute(
     'aria-pressed',
@@ -523,7 +525,7 @@ test('the top-bar network selector and the track form share one selection', asyn
   // Switching back from the form chip moves the top-bar selector too.
   await page.getByRole('button', { name: 'Ethereum', exact: true }).click();
   await expect(select).toHaveValue('ethereum');
-  await expect(page.getByText('Public Ethereum address (Ethereum mainnet)')).toBeVisible();
+  await expect(page.locator('#main').getByText('Public Ethereum address (Ethereum mainnet)')).toBeVisible();
 });
 
 test('corporate site link is reachable on every width', async ({ page }) => {
