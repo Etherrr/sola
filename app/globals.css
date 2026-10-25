@@ -3650,6 +3650,37 @@ html {
   font-size: 0.9rem;
   font-style: italic;
 }
+/* Plan section 9: quiet compact badges carry the limits; prose lives in expandable details. */
+.ov2-coverage,
+.combined-coverage {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.cov-badge {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  padding: 3px 10px;
+  white-space: nowrap;
+}
+.cov-details {
+  flex-basis: 100%;
+}
+.cov-details summary {
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.82rem;
+  width: max-content;
+}
+.cov-details p,
+.cov-details ul {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
 .ov2-net + .ov2-net {
   margin-top: 22px;
   padding-top: 20px;

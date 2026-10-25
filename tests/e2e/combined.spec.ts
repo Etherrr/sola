@@ -149,12 +149,18 @@ test('loads nothing until asked, then renders the real combined view with per-ad
   await expect(section.getByText('3 of 3')).toBeVisible();
   await expect(section.getByText('05:55 – 05:58 UTC')).toBeVisible();
   await expect(section.getByText(/One source was unreachable/)).toBeVisible();
+  // Compact badges visible; the full honesty notes live one tap away in the details panel.
+  await expect(section.getByText('Ethereum: ETH + 4 tokens')).toBeVisible();
+  await expect(section.getByText('Solana: SOL balance only')).toBeVisible();
+  await expect(section.getByText('Observed, not owned')).toBeVisible();
+  await expect(section.getByText(/Coverage: Ethereum ETH plus USDC, USDT, DAI and WETH/)).toHaveCount(1);
+  await section.locator('.cov-details summary').click();
   await expect(section.getByText(/Coverage: Ethereum ETH plus USDC, USDT, DAI and WETH/)).toBeVisible();
   await expect(section.getByText(/not a zero balance/)).toBeVisible();
   await expect(section.getByText(/observed, not proven to be yours/)).toBeVisible();
   await expect(section.getByText(/Refreshes only when you ask/)).toBeVisible();
   await expect(section.getByText(/Sources: test-live via the read-only API/)).toBeVisible();
-  await expect(section.getByText(/Prices updated/)).toBeVisible();
+  await expect(section.getByText(/Prices Oct 25, 2026 · 05:55 UTC/)).toBeVisible();
   await expect(section.getByRole('button', { name: 'Refresh now' })).toBeVisible();
   await section.scrollIntoViewIfNeeded();
   await page.screenshot({ path: `test-results/combined-${info.project.name}.png` });

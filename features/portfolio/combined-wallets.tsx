@@ -279,6 +279,17 @@ export function CombinedWallets() {
                 ))}
             </ul>
           ) : null}
+          <div className="combined-coverage">
+            <span className="cov-badge">Ethereum: ETH + 4 tokens</span>
+            <span className="cov-badge">Solana: SOL balance only</span>
+            <span className="cov-badge">Observed, not owned</span>
+            {ready.result.priceAsOf ? (
+              <span className="cov-badge">
+                Prices {dayLabel(ready.result.priceAsOf)} · {hhmm(ready.result.priceAsOf)} UTC
+              </span>
+            ) : null}
+            <details className="cov-details">
+              <summary>Coverage details</summary>
           <ul className="fine muted combined-notes">
             <li>
               Coverage: Ethereum ETH plus USDC, USDT, DAI and WETH (five assets total); Solana
@@ -293,12 +304,9 @@ export function CombinedWallets() {
             {ready.providers.length > 0 ? (
               <li>Sources: {ready.providers.join(', ')} via the read-only API.</li>
             ) : null}
-            {ready.result.priceAsOf ? (
-              <li>
-                Prices updated {dayLabel(ready.result.priceAsOf)} · {hhmm(ready.result.priceAsOf)} UTC.
-              </li>
-            ) : null}
           </ul>
+            </details>
+          </div>
           <button
             type="button"
             className="button secondary"

@@ -1649,8 +1649,10 @@ test('v2 combined balances: explicit load combines saved addresses honestly', as
   await expect(block.getByText('Addresses loaded')).toBeVisible();
   await expect(block.getByText('2 of 2', { exact: true })).toBeVisible();
   await expect(block.getByText('1 with a priced value')).toBeVisible();
-  // The Solana coverage limit travels with the result.
-  await expect(block.getByText(/Solana lookups show the SOL balance only/)).toBeVisible();
+  // The Solana coverage limit travels with the result: compact badge visible,
+  // full prose one tap away in the expandable details.
+  await expect(block.getByText('Solana: SOL balance only')).toBeVisible();
+  await expect(block.locator('.cov-details')).toContainText(/Solana lookups show the SOL balance only/);
   const vaultRow = block.getByRole('row', { name: /Vault/ });
   await expect(vaultRow).toContainText('n/a');
   await expect(vaultRow).toContainText('+ 1 unknown');
@@ -1659,7 +1661,7 @@ test('v2 combined balances: explicit load combines saved addresses honestly', as
   await expect(mainRow).toContainText('Loaded');
   // Incomplete is named with its reason; sources keep their own time.
   await expect(block.getByText(/Incomplete: 1 unpriced asset/)).toBeVisible();
-  await expect(block.getByText(/never zero/)).toBeVisible();
+  await expect(block.locator('.cov-details')).toContainText(/never zero/);
   // Two networks read in the same minute (17.875s vs 58.082s) collapse to ONE formatted
   // time - the metric never renders a "9:00 PM – 9:00 PM" style duplicate range.
   const read = block.locator('.metric', { hasText: 'Balances read' }).locator('strong');
@@ -2232,9 +2234,11 @@ test('v2 allocation derives from the same combined read - no extra provider requ
   await expect(alloc.getByText('$4,500.00')).toBeVisible();
   await expect(alloc.getByRole('img', { name: 'Allocation: Ethereum 100 percent' })).toBeVisible();
   await expect(alloc.getByText('ETH', { exact: true })).toBeVisible();
-  await expect(alloc.getByText(/Coverage: 2 of 2 addresses loaded/)).toBeVisible();
-  await expect(alloc.getByText(/1 unpriced asset unknown/)).toBeVisible();
-  await expect(alloc.getByText(/never zero/)).toBeVisible();
+  await expect(alloc.getByText('2 of 2 addresses loaded', { exact: true })).toBeVisible();
+  await expect(alloc.getByText('1 unpriced asset unknown', { exact: true })).toBeVisible();
+  await expect(alloc.getByText('Solana: SOL balance only')).toBeVisible();
+  await expect(alloc.locator('.cov-details')).toContainText(/Coverage: 2 of 2 addresses loaded/);
+  await expect(alloc.locator('.cov-details')).toContainText(/never zero/);
   await expect(alloc.getByRole('link', { name: 'Manage addresses' })).toHaveAttribute(
     'href',
     '#ov2-addresses',
@@ -2439,9 +2443,11 @@ test('v2 combined balances: a partial address counts as loaded and explains itse
   ).toBeVisible();
   await expect(block.locator('.badge-warn').first()).toHaveText('PARTIAL');
   await expect(block.getByText('Main: Aave V3 read failed: rate limited.')).toBeVisible();
-  // Allocation coverage explains the same partial status.
+  // Allocation coverage explains the same partial status: badges visible, prose in details.
   const alloc = main.locator('.ov2-allocation');
-  await expect(
-    alloc.getByText(/Coverage: 1 of 1 address loaded \(1 partial - some sources did not answer\)/),
-  ).toBeVisible();
+  await expect(alloc.getByText('1 of 1 address loaded', { exact: true })).toBeVisible();
+  await expect(alloc.getByText('1 partial', { exact: true })).toBeVisible();
+  await expect(alloc.locator('.cov-details')).toContainText(
+    /Coverage: 1 of 1 address loaded \(1 partial - some sources did not answer\)/,
+  );
 });

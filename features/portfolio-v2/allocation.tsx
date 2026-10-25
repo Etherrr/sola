@@ -97,23 +97,43 @@ export function AllocationV2() {
           ))}
         </ul>
       </div>
-      <p className="ov2-quiet">
-        Coverage: {loadedCount} of {phase.totalSaved}{' '}
-        {phase.totalSaved === 1 ? 'address' : 'addresses'} loaded
-        {partialCount > 0
-          ? ` (${partialCount} partial - some sources did not answer)`
-          : ''}
-        {failed > 0 ? ` · ${failed} failed` : ''}
-        {unpriced > 0
-          ? ` · ${unpriced} unpriced ${unpriced === 1 ? 'asset' : 'assets'} unknown`
-          : ''}
-        . Percentages are of gross priced holdings only - debt and unpriced are excluded,
-        never zero.
-        {hasSolana ? ' Solana lookups show the SOL balance only.' : ''}
-        {phase.result.priceAsOf
-          ? ` Prices updated ${fmtTimestamp(phase.result.priceAsOf)}.`
-          : ''}
-      </p>
+      <div className="ov2-coverage">
+        <span className="cov-badge">
+          {loadedCount} of {phase.totalSaved} {phase.totalSaved === 1 ? 'address' : 'addresses'}{' '}
+          loaded
+        </span>
+        {partialCount > 0 ? <span className="cov-badge">{partialCount} partial</span> : null}
+        {failed > 0 ? <span className="cov-badge">{failed} failed</span> : null}
+        {unpriced > 0 ? (
+          <span className="cov-badge">
+            {unpriced} unpriced {unpriced === 1 ? 'asset' : 'assets'} unknown
+          </span>
+        ) : null}
+        {hasSolana ? <span className="cov-badge">Solana: SOL balance only</span> : null}
+        {phase.result.priceAsOf ? (
+          <span className="cov-badge">Prices {fmtTimestamp(phase.result.priceAsOf)}</span>
+        ) : null}
+        <details className="cov-details">
+          <summary>Coverage details</summary>
+          <p>
+            Coverage: {loadedCount} of {phase.totalSaved}{' '}
+            {phase.totalSaved === 1 ? 'address' : 'addresses'} loaded
+            {partialCount > 0
+              ? ` (${partialCount} partial - some sources did not answer)`
+              : ''}
+            {failed > 0 ? ` · ${failed} failed` : ''}
+            {unpriced > 0
+              ? ` · ${unpriced} unpriced ${unpriced === 1 ? 'asset' : 'assets'} unknown`
+              : ''}
+            . Percentages are of gross priced holdings only - debt and unpriced are excluded,
+            never zero.
+            {hasSolana ? ' Solana lookups show the SOL balance only.' : ''}
+            {phase.result.priceAsOf
+              ? ` Prices updated ${fmtTimestamp(phase.result.priceAsOf)}.`
+              : ''}
+          </p>
+        </details>
+      </div>
       <p className="actions">
         <a className="button secondary" href="#ov2-addresses">
           Manage addresses

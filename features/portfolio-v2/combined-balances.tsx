@@ -165,13 +165,22 @@ export function CombinedBalances() {
                 ))}
             </ul>
           ) : null}
-          <p className="ov2-quiet">
-            Priced values cover only assets with verified-feed prices; anything else is unknown,
-            never zero. Each address counted once.
-            {hasSolana ? ' Solana lookups show the SOL balance only.' : ''}
-            {ready.providers.length > 0 ? ` Sources: ${ready.providers.join(', ')}.` : ''}{' '}
-            {ready.result.priceAsOf ? `Prices updated ${fmtTimestamp(ready.result.priceAsOf)}.` : ''}
-          </p>
+          <div className="ov2-coverage">
+            <span className="cov-badge">Verified-feed prices only</span>
+            {hasSolana ? <span className="cov-badge">Solana: SOL balance only</span> : null}
+            {ready.result.priceAsOf ? (
+              <span className="cov-badge">Prices {fmtTimestamp(ready.result.priceAsOf)}</span>
+            ) : null}
+            <details className="cov-details">
+              <summary>Coverage details</summary>
+              <p>
+                Priced values cover only assets with verified-feed prices; anything else is
+                unknown, never zero. Each address counted once.
+                {hasSolana ? ' Solana lookups show the SOL balance only.' : ''}
+                {ready.providers.length > 0 ? ` Sources: ${ready.providers.join(', ')}.` : ''}
+              </p>
+            </details>
+          </div>
           <button
             type="button"
             className="button secondary"
