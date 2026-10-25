@@ -75,6 +75,7 @@ export function SignInForm() {
 
   return (
     <form
+      className="accounts"
       onSubmit={(e) => { e.preventDefault(); if (!busy) void (step.kind === 'email' ? sendCode() : verify()); }}
     >
       {step.kind === 'email' ? (
@@ -88,7 +89,6 @@ export function SignInForm() {
             autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            style={{ width: '100%', maxWidth: '22rem', padding: '0.5rem', marginTop: '0.25rem' }}
           />
         </p>
       ) : (
@@ -104,17 +104,21 @@ export function SignInForm() {
             required
             value={code}
             onChange={(e) => setCode(e.target.value)}
-            style={{ width: '10rem', padding: '0.5rem', marginTop: '0.25rem' }}
           />
         </p>
       )}
       {error && <p role="alert"><em>{error}</em></p>}
-      <p>
-        <button type="submit" disabled={busy}>
+      <p className="actions">
+        <button type="submit" className="button primary" disabled={busy}>
           {busy ? 'Working…' : step.kind === 'email' ? 'Send sign-in code' : 'Sign in'}
         </button>{' '}
         {step.kind === 'code' && (
-          <button type="button" disabled={busy} onClick={() => { setStep({ kind: 'email' }); setError(null); }}>
+          <button
+            type="button"
+            className="button secondary"
+            disabled={busy}
+            onClick={() => { setStep({ kind: 'email' }); setError(null); }}
+          >
             Use a different email
           </button>
         )}

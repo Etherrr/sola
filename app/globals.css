@@ -1635,6 +1635,7 @@ code {
 .track input[type='text'],
 .track input:not([type]),
 .accounts input[type='text'],
+.accounts input[type='email'],
 .accounts input:not([type]) {
   display: block;
   width: 100%;
