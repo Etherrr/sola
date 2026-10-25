@@ -1,8 +1,11 @@
-# Aave V3 positions - preparatory design (NOT active)
+# Aave V3 positions - Track integration (local, pre-review)
 
-Status: **preparatory only**. No live calls, no provider wiring into the lookup path, no UI, no deployment.
-Activation is held until the original owner-approval scope for live DeFi position reads is resolved
-(see "Authority" below). This document is the reviewable milestone for that preparation.
+Status: **integrated and tested locally; not deployed**. The owner approved integration and testing
+on 25 Oct 2026 ("Let's add aave", iMessage phonemsg-01M5SHMNG00XY1MYTYHGPPC2T1 8:47 am, answering the
+proposal to integrate and test read-only Aave V3 Ethereum supplied balances and variable debt on
+Track). The section ships behind the default-off flag PORTFOLIO_AAVE_V3 ('1' only); production is
+unchanged (b05ec66) and any release still requires the independent review + visual verification gate
+and sets the flag only with the enabling deployment.
 
 ## Scope (what this would read, if ever activated)
 
@@ -63,14 +66,28 @@ is named with its value unknown. These positions are not your total account valu
   "you can do everything to get the live app with accounts running as long as the entry stays
   secure. no need for approvals. I trust your judgement".
 
-Composition to resolve BEFORE activation: whether "the live app with accounts running" covers live
-Aave position reads, given the earlier explicit gate on deploying live financial data. That call
-belongs to the owner, presented with both texts; it is not assumed here.
+Composition RESOLVED for integration and testing on 25 Oct 2026: the owner answered the explicit
+proposal ("shall I proceed with integrating and testing read-only supplied balances and variable
+debt?") with "Let's add aave" (iMessage phonemsg-01M5SHMNG00XY1MYTYHGPPC2T1, 8:47 am). The approval
+covers integration and testing with the stated limits (no wallet connection, signing or fund
+movement; current verified pricing only; honest incomplete semantics). Release timing and the
+enabling deployment remain gated by independent review and the standing release discipline.
 
-## Remaining before activation could even be proposed
+## Integration record (25 Oct 2026)
 
-1. Owner scope resolution (above).
-2. UI section + claims wiring behind the reviewed copy, with e2e coverage (mocked RPC only).
-3. Aggregate-model slot for positions (debt direction, no double counting) with unit tests.
-4. One bounded live verification read, only after approval, with observation-time capture.
-5. Progress-File update only at a warranted milestone.
+1. Owner scope resolution: approved for integration and testing (above).
+2. UI section + claims wiring: `features/portfolio/aave-section.tsx` renders the three honest states
+   (positions / true empty / unavailable-never-substituted) from the reviewed copy; e2e covers all
+   three plus parser rejection and flag-off absence (mocked responses only).
+3. Aggregate-model slot: `features/portfolio/aave-model.ts` maps positions to Supplied/Debt rows
+   (debt direction in kind, receipt exclusion, no double counting) with unit tests; Overview wiring
+   is a later milestone, not part of this approval.
+4. Bounded live validation read (25 Oct 2026 ~9:07 am Toronto, one run: 1 multicall + 1 reserves +
+   2 user eth_calls against PublicNode, read-only): the strict decoders accepted the real full
+   mainnet reserves payload and real user payloads; 0x0000...dEaD returned 12 real positions -
+   priced assets valued only by the app's Chainlink feeds, wstETH value Unknown (never zero), real
+   stored-index observation times (e.g. 2026-10-25T13:05:11Z); a true-empty wallet returned an ok
+   empty section. No deployment followed; the read was validation only.
+5. Release: pending independent review of 68c2a0e + 49cf349 on top of the reviewed preparation
+   (base b05ec66); the flag is set only with the enabling deployment (Pages env applies to new
+   deployments only).
