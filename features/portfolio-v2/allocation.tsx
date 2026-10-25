@@ -3,6 +3,7 @@ import { Donut } from '../portfolio/donut';
 import { assetAllocation, money, networkAllocation, symbolColor } from '../portfolio/model';
 import { useNativeSession } from '@/features/auth-v2/native-session';
 import { useCombined } from './combined-context';
+import { fmtTimestamp } from './format-time';
 
 /**
  * At-a-glance allocation for the v0.2 Overview (plan: by chain and holding,
@@ -103,6 +104,9 @@ export function AllocationV2() {
         . Percentages are of gross priced holdings only - debt and unpriced are excluded,
         never zero.
         {hasSolana ? ' Solana lookups show the SOL balance only.' : ''}
+        {phase.result.priceAsOf
+          ? ` Prices updated ${fmtTimestamp(phase.result.priceAsOf)}.`
+          : ''}
       </p>
       <p className="actions">
         <a className="button secondary" href="#ov2-addresses">

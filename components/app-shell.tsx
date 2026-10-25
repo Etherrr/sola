@@ -95,9 +95,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <p className="side-foot">
             v0.1 · PREVIEW
             <br />
-            Demo data is simulated.
+            Demo data.
             <br />
-            Lookups and markets prices show their own mode.
+            Lookups and prices show their own source and time.
           </p>
         </aside>
         <div className="app-body">

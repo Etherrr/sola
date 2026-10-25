@@ -131,7 +131,7 @@ describe('the markets top-bar pill never contradicts the live panel', () => {
     // The sidebar keeps the scoping sentence; the streamlined footer (2026-10-25
     // user steering: one concise safety line) makes NO data-mode claim at all,
     // so it cannot contradict a live panel's own mode label.
-    expect(shell).toContain('Lookups and markets prices show their own mode.');
+    expect(shell).toContain('Lookups and prices show their own source and time.');
     const footer = shell.match(/<footer[\s\S]*?<\/footer>/)?.[0] ?? '';
     expect(footer).toContain('Preview · Read-only · No financial advice.');
     expect(footer).not.toMatch(/simulated|market data|live data/i);

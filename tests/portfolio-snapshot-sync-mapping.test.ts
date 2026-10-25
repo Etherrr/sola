@@ -43,7 +43,7 @@ describe('sync response mapping', () => {
       recorded: false,
       runs: [{ network: 'ethereum', recorded: false, reason: 'simulated_refused' }],
     }));
-    expect(sim).toEqual({ kind: 'ok', recorded: false, notes: ['ethereum: read was simulated - not recorded'] });
+    expect(sim).toEqual({ kind: 'ok', recorded: false, notes: ['ethereum: demo read - not recorded'] });
     // a 200 without runs is a failure shape, not a fake success
     expect(await mapSyncResponse(res(200, { status: 'ok', recorded: true }))).toEqual({ kind: 'failed' });
   });

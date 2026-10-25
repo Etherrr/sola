@@ -152,7 +152,7 @@ test('loads nothing until asked, then renders the real combined view with per-ad
   await expect(section.getByText(/observed, not proven to be yours/)).toBeVisible();
   await expect(section.getByText(/Refreshes only when you ask/)).toBeVisible();
   await expect(section.getByText(/Sources: test-live via the read-only API/)).toBeVisible();
-  await expect(section.getByText(/request time, not an observation time/)).toBeVisible();
+  await expect(section.getByText(/Prices updated/)).toBeVisible();
   await expect(section.getByRole('button', { name: 'Refresh now' })).toBeVisible();
   await section.scrollIntoViewIfNeeded();
   await page.screenshot({ path: `test-results/combined-${info.project.name}.png` });
@@ -188,7 +188,9 @@ test('a failed network marks only its own addresses failed; nothing is substitut
   await expect(section.getByText('FAILED').first()).toBeVisible();
   await expect(section.getByText(/data source is busy/i).first()).toBeVisible();
   await expect(section.getByText(/Incomplete: 0 unpriced/)).toBeVisible();
-  await expect(section.getByText('05:58 – 05:58 UTC')).toBeVisible();
+  // A single shared instant collapses to one time - no misleading "x – x" range.
+  await expect(section.getByText(/· 05:58 UTC$/)).toBeVisible();
+  await expect(section.getByText('05:58 – 05:58 UTC')).toHaveCount(0);
   await section.scrollIntoViewIfNeeded();
   await page.screenshot({ path: `test-results/combined-failed-${info.project.name}.png` });
 });

@@ -83,7 +83,7 @@ export async function mapSyncResponse(res: Response): Promise<SyncOutcome> {
     if (!Array.isArray(b.runs)) return { kind: 'failed' };
     const notes = b.runs
       .filter((r) => !r.recorded)
-      .map((r) => `${r.network}: ${r.reason === 'simulated_refused' ? 'read was simulated - not recorded' : `read failed (${r.reason}) - not recorded`}`);
+      .map((r) => `${r.network}: ${r.reason === 'simulated_refused' ? 'demo read - not recorded' : `read failed (${r.reason}) - not recorded`}`);
     return { kind: 'ok', recorded: b.recorded === true, notes };
   } catch {
     return { kind: 'failed' };

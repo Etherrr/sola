@@ -50,6 +50,10 @@ export type AggregateResult = {
   incomplete: boolean;
   /** Earliest and latest source observation times across contributing addresses. */
   observedRange: { earliest: string; latest: string } | null;
+  /** Oldest USD reference-price update across priced assets - each feed's own update time,
+   *  kept DISTINCT from observedRange (balance read time) so a recent balance read never
+   *  lends its freshness to an older price. Null when nothing is priced. */
+  priceAsOf: string | null;
 };
 
 const NETWORK_NAME: Record<AddressNetwork, Position['network']> = {
@@ -75,6 +79,7 @@ export function aggregateAddresses(inputs: readonly AggregateInput[]): Aggregate
   const perAddress: AddressStatus[] = [];
   const seen = new Set<string>();
   let earliest: string | null = null;
+  let priceAsOf: string | null = null;
   let latest: string | null = null;
 
   for (const input of inputs) {
@@ -129,6 +134,8 @@ export function aggregateAddresses(inputs: readonly AggregateInput[]): Aggregate
         else {
           pricedSum += cents;
           pricedObserved++;
+          if (asset.priceObservedAt && (priceAsOf === null || asset.priceObservedAt < priceAsOf))
+            priceAsOf = asset.priceObservedAt;
         }
         const id = `${input.network}:${input.address}:${asset.assetId}`;
         positions.push({
@@ -168,5 +175,6 @@ export function aggregateAddresses(inputs: readonly AggregateInput[]): Aggregate
     perAddress,
     incomplete,
     observedRange: earliest === null ? null : { earliest, latest: latest as string },
+    priceAsOf,
   };
 }

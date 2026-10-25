@@ -61,7 +61,7 @@ export function Entrance() {
         </h1>
         <p className="entrance-sub">
           Open the app, or learn first. Address lookups read live public balances; sample pages
-          stay clearly simulated. Everything is read-only.
+          are demo data. Everything is read-only.
         </p>
         {email && (
           <p className="entrance-account" data-sensitive>

@@ -204,16 +204,15 @@ export function CombinedWallets() {
               <small>Each address counted once; a duplicate is never a second holding</small>
             </div>
             <div className="metric">
-              <p>Observation window</p>
+              <p>Snapshot taken</p>
               <strong className="obs-value">
                 {ready.result.observedRange
-                  ? `${dayLabel(ready.result.observedRange.earliest)} · ${hhmm(ready.result.observedRange.earliest)} – ${hhmm(ready.result.observedRange.latest)} UTC`
+                  ? ready.result.observedRange.earliest === ready.result.observedRange.latest
+                    ? `${dayLabel(ready.result.observedRange.earliest)} · ${hhmm(ready.result.observedRange.earliest)} UTC`
+                    : `${dayLabel(ready.result.observedRange.earliest)} · ${hhmm(ready.result.observedRange.earliest)} – ${hhmm(ready.result.observedRange.latest)} UTC`
                   : 'n/a'}
               </strong>
-              <small>
-                Each source&apos;s own time, never the request time
-                {mixedSnapshots ? ' · mixed snapshots' : ''}
-              </small>
+              {mixedSnapshots ? <small>Mixed snapshots</small> : null}
             </div>
           </div>
           <div
@@ -290,7 +289,11 @@ export function CombinedWallets() {
             {ready.providers.length > 0 ? (
               <li>Sources: {ready.providers.join(', ')} via the read-only API.</li>
             ) : null}
-            <li>Loaded at your request at {hhmm(ready.loadedAt)} UTC; that is the request time, not an observation time.</li>
+            {ready.result.priceAsOf ? (
+              <li>
+                Prices updated {dayLabel(ready.result.priceAsOf)} · {hhmm(ready.result.priceAsOf)} UTC.
+              </li>
+            ) : null}
           </ul>
           <button
             type="button"

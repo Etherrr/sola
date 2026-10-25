@@ -193,7 +193,7 @@ export function AddressLookup() {
             <p className="ov2-quiet">{state.data.totals.note}</p>
           ) : null}
           <p><em>
-            On-demand lookup{state.data.simulated ? ' (simulated)' : ''} as of{' '}
+            On-demand lookup{state.data.simulated ? ' (demo)' : ''} as of{' '}
             <span title={state.data.observedAt}>{fmtTimestamp(state.data.observedAt)}</span>. Not a recorded observation.
             {state.network === 'solana' ? ' Solana lookups show the SOL balance only.' : ''}
             {state.data.partial ? ' Some sources did not answer - figures may be incomplete.' : ''}

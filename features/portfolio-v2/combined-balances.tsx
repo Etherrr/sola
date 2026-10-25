@@ -78,7 +78,7 @@ export function CombinedBalances() {
         <div data-sensitive>
           <div className="metric-grid">
             <div className="metric">
-              <p>Combined priced value{ready.mode === 'mock' ? ' (simulated)' : ''}</p>
+              <p>Combined priced value{ready.mode === 'mock' ? ' · Demo' : ''}</p>
               {/* n/a, never $0.00, when no address contributed: zero would read as empty wallets. */}
               <strong>{contributing === 0 ? 'n/a' : money(totals.net)}</strong>
               {ready.result.incomplete ? (
@@ -101,15 +101,16 @@ export function CombinedBalances() {
               </small>
             </div>
             <div className="metric">
-              <p>Observation window</p>
+              <p>Snapshot taken</p>
               <strong className="obs-value">
                 {ready.result.observedRange
-                  ? `${fmtTimestamp(ready.result.observedRange.earliest)} – ${fmtTimestamp(
-                      ready.result.observedRange.latest,
-                    )}`
+                  ? ready.result.observedRange.earliest === ready.result.observedRange.latest
+                    ? fmtTimestamp(ready.result.observedRange.earliest)
+                    : `${fmtTimestamp(ready.result.observedRange.earliest)} – ${fmtTimestamp(
+                        ready.result.observedRange.latest,
+                      )}`
                   : 'n/a'}
               </strong>
-              <small>Each source&apos;s own time, never the request time</small>
             </div>
           </div>
           <table className="combined-table ov2-holdings-table">
@@ -167,8 +168,7 @@ export function CombinedBalances() {
             never zero. Each address counted once.
             {hasSolana ? ' Solana lookups show the SOL balance only.' : ''}
             {ready.providers.length > 0 ? ` Sources: ${ready.providers.join(', ')}.` : ''}{' '}
-            Loaded at your request at {fmtTimestamp(ready.loadedAt)} - the request time, not an
-            observation time.
+            {ready.result.priceAsOf ? `Prices updated ${fmtTimestamp(ready.result.priceAsOf)}.` : ''}
           </p>
           <button
             type="button"

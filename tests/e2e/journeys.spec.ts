@@ -1195,7 +1195,7 @@ test('v2 address lookup: on-demand lookup uses the shared rows, disclosure near 
   // The result names the address and network it belongs to.
   await expect(tool.getByText('Balances for')).toBeVisible();
   await expect(tool.getByText('on EVM:')).toBeVisible();
-  await expect(tool.getByText(/On-demand lookup \(simulated\)/)).toBeVisible();
+  await expect(tool.getByText(/On-demand lookup \(demo\)/)).toBeVisible();
   await expect(tool.getByText(/Not a recorded observation/)).toBeVisible();
   // Editing the input clears the result: A's balances never sit beside B.
   await input.fill('0xAbC1230000000000000000000000000000000001');
@@ -1642,7 +1642,7 @@ test('v2 combined balances: explicit load combines saved addresses honestly', as
   await block.getByRole('button', { name: 'Load combined balances' }).click();
   // The EVM address contributes its priced $4,500.00; the SOL address is
   // honestly unpriced (n/a + 1 unknown), never read as zero.
-  await expect(block.getByText('Combined priced value (simulated)')).toBeVisible();
+  await expect(block.getByText('Combined priced value · Demo')).toBeVisible();
   await expect(block.locator('.metric strong').first()).toHaveText('$4,500.00');
   // Loaded and priced are separate ideas with separate numbers (reviewer): both
   // addresses loaded; only the EVM one carries a priced value.
