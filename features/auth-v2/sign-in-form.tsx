@@ -66,10 +66,9 @@ export function SignInForm() {
     return (
       <div>
         <p>
-          <strong>Signed in as {step.email}.</strong> The session cookie is set. Data routes open
-          only for invited accounts; everyone else gets an honest &quot;not entitled&quot; answer.
+          <strong>Signed in as {step.email}.</strong>
         </p>
-        <p><a href="/dev/overview-v2">Open the Overview preview</a></p>
+        <p><a href="/dev/overview-v2">Continue</a></p>
       </div>
     );
 

@@ -19,7 +19,6 @@ const sections = [
   },
 ];
 // The only education trace in the app: one button leading to the separate Education area.
-const startLink = { href: '/welcome', label: 'Start here', icon: '✦', cls: 'nav-settings nav-start-here' };
 const educationLink = { href: '/education', label: 'Education', icon: '◎', cls: 'nav-settings' };
 const settingsLink = { href: '/settings', label: 'Settings', icon: '⚙', cls: 'nav-settings' };
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -79,7 +78,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 ))}
               </div>
             ))}
-            {[startLink, educationLink, settingsLink].map((t) => (
+            {[educationLink, settingsLink].map((t) => (
               <Link
                 key={t.href}
                 href={t.href}

@@ -11,7 +11,7 @@ export default function ErrorPage({
       <p className="eyebrow">A PAUSE IN THE VIEW</p>
       <h1>This view could not load.</h1>
       <p>
-        Try again, or return to the welcome screen. No wallet or financial activity is involved.
+        Try again, or return home. No wallet or financial activity is involved.
       </p>
       <div className="actions">
         <button className="button primary" onClick={reset}>

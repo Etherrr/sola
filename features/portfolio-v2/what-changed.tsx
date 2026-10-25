@@ -82,10 +82,7 @@ export function WhatChanged() {
   if (load.kind === 'loading') return <p><em>Loading recorded history…</em></p>;
   if (load.kind === 'signin')
     return (
-      <p>
-        <em>Sign in to load your recorded history.</em> Native sign-in is being enabled on this
-        preview in stages, behind review; this section reads the live route as soon as it opens.
-      </p>
+      <p><em>Sign in to load your recorded history.</em></p>
     );
   if (load.kind === 'off')
     return <p><em>Recorded history is switched off on this deployment.</em></p>;

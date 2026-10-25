@@ -24,8 +24,7 @@ export default function Settings() {
           host.
         </p>
         <p>
-          New here? The <Link href="/welcome">orientation</Link> summarizes what each area reads
-          and the honest limits. External links open third-party websites under their own terms. This app loads no external
+          External links open third-party websites under their own terms. This app loads no external
           fonts, trackers, or wallet scripts. This preview is protected by Cloudflare Access. A
           formal privacy review is still required before any public launch.
         </p>

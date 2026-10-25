@@ -19,6 +19,8 @@ import { recentlyAuthenticated } from '../auth/sessions';
 import { SESSION_COOKIE, type NativeAuthEnv } from '../auth/email';
 import { requireSameOrigin, requireEntitledSession, type NativeIdentity } from '../auth/guards';
 import type { ChallengeDb } from '../auth/challenges';
+import { createD1Limiter } from '../accounts/d1-limiter';
+import type { LimitWindow } from '../accounts/limiter';
 
 export type AddressNetwork = 'ethereum' | 'solana';
 
@@ -101,6 +103,27 @@ export async function ensurePortfolio(db: ChallengeDb, userId: string, now: stri
   return row.id;
 }
 
+/** CRUD rates (wired at route-enable time, reviewer 2026-10-25): per-USER
+ *  fixed windows, durable across isolates via D1. Reads and writes use
+ *  separate scopes so heavy listing cannot starve a mutation and vice versa.
+ *  Keys are the entitled userId, so the limiter only runs AFTER the
+ *  entitlement gate - unauthenticated traffic 401s without consuming quota. */
+const ADDRESS_READ_WINDOWS: LimitWindow[] = [{ limit: 60, windowMs: 600_000 }];
+const ADDRESS_WRITE_WINDOWS: LimitWindow[] = [{ limit: 30, windowMs: 600_000 }];
+
+async function rateLimit(
+  db: ChallengeDb,
+  scope: 'portfolio_addresses_read' | 'portfolio_addresses_write',
+  windows: LimitWindow[],
+  userId: string,
+  requestId: string,
+): Promise<Response | null> {
+  const lim = await createD1Limiter(db as never, windows, scope).check(userId);
+  return lim.allowed
+    ? null
+    : json(429, { error: 'rate_limited', retryAfterSec: lim.retryAfterSec, requestId });
+}
+
 const ADDRESS_COLS = `pa.network, pa.address, pa.label, pa.verification, pa.created_at`;
 const rowToEntry = (r: { network: string; address: string; label: string; verification: string; created_at: string }): AddressEntry => ({
   network: r.network as AddressNetwork,
@@ -122,6 +145,8 @@ export async function handleAddressesList(req: Request, env: NativeAuthEnv): Pro
   const u = await entitledUser(req, db, false);
   if (u instanceof Response) return u;
   const userId = u;
+  const rl0 = await rateLimit(db, 'portfolio_addresses_read', ADDRESS_READ_WINDOWS, userId, requestId);
+  if (rl0) return rl0;
   const rows = await db
     .prepare(
       `SELECT ${ADDRESS_COLS} FROM portfolio_addresses pa
@@ -148,6 +173,8 @@ export async function handleAddressAdd(req: Request, env: NativeAuthEnv): Promis
   const u = await entitledUser(req, db, false);
   if (u instanceof Response) return u;
   const userId = u;
+  const rl = await rateLimit(db, 'portfolio_addresses_write', ADDRESS_WRITE_WINDOWS, userId, requestId);
+  if (rl) return rl;
 
   let body: Record<string, unknown>;
   try {
@@ -223,6 +250,8 @@ export async function handleAddressRename(req: Request, env: NativeAuthEnv): Pro
   const u = await entitledUser(req, db, false);
   if (u instanceof Response) return u;
   const userId = u;
+  const rl = await rateLimit(db, 'portfolio_addresses_write', ADDRESS_WRITE_WINDOWS, userId, requestId);
+  if (rl) return rl;
 
   let body: Record<string, unknown>;
   try {
@@ -261,6 +290,8 @@ export async function handleAddressRemove(req: Request, env: NativeAuthEnv): Pro
   const u = await entitledUser(req, db, true);
   if (u instanceof Response) return u;
   const userId = u;
+  const rl = await rateLimit(db, 'portfolio_addresses_write', ADDRESS_WRITE_WINDOWS, userId, requestId);
+  if (rl) return rl;
 
   let body: Record<string, unknown>;
   try {

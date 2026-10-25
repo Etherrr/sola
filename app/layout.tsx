@@ -8,7 +8,7 @@ export const metadata: Metadata = {
     'Learn DeFi safely and explore a clearly simulated portfolio. A Sola Capital preview.',
   robots: { index: false, follow: false },
 };
-export const viewport: Viewport = { viewportFit: 'cover' };
+export const viewport: Viewport = { width: 'device-width', initialScale: 1, viewportFit: 'cover' };
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
