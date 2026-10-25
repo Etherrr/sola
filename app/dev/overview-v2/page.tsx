@@ -21,9 +21,10 @@ export default function OverviewV2() {
       <section className="panel">
         <h2>Priced subtotal</h2>
         <p>
-          <em>No priced positions yet.</em> This is a subtotal over recognized, freshly priced
-          positions only - never a claim about your whole portfolio. Unpriced positions are counted
-          separately and never silently valued at zero.
+          <em>Nothing to show yet - this screen is not connected to live data.</em> The secured
+          read routes are being enabled in stages. Connect your addresses to load positions; when
+          connected, this area shows a subtotal over recognized, freshly priced positions only -
+          never a claim about your whole portfolio.
         </p>
       </section>
 
@@ -39,8 +40,9 @@ export default function OverviewV2() {
       <section className="panel">
         <h2>DeFi positions</h2>
         <p>
-          <em>No positions observed.</em> Supplied and borrowed amounts are shown per protocol with
-          signed netting; debt is always visible and never merged into asset balances.
+          <em>Connect your addresses to load positions.</em> Supplied and borrowed amounts are
+          shown per protocol with signed netting; debt is always visible and never merged into
+          asset balances.
         </p>
       </section>
 

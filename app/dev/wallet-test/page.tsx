@@ -61,7 +61,7 @@ Expiration Time: <timestamp, 10 minutes after issue>`}
         </pre>
         <p>
           Solana wallets sign a plain-text message with the same purpose and expiry instead; the
-          SIWE fields above are EVM-specific. If your wallet ever shows a transaction, an approval,
+          Version and Chain ID fields above are EVM-specific. If your wallet ever shows a transaction, an approval,
           or a spending cap instead of a plain sign-in message, <strong>cancel and report it</strong>{' '}
           - that is not this flow.
         </p>
