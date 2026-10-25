@@ -1090,6 +1090,130 @@ test('v2 overview: withdrawal clears every panel without reload; stale mount res
   await expect(main).not.toContainText('1.5');
 });
 
+test('v2 address lookup: on-demand lookup uses the shared rows, disclosure near the action', async ({
+  page,
+}) => {
+  await page.route('**/api/v1/auth/email/session', (r) =>
+    r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'ok', email: 'owner@example.com', fresh: true }),
+    }),
+  );
+  await page.route('**/api/v1/portfolio/addresses**', (r) => {
+    if (r.request().method() !== 'GET') return r.continue();
+    return r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'ok', addresses: [] }),
+    });
+  });
+  await page.route('**/api/v1/portfolio/overview**', (r) =>
+    r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'empty', newerPartial: false }),
+    }),
+  );
+  const resolveBody: unknown = {
+    schemaVersion: 1,
+    mode: 'mock',
+    simulated: true,
+    provider: 'fixture',
+    generatedAt: '2026-10-25T01:00:00Z',
+    observedAt: '2026-10-25T01:00:00Z',
+    wallets: [
+      {
+        address: '0xabc1230000000000000000000000000000000000',
+        partial: false,
+        warnings: [],
+        assets: [
+          {
+            assetId: 'eth/native',
+            symbol: 'ETH',
+            decimals: 18,
+            amount: '1.5',
+            price: '3000',
+            value: '4500',
+          },
+        ],
+      },
+    ],
+    totals: { recognizedPricedSubtotalUsd: '4500', unpricedAssetCount: 0, note: 'test' },
+    partial: false,
+    warnings: [],
+  };
+  await page.route('**/api/v1/portfolio/resolve**', (r) =>
+    r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(resolveBody),
+    }),
+  );
+  await page.goto('/dev/overview-v2');
+  const main = page.locator('#main');
+  const tool = main.locator('.ab-lookup');
+  // The disclosure sits next to the action, before any lookup runs.
+  await expect(
+    tool.getByText(/sends the address you enter to third-party blockchain data providers/),
+  ).toBeVisible();
+  const input = tool.getByLabel('Address to look up');
+  const go = tool.getByRole('button', { name: 'Look up' });
+  // Invalid input: action stays disabled, honest hint, nothing is sent.
+  await input.fill('not-an-address');
+  await expect(go).toBeDisabled();
+  await expect(tool.getByText(/does not look like an EVM or Solana address/)).toBeVisible();
+  // Valid EVM address (mixed case): the shared row shape renders, labeled as
+  // an on-demand simulated lookup, never as recorded history.
+  await input.fill('0xAbC1230000000000000000000000000000000000');
+  await go.click();
+  await expect(tool.getByRole('cell', { name: 'eth/native' })).toBeVisible();
+  await expect(tool.getByRole('cell', { name: '1.5' })).toBeVisible();
+  await expect(tool.getByText(/On-demand lookup \(simulated\)/)).toBeVisible();
+  await expect(tool.getByText(/Not a recorded observation/)).toBeVisible();
+});
+
+test('v2 address lookup: rate limit shows the retry wording, nothing substituted', async ({
+  page,
+}) => {
+  await page.route('**/api/v1/auth/email/session', (r) =>
+    r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'ok', email: 'owner@example.com', fresh: true }),
+    }),
+  );
+  await page.route('**/api/v1/portfolio/addresses**', (r) => {
+    if (r.request().method() !== 'GET') return r.continue();
+    return r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'ok', addresses: [] }),
+    });
+  });
+  await page.route('**/api/v1/portfolio/overview**', (r) =>
+    r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'empty', newerPartial: false }),
+    }),
+  );
+  await page.route('**/api/v1/portfolio/resolve**', (r) =>
+    r.fulfill({
+      status: 429,
+      contentType: 'application/json',
+      headers: { 'retry-after': '42' },
+      body: JSON.stringify({ error: 'rate_limited' }),
+    }),
+  );
+  await page.goto('/dev/overview-v2');
+  const tool = page.locator('#main .ab-lookup');
+  await tool.getByLabel('Address to look up').fill('0xAbC1230000000000000000000000000000000000');
+  await tool.getByRole('button', { name: 'Look up' }).click();
+  await expect(tool.getByText(/Retry in about 42s/)).toBeVisible();
+  await expect(tool.getByRole('cell', { name: 'eth/native' })).toHaveCount(0);
+});
+
 test('shell nav is keyboard-reachable in DOM order', async ({ page }) => {
   await page.goto('/portfolio');
   const nav = page.locator('nav[aria-label="Main"]');
