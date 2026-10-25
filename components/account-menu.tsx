@@ -52,7 +52,7 @@ export function AccountMenu() {
       ? 'Account: session not verified'
       : 'Account';
   return (
-    <div className="acct" ref={root}>
+    <div className="acct" ref={root} data-sensitive>
       <button
         ref={btn}
         type="button"

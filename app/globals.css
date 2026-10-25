@@ -3115,3 +3115,8 @@ html {
 .muted {
   opacity: 0.7;
 }
+
+/* bfcache frozen-snapshot mask: hides identity/saved-data surfaces until revalidation settles */
+.bfcache-mask [data-sensitive] {
+  visibility: hidden;
+}

@@ -256,7 +256,7 @@ export function AccountsPanel() {
               {byNet(n).length === 0 ? (
                 <p className="fine muted">None saved.</p>
               ) : (
-                <ul className="accounts-list">
+                <ul className="accounts-list" data-sensitive>
                   {byNet(n).map((a) => (
                     <li key={a.address} className="accounts-row">
                       {renaming === a.address ? (

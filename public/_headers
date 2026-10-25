@@ -5,3 +5,50 @@
   Permissions-Policy: camera=(), microphone=(), geolocation=()
   X-Robots-Tag: noindex, nofollow
   Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+
+/
+  Cache-Control: no-store
+/404/
+  Cache-Control: no-store
+/track/
+  Cache-Control: no-store
+/portfolio/
+  Cache-Control: no-store
+/portfolio/risk/
+  Cache-Control: no-store
+/portfolio/assets/
+  Cache-Control: no-store
+/portfolio/positions/
+  Cache-Control: no-store
+/settings/
+  Cache-Control: no-store
+/markets/
+  Cache-Control: no-store
+/explore/
+  Cache-Control: no-store
+/connect/
+  Cache-Control: no-store
+/education/
+  Cache-Control: no-store
+/learn/
+  Cache-Control: no-store
+/learn/risks/
+  Cache-Control: no-store
+/learn/network-journey/
+  Cache-Control: no-store
+/learn/security-lab/
+  Cache-Control: no-store
+/learn/addresses/
+  Cache-Control: no-store
+/start/
+  Cache-Control: no-store
+/start/networks/
+  Cache-Control: no-store
+/start/wallets/
+  Cache-Control: no-store
+/start/defi/
+  Cache-Control: no-store
+/start/security/
+  Cache-Control: no-store
+/404.html
+  Cache-Control: no-store

@@ -28,7 +28,10 @@ createServer(async (req,res)=>{
   try {if(!(await stat(filepath)).isFile()) throw Error('missing');}catch{filepath=resolve(root,'404.html');code=404;}
   try{
     const body=await readFile(filepath);
-    res.writeHead(code,{...headers,'Content-Type':mime[extname(filepath)] || 'application/octet-stream'});
+    // HTML documents are never stored (mirrors public/_headers): keeps the back-forward cache
+    // from repainting identity or saved data after a logout in supporting engines.
+    const cache = extname(filepath)==='.html' ? {'Cache-Control':'no-store'} : {};
+    res.writeHead(code,{...headers,...cache,'Content-Type':mime[extname(filepath)] || 'application/octet-stream'});
     res.end(req.method==='HEAD'?undefined:body);
   }catch{res.writeHead(500);res.end('Static export not found. Run npm run build.');}
 }).listen(port,'127.0.0.1',()=>console.log('Static preview on http://127.0.0.1:'+port));
