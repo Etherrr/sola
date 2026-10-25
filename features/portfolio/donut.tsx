@@ -2,7 +2,16 @@ export type Slice = { label: string; key?: string; percent: number; color: strin
 const R = 42;
 const C = 2 * Math.PI * R;
 /** Dependency-free SVG donut. The meaning is carried by the aria-label and the adjacent list, not by colour. */
-export function Donut({ slices, caption }: { slices: Slice[]; caption: string }) {
+export function Donut({
+  slices,
+  caption,
+  center,
+}: {
+  slices: Slice[];
+  caption: string;
+  /** Optional center text replacing the slice count (e.g. '1 chain'). */
+  center?: string;
+}) {
   const lens = slices.map((s) => (Math.max(0, Math.min(100, s.percent)) * C) / 100);
   const starts = lens.map((_, i) => lens.slice(0, i).reduce((x, y) => x + y, 0));
   const label = slices.map((s) => `${s.label} ${s.percent} percent`).join(', ');
@@ -20,15 +29,22 @@ export function Donut({ slices, caption }: { slices: Slice[]; caption: string })
             fill="none"
             stroke={s.color}
             strokeWidth="12"
-            strokeDasharray={`${Math.max(0, len - 0.6)} ${C}`}
+            // A single full ring needs no gap; the 0.6 hairline only separates
+          // adjacent slices, and on one slice it read as a stray seam at 12 o'clock.
+          strokeDasharray={`${slices.length > 1 ? Math.max(0, len - 0.6) : len} ${C}`}
             strokeDashoffset={-starts[i]!}
             transform="rotate(-90 50 50)"
           />
         );
         return el;
       })}
-      <text x="50" y="48" textAnchor="middle" className="donut-n">
-        {slices.length}
+      <text
+        x="50"
+        y={caption === '' ? 53 : 48}
+        textAnchor="middle"
+        className={center !== undefined ? 'donut-c' : 'donut-n'}
+      >
+        {center ?? slices.length}
       </text>
       <text x="50" y="60" textAnchor="middle" className="donut-c">
         {caption}

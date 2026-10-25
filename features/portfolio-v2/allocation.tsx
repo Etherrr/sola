@@ -76,7 +76,8 @@ export function AllocationV2() {
       <div className="alloc-wrap">
         <Donut
           slices={chains.map((c) => ({ label: c.network, percent: c.percent, color: c.color }))}
-          caption="by chain"
+          caption={chains.length === 1 ? '' : 'by chain'}
+          center={chains.length === 1 ? '1 chain' : undefined}
         />
         <ul className="alloc-list">
           {rows.map((r) => (
