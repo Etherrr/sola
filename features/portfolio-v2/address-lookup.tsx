@@ -170,7 +170,14 @@ export function AddressLookup() {
               )}
             </tbody>
           </table>
-          {wallet.aave && <AaveSection section={wallet.aave} exact={exact} />}
+          {wallet.aave && (
+            <>
+              <p className="ov2-quiet ab-lookup-pan-hint">
+                Scroll sideways for debt and observed time.
+              </p>
+              <AaveSection section={wallet.aave} exact={exact} />
+            </>
+          )}
           <p className="ov2-quiet">
             Recognized priced subtotal:{' '}
             {state.data.totals.recognizedPricedSubtotalUsd === null

@@ -1364,6 +1364,10 @@ test('v2 address lookup: Aave V3 positions render separately, debt never netted'
   await expect(section.getByRole('cell', { name: /2,500\.5/ })).toBeVisible();
   // The priced subtotal stays wallet balances only: Aave is never netted in.
   await expect(tool.getByText('Recognized priced subtotal: $4,500')).toBeVisible();
+  // Narrow-width discoverability: the pan hint shows on phones, stays hidden on desktop.
+  const hint = tool.getByText('Scroll sideways for debt and observed time.');
+  if (test.info().project.name === 'mobile') await expect(hint).toBeVisible();
+  else await expect(hint).toBeHidden();
 });
 
 test('v2 address lookup: an Aave-side failure is honest beside intact wallet balances', async ({

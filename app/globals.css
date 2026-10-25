@@ -3572,24 +3572,19 @@ html {
    and pans sideways inside its focusable scroll region instead of stacking into the wallet
    card grid (which would merge the two amounts). */
 .aave-table {
-  table-layout: fixed;
+  /* Columns size to content instead of fixed proportions: a long exact amount
+     (a 24-digit debt) widens the table past its region and pans inside the
+     focusable scroll region at every width - it can never bleed into the next
+     column. width:100% keeps a short table filling its region on desktop;
+     min-width:max-content is the floor that forces growth (and panning)
+     instead of squeezing or overlap. Digits never split (see .amt-num). */
+  table-layout: auto;
   width: 100%;
-  /* Formatted amounts such as 11,392.069003 must never split across lines: the numeric
-     columns are sized for long values, and the table pans inside its focusable scroll
-     region (at every width, including desktop) when they would not fit. */
-  min-width: 38rem;
+  min-width: max-content;
 }
-.aave-table thead th:nth-child(1) {
-  width: 26%;
-}
-.aave-table thead th:nth-child(2) {
-  width: 23%;
-}
-.aave-table thead th:nth-child(3) {
-  width: 23%;
-}
-.aave-table thead th:nth-child(4) {
-  width: 28%;
+.aave-table th,
+.aave-table td {
+  padding-right: 0.9rem;
 }
 .aave-table td,
 .aave-table th {
@@ -3612,6 +3607,17 @@ html {
    stacking into the wallet card grid (which would merge the two amounts). */
 .app .track-output .aave-scroll {
   overflow-x: auto;
+}
+
+/* Pan hint for the v2 Aave table: phones only, where columns pan. */
+.ab-lookup-pan-hint {
+  display: none;
+}
+@media (max-width: 720px) {
+  .ab-lookup-pan-hint {
+    display: block;
+    margin: 0.4rem 0 0;
+  }
 }
 
 /* v0.2 Overview polish (user steering 2026-10-25: v0.2 should be beautiful).
