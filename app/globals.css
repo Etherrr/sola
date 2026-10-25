@@ -3152,7 +3152,21 @@ html {
   flex-wrap: wrap;
   margin: 4px 0 0;
 }
-/* The global .app .panel > .eyebrow rule hides direct-child eyebrows; price cards need theirs. */
+.chip-warn {
+  display: inline-block;
+  padding: 3px 10px;
+  font-size: 0.72rem;
+  border: 1px solid var(--gold, #bb9b60);
+  color: var(--gold, #bb9b60);
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+}
+.price-overview .button {
+  margin-top: 4px;
+}
+
+/* The app shell hides direct-child panel eyebrows; price cards keep theirs
+   because it carries the instrument class and issuer disclosure. */
 .app .panel.price-card > .eyebrow {
   display: block;
 }
