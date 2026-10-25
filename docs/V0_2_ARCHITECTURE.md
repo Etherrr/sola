@@ -77,6 +77,14 @@ every query carries user_id/owner predicates (existing D1 store pattern extends)
   zero; expiry; crash-after-claim; attempt-ID collision.
 - Auth != entitlement: before cutover, run host/direct-origin/preview bypass tests —
   a request that skips the app shell must still fail entitlement server-side.
+- Handler-layer gates for the auth endpoints (reviewer, required at build): a fresh
+  server attempt id per claim request; max-attempt lockout plus rate limits on code
+  verification (the challenges store counts attempts but does NOT lock out — the
+  handler enforces); __Host-/HttpOnly/SameSite=Lax session cookies; entitlement
+  middleware on every route; claim-copy reverification per §4.2; reauthentication
+  rotates the session to refresh the 10-minute sensitive window. Known acceptable
+  minor: two concurrently issued challenges for the same subject can mutually
+  supersede (availability retry) — documented, not a security hole.
 - Negative-path test matrix (all mandatory before cutover): recovery at least as strong
   as primary sign-in with recent reauthentication for sensitive changes; OTP replay and
   rate limits; passkey RP-ID/origin/credential-ID checks; session fixation, revocation
@@ -98,13 +106,25 @@ every query carries user_id/owner predicates (existing D1 store pattern extends)
    staging rehearsal on the isolated preview D1 with synthetic fixtures only.
 1. Ship native auth + entitlement enforcement alongside Access (Access still gates the
    host; app ALSO requires native session for account data). Dual-gate phase.
-2. Claim flow: existing Access user signs in natively with the SAME email (verified by
-   native email challenge). The app then shows their Access-linked saved addresses
-   (read via the still-valid Access JWT in the same browser session) and offers
-   "bring these into my Sola account". On confirm, server copies rows from
-   tracked_addresses(owner=access-key) to portfolio_addresses(user) — never keyed on
-   email text alone: the binding evidence is the live Access JWT + verified native
-   email in one session.
+2. Claim flow: the existing Access user signs in natively, then reaches the claim
+   route, which the Access application KEEPS protecting (see 5. claim window). The
+   claim endpoint server-reverifies BOTH credentials at copy time: the native session
+   (destination user_id, from the server-side session row) AND the live Access JWT
+   (source owner key = iss#sub, verified with jose against the team domain). Neither
+   value is ever client-supplied; a browser-side display check is not verification.
+   On confirm, the server copies rows from tracked_addresses(owner=access iss#sub) to
+   portfolio_addresses(destination user) — never keyed on email text alone.
+
+   Email-matching policy (explicit): DEFAULT is matching emails — the Access JWT email
+   and the natively verified email must be the same mailbox. A differing-email claim
+   (Access identity email A, native account email B) is permitted ONLY with (a) the
+   live Access JWT proving control of identity A, (b) a verified native session for
+   account B, and (c) an explicit confirmation screen naming BOTH addresses before
+   copy; the claim record stores both iss#sub and both email claims for audit.
+   Cross-email metadata attachment is never silent. Rationale: the Access JWT alone
+   proves control of the source identity; the email match is a friction-reducing
+   default, not the security boundary, so a considered differing-email path with
+   explicit user confirmation is safe and covers mailbox changes.
 3. Reconciliation: after claims, row counts and labels are reconciled between
    tracked_addresses and portfolio_addresses per owner; unmatched legacy rows stay
    claimable. Matching email/mailbox text alone is NEVER continuity proof — the binding
@@ -123,7 +143,7 @@ every query carries user_id/owner predicates (existing D1 store pattern extends)
    owner-assisted claim: the owner verifies the requester controls the legacy Access
    identity out-of-band (reply from the verified mailbox on file) and approves each
    assisted claim individually.
-4. Cutover: after QA (invited new user, returning user, wallet-verified, two-account
+6. Cutover: after QA (invited new user, returning user, wallet-verified, two-account
    isolation, expired session, provider timeout), remove the customer-facing Access
    policy on the app host; keep Access on preview/staging hosts and admin. Documented
    rollback = re-enable the Access policy (no data change).
@@ -133,7 +153,7 @@ every query carries user_id/owner predicates (existing D1 store pattern extends)
   isolated preview D1 database bound only for preview (separation verified before any
   mutation; synthetic fixtures only). Production D1 is never a test-write fallback.
 
-## 7. Native email verification dependency (blocking for the email path)
+## 6. Native email verification dependency (blocking for the email path)
 
 The claim flow and the plan's email-first path both require NATIVELY verified email,
 and the retained Access email-code factor is a staging bridge only — it does not
@@ -155,7 +175,7 @@ Access mailbox as the continuity anchor only where the native account is wallet-
 and explicitly claims the Access email as a watched contact — otherwise it waits for
 the email decision.
 
-## 8. Open items
+## 7. Open items
 - WebAuthn server library for Workers runtime: @simplewebauthn/server is the candidate
   (claims Workers support) pending an exact Pages packaging/runtime spike on staging;
   WebCrypto Ed25519 exists in the Workers runtime but is not package-compatibility
