@@ -3320,23 +3320,32 @@ html {
 .aave-table {
   table-layout: fixed;
   width: 100%;
+  /* Formatted amounts such as 11,392.069003 must never split across lines: the numeric
+     columns are sized for long values, and the table pans inside its focusable scroll
+     region (at every width, including desktop) when they would not fit. */
+  min-width: 38rem;
 }
 .aave-table thead th:nth-child(1) {
-  width: 30%;
+  width: 26%;
 }
 .aave-table thead th:nth-child(2) {
-  width: 20%;
+  width: 23%;
 }
 .aave-table thead th:nth-child(3) {
-  width: 20%;
+  width: 23%;
 }
 .aave-table thead th:nth-child(4) {
-  width: 30%;
+  width: 28%;
 }
 .aave-table td,
 .aave-table th {
   white-space: normal;
   overflow-wrap: anywhere;
+}
+.aave-table .amt-num {
+  white-space: nowrap;
+  overflow-wrap: normal;
+  font-variant-numeric: tabular-nums;
 }
 /* The caption inherits nowrap from the global table rule; a long caption line would force the
    table wider than its scroll region at every viewport. */
@@ -3344,11 +3353,9 @@ html {
   white-space: normal;
   overflow-wrap: anywhere;
 }
-@media (max-width: 640px) {
-  .app .track-output .aave-scroll {
-    overflow-x: auto;
-  }
-  .aave-table {
-    min-width: 34rem;
-  }
+/* The aave table keeps its 38rem floor at every width (see the min-width comment above);
+   on phones the section pans sideways inside its focusable scroll region instead of
+   stacking into the wallet card grid (which would merge the two amounts). */
+.app .track-output .aave-scroll {
+  overflow-x: auto;
 }

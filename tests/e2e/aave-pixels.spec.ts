@@ -10,9 +10,11 @@ const aaveOk = {
       underlyingAsset: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
       symbol: 'USDC',
       decimals: 6,
-      supplied: '500.25',
+      // Real-magnitude long formatted values: the defect they guard against is a
+      // formatted number splitting mid-value across two lines in a narrow cell.
+      supplied: '11392.069003',
       variableDebt: '0',
-      suppliedValueUsd: '500.25',
+      suppliedValueUsd: '11390.54',
       variableDebtValueUsd: '0',
       priceSource: 'chainlink:USDC/USD',
       priceObservedAt: '2026-10-23T11:58:00Z',
@@ -25,9 +27,9 @@ const aaveOk = {
       symbol: 'DAI',
       decimals: 18,
       supplied: '0',
-      variableDebt: '120.5',
+      variableDebt: '1234567.891234567890123456',
       suppliedValueUsd: '0',
-      variableDebtValueUsd: '120.5',
+      variableDebtValueUsd: '1234567.89',
       priceSource: 'chainlink:DAI/USD',
       priceObservedAt: '2026-10-23T11:58:00Z',
       observedAt: '2026-10-21T02:14:20Z',
@@ -83,6 +85,13 @@ test.describe('Aave V3 section pixels', () => {
       await setup(page, aaveOk);
       // No horizontal overflow at any width.
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+      // Formatted amounts never wrap mid-number: each .amt-num renders on one line.
+      for (const el of await page.locator('#main .aave-table .amt-num').all()) {
+        expect(await el.evaluate((n) => getComputedStyle(n).whiteSpace)).toBe('nowrap');
+        expect(await el.evaluate((n) => n.getBoundingClientRect().height)).toBeLessThanOrEqual(
+          await el.evaluate((n) => parseFloat(getComputedStyle(n).fontSize) * 1.6),
+        );
+      }
       await page.screenshot({ path: `output/playwright/aave-positions-${width}.png`, fullPage: true });
     }
   });

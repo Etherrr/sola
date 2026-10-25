@@ -74,7 +74,7 @@ export function AaveSection({ section, exact }: { section: ApiAaveSection; exact
                       {p.reserveNote && <small className="muted warn"> {p.reserveNote}</small>}
                     </th>
                     <td role="cell" className="t-amount" data-unit={p.symbol}>
-                      {fmtAmount(p.supplied, exact)}
+                      <span className="amt-num">{fmtAmount(p.supplied, exact)}</span>
                       <small className="muted price-src">
                         {p.suppliedValueUsd === null
                           ? 'value Unknown'
@@ -82,7 +82,7 @@ export function AaveSection({ section, exact }: { section: ApiAaveSection; exact
                       </small>
                     </td>
                     <td role="cell" className="t-amount" data-unit={p.symbol}>
-                      {fmtAmount(p.variableDebt, exact)}
+                      <span className="amt-num">{fmtAmount(p.variableDebt, exact)}</span>
                       <small className="muted price-src">
                         {p.variableDebtValueUsd === null
                           ? 'value Unknown'
