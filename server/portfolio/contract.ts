@@ -18,11 +18,38 @@ export type Asset = {
   priceObservedAt: string | null;
 };
 
+/** One Aave V3 reserve position for a wallet: supplied and variable-debt balances only. */
+export type AavePositionView = {
+  underlyingAsset: string;
+  symbol: string;
+  decimals: number;
+  /** Normalized decimal strings; a '0' side is a true zero, never a failed read. */
+  supplied: string;
+  variableDebt: string;
+  /** USD values exist only when the app's own verified Chainlink feeds priced this asset. */
+  suppliedValueUsd: string | null;
+  variableDebtValueUsd: string | null;
+  priceSource: string | null;
+  priceObservedAt: string | null;
+  /** The reserve's stored-index observation time (its lastUpdateTimestamp), ISO-8601 UTC. */
+  observedAt: string;
+  usageAsCollateralEnabled: boolean;
+  /** Static note when the reserve is not active, frozen or paused; null otherwise. */
+  reserveNote: string | null;
+};
+
+/** The Aave V3 section of one wallet's result. Absent entirely when the feature is off or the
+ *  network is not Ethereum; a failure is an honest unavailable state, never an empty list. */
+export type AaveSection =
+  | { status: 'ok'; positions: AavePositionView[] }
+  | { status: 'unavailable'; reason: 'rate_limited' | 'timeout' | 'unavailable' | 'bad_response' };
+
 export type WalletResult = {
   address: string;
   assets: Asset[];
   partial: boolean;
   warnings: string[];
+  aave?: AaveSection;
 };
 
 export type ResolveResponse = {

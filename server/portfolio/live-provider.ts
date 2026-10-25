@@ -1,6 +1,12 @@
 import { formatUnits, valueUsd } from './units';
-import type { Asset, WalletResult } from './contract';
-import type { Diag, PortfolioProvider, ProviderResult } from './provider';
+import type { AavePositionView, Asset, WalletResult } from './contract';
+import type { Diag, FetchOptions, PortfolioProvider, ProviderResult } from './provider';
+import {
+  readAaveV3PositionsForUsers,
+  type AavePosition,
+  type RpcCall,
+  type RpcFailure,
+} from './aave-v3-read';
 import {
   addressWord,
   decodeAggregate3,
@@ -24,6 +30,15 @@ export const MAX_FUTURE_S = 30;
 export const MAX_CLOCK_SKEW_S = 120;
 // Multicall3, canonical address per https://github.com/mds1/multicall3 (read 23 Oct 2026).
 export const MULTICALL3 = '0xcA11bde05977b3631167028862bE2a173976CA11';
+
+// Aave V3 on Ethereum mainnet (bgd-labs/aave-address-book; deployed source verified via
+// Sourcify's address-scoped lookup, 25 Oct 2026 - see docs/AAVE_V3_POSITIONS.md).
+export const AAVE_UI_POOL_DATA_PROVIDER = '0x2dAd8162A989cd99D673dE4425Bb2298Db1E1aA2';
+export const AAVE_POOL_ADDRESSES_PROVIDER = '0x2f39d218133AFaB8F2B819B1066c7E434Ad94E9e';
+// The reserves payload is large (every listed reserve), so it gets its own generous-but-bounded
+// cap and its own deadline: an Aave failure must degrade only the Aave section, never the lookup.
+export const AAVE_MAX_RESPONSE_BYTES = 256 * 1024;
+export const AAVE_DEADLINE_MS = 5000;
 
 type FeedId = 'ETH/USD' | 'USDC/USD' | 'USDT/USD' | 'DAI/USD';
 // Feed addresses and descriptions were read on-chain on 2026-10-23 (description() matched) and match
@@ -117,7 +132,7 @@ export function createLiveProvider(over: Partial<LiveDeps> = {}): PortfolioProvi
   return {
     name: 'publicnode-rpc+chainlink',
     simulated: false,
-    async fetchWallets(addresses, signal): Promise<ProviderResult> {
+    async fetchWallets(addresses, signal, opts?: FetchOptions): Promise<ProviderResult> {
       let diag: Diag = { step: 'build' };
       const fail = (kind: 'rate_limited' | 'timeout' | 'unavailable' | 'bad_response') =>
         ({ ok: false, provider: 'publicnode-rpc+chainlink', kind, diag }) as const;
@@ -321,6 +336,122 @@ export function createLiveProvider(over: Partial<LiveDeps> = {}): PortfolioProvi
           w.warnings.push(
             'Some prices are unavailable or stale; those values are Unknown, not zero.',
           );
+      // Aave V3 positions (only when the deployment enables them): read through the same
+      // PublicNode endpoint - no new vendor, no key. Any failure degrades this section to an
+      // honest unavailable state; the wallet balances above are already settled and unaffected.
+      if (opts?.aave) {
+        // One bounded eth_call per request through the same JSON-RPC discipline as the
+        // multicall above, with its own deadline so a slow Aave read cannot consume the
+        // whole lookup budget.
+        const aaveRpc: RpcCall = async (to, data) => {
+          const fail = (reason: RpcFailure) => ({ ok: false as const, reason });
+          const ctl = new AbortController();
+          const onOuter = () => ctl.abort();
+          if (signal.aborted) ctl.abort();
+          else signal.addEventListener('abort', onOuter, { once: true });
+          const timer = setTimeout(() => ctl.abort(), AAVE_DEADLINE_MS);
+          try {
+            let res: Response;
+            try {
+              res = await d.fetch(d.rpcUrl, {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({
+                  jsonrpc: '2.0',
+                  id: 1,
+                  method: 'eth_call',
+                  params: [{ to, data }, 'latest'],
+                }),
+                signal: ctl.signal,
+                redirect: 'manual',
+              });
+            } catch {
+              return fail(ctl.signal.aborted && !signal.aborted ? 'timeout' : 'unavailable');
+            }
+            if (res.status === 429) return fail('rate_limited');
+            if (!res.ok) return fail('unavailable');
+            let text: string | null;
+            try {
+              text = await readCapped(res, AAVE_MAX_RESPONSE_BYTES);
+            } catch {
+              return fail(ctl.signal.aborted && !signal.aborted ? 'timeout' : 'unavailable');
+            }
+            if (text === null) return fail('bad_response');
+            let parsed: Rpc;
+            try {
+              parsed = JSON.parse(text) as Rpc;
+            } catch {
+              return fail('bad_response');
+            }
+            if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed))
+              return fail('bad_response');
+            if (parsed.jsonrpc !== '2.0' || parsed.id !== 1) return fail('bad_response');
+            if ((parsed.error === undefined) === (parsed.result === undefined))
+              return fail('bad_response');
+            if (parsed.error !== undefined) {
+              const code = (parsed.error as { code?: unknown } | null)?.code;
+              return fail(code === -32005 || code === -32029 ? 'rate_limited' : 'unavailable');
+            }
+            if (typeof parsed.result !== 'string' || !HEX.test(parsed.result))
+              return fail('bad_response');
+            return { ok: true as const, result: parsed.result };
+          } finally {
+            clearTimeout(timer);
+            signal.removeEventListener('abort', onOuter);
+          }
+        };
+        const sections = await readAaveV3PositionsForUsers(aaveRpc, {
+          poolAddressesProvider: AAVE_POOL_ADDRESSES_PROVIDER,
+          uiPoolDataProvider: AAVE_UI_POOL_DATA_PROVIDER,
+          users: addresses,
+        });
+        // Prices come only from this app's own verified Chainlink feeds (read in the multicall
+        // above), matched by the underlying token address - never from Aave's reference prices.
+        const feedFor = new Map(TOKENS.map((t) => [t.address.toLowerCase(), t.feed] as const));
+        const view = (p: AavePosition): AavePositionView => {
+          const feedId = feedFor.get(p.underlyingAsset.toLowerCase());
+          const price = feedId ? prices.get(feedId) : undefined;
+          const notes: string[] = [];
+          if (!p.reserveFlags.isActive) notes.push('not active');
+          if (p.reserveFlags.isFrozen) notes.push('frozen');
+          if (p.reserveFlags.isPaused) notes.push('paused');
+          return {
+            underlyingAsset: p.underlyingAsset,
+            symbol: p.symbol,
+            decimals: p.decimals,
+            supplied: formatUnits(p.suppliedRaw, p.decimals),
+            variableDebt: formatUnits(p.variableDebtRaw, p.decimals),
+            suppliedValueUsd:
+              p.suppliedRaw === 0n ? '0' : price ? valueUsd(p.suppliedRaw, p.decimals, price.price) : null,
+            variableDebtValueUsd:
+              p.variableDebtRaw === 0n
+                ? '0'
+                : price
+                  ? valueUsd(p.variableDebtRaw, p.decimals, price.price)
+                  : null,
+            priceSource: price && feedId ? `chainlink:${feedId}` : null,
+            priceObservedAt: price ? price.at : null,
+            // The reserve's stored-index observation time, never the fetch time.
+            observedAt: new Date(Number(p.observedAt) * 1000).toISOString(),
+            usageAsCollateralEnabled: p.usageAsCollateralEnabled,
+            reserveNote: notes.length ? `This reserve is ${notes.join(' and ')} on Aave.` : null,
+          };
+        };
+        wallets.forEach((w, i) => {
+          const s = sections.get(addresses[i]!);
+          if (!s || s.kind === 'unavailable') {
+            w.aave = {
+              status: 'unavailable',
+              reason:
+                !s || s.reason === 'bad_payload' || s.reason === 'bad_response'
+                  ? 'bad_response'
+                  : s.reason,
+            };
+            return;
+          }
+          w.aave = { status: 'ok', positions: s.positions.map(view) };
+        });
+      }
       return {
         ok: true,
         provider: 'publicnode-rpc+chainlink',

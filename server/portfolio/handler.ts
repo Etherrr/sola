@@ -26,6 +26,8 @@ export type Env = {
   PORTFOLIO_LOOKUP_LIMIT?: string;
   /** Optional approved D1 binding; when present the limiter adds a durable global counter layer. */
   PORTFOLIO_ACCOUNTS_DB?: D1Like;
+  /** Aave V3 read-only positions on Ethereum lookups. Only the exact string '1' turns it on. */
+  PORTFOLIO_AAVE_V3?: string;
 };
 export type Deps = {
   provider: PortfolioProvider;
@@ -230,7 +232,9 @@ export async function handleResolve(
           ? d.solanaLiveProvider
           : d.solanaProvider
         : pick(env, d)
-      ).fetchWallets(parsed.value.addresses, ctl.signal),
+      ).fetchWallets(parsed.value.addresses, ctl.signal, {
+        aave: parsed.value.network === 'ethereum' && env.PORTFOLIO_AAVE_V3 === '1',
+      }),
       new Promise<never>((_, rej) =>
         ctl.signal.addEventListener('abort', () => rej(new Error('timeout'))),
       ),
@@ -311,7 +315,10 @@ export async function handleResolve(
     totals: {
       recognizedPricedSubtotalUsd: subtotal === null ? null : fmt(subtotal),
       unpricedAssetCount: unpriced,
-      note: 'Wallet balances only: DeFi deposits, staking, debts, LP claims and other positions may be missing; the subtotal is not total net worth.',
+      note:
+        parsed.value.network === 'ethereum' && env.PORTFOLIO_AAVE_V3 === '1'
+          ? 'Wallet balances only: DeFi deposits, staking, debts, LP claims and other positions may be missing; Aave V3 positions are listed separately and are never added to this subtotal; the subtotal is not total net worth.'
+          : 'Wallet balances only: DeFi deposits, staking, debts, LP claims and other positions may be missing; the subtotal is not total net worth.',
     },
     partial: result.wallets.some((w) => w.partial),
     warnings: result.simulated
@@ -320,9 +327,13 @@ export async function handleResolve(
         ? [
             'Live read-only Solana data. Only the SOL balance is checked; SPL tokens (including USDC and USDT), NFTs and DeFi positions are not shown. A missing token is not a zero balance.',
           ]
-        : [
-            'Live read-only Ethereum data. Only ETH, USDC, USDT, DAI and WETH are checked; other tokens, NFTs and DeFi positions are not shown.',
-          ],
+        : env.PORTFOLIO_AAVE_V3 === '1'
+          ? [
+              'Live read-only Ethereum data. Wallet balances cover only ETH, USDC, USDT, DAI and WETH; Aave V3 shows supplied and variable-debt positions only (no stable debt, health factor or APY). Other tokens, NFTs and other DeFi positions are not shown.',
+            ]
+          : [
+              'Live read-only Ethereum data. Only ETH, USDC, USDT, DAI and WETH are checked; other tokens, NFTs and DeFi positions are not shown.',
+            ],
   };
   return reply(200, body);
 }
@@ -337,7 +348,12 @@ export async function handleHealth(
     return err(405, 'method_not_allowed', 'Use GET.', requestId, { allow: 'GET' });
   const blocked = await gate(req, env, d, requestId);
   if (blocked) return blocked;
-  return reply(200, { status: 'ok', mode: pick(env, d).simulated ? 'mock' : 'live', requestId });
+  return reply(200, {
+    status: 'ok',
+    mode: pick(env, d).simulated ? 'mock' : 'live',
+    aave: env.PORTFOLIO_AAVE_V3 === '1',
+    requestId,
+  });
 }
 
 export async function handleNetworks(

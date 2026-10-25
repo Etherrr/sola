@@ -11,11 +11,31 @@ export type ApiAsset = {
   priceSource?: string | null;
   priceObservedAt?: string | null;
 };
+/** One Aave V3 reserve position: supplied and variable-debt balances only (never all debt). */
+export type ApiAavePosition = {
+  underlyingAsset: string;
+  symbol: string;
+  decimals: number;
+  supplied: string;
+  variableDebt: string;
+  suppliedValueUsd: string | null;
+  variableDebtValueUsd: string | null;
+  priceSource: string | null;
+  priceObservedAt: string | null;
+  /** The reserve's stored-index observation time (not the request or fetch time). */
+  observedAt: string;
+  usageAsCollateralEnabled: boolean;
+  reserveNote: string | null;
+};
+export type ApiAaveSection =
+  | { status: 'ok'; positions: ApiAavePosition[] }
+  | { status: 'unavailable'; reason: 'rate_limited' | 'timeout' | 'unavailable' | 'bad_response' };
 export type ApiWallet = {
   address: string;
   assets: ApiAsset[];
   partial: boolean;
   warnings: string[];
+  aave?: ApiAaveSection;
 };
 export type ApiSuccess = {
   mode: 'mock' | 'live';
@@ -45,6 +65,32 @@ const isDecOrNull = (v: unknown) => v === null || isDec(v);
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null;
 const strArr = (v: unknown): v is string[] => Array.isArray(v) && v.every(isStr);
 
+const AAVE_REASONS = ['rate_limited', 'timeout', 'unavailable', 'bad_response'];
+function isAaveSection(v: unknown): v is ApiAaveSection {
+  if (!isObj(v)) return false;
+  if (v.status === 'unavailable')
+    return isStr(v.reason) && (AAVE_REASONS as string[]).includes(v.reason);
+  if (v.status !== 'ok') return false;
+  if (!Array.isArray(v.positions) || v.positions.length > 100) return false;
+  for (const p of v.positions) {
+    if (!isObj(p)) return false;
+    if (!isStr(p.underlyingAsset) || !/^0x[0-9a-fA-F]{40}$/.test(p.underlyingAsset)) return false;
+    if (!isStr(p.symbol) || p.symbol.length === 0 || p.symbol.length > 20) return false;
+    const dec = p.decimals;
+    if (typeof dec !== 'number' || !Number.isInteger(dec) || dec < 0 || dec > 77) return false;
+    if (!isDec(p.supplied) || !isDec(p.variableDebt)) return false;
+    if (!isDecOrNull(p.suppliedValueUsd) || !isDecOrNull(p.variableDebtValueUsd)) return false;
+    for (const k of ['priceSource', 'priceObservedAt', 'reserveNote'] as const) {
+      const val = p[k];
+      if (val !== null && (!isStr(val) || val.length > 160)) return false;
+    }
+    if (typeof p.usageAsCollateralEnabled !== 'boolean') return false;
+    if (!isStr(p.observedAt) || Number.isNaN(Date.parse(p.observedAt))) return false;
+    if (isStr(p.priceObservedAt) && Number.isNaN(Date.parse(p.priceObservedAt))) return false;
+  }
+  return true;
+}
+
 /** Strict runtime check of the whole response. Anything unexpected is rejected, never guessed. */
 export function parseApiSuccess(raw: unknown): ApiSuccess | null {
   if (!isObj(raw)) return null;
@@ -64,6 +110,7 @@ export function parseApiSuccess(raw: unknown): ApiSuccess | null {
   for (const w of raw.wallets) {
     if (!isObj(w) || !isStr(w.address) || typeof w.partial !== 'boolean' || !strArr(w.warnings))
       return null;
+    if (w.aave !== undefined && !isAaveSection(w.aave)) return null;
     if (!Array.isArray(w.assets) || w.assets.length > 200) return null;
     for (const a of w.assets) {
       if (!isObj(a) || !isStr(a.assetId) || !isStr(a.symbol) || !Number.isInteger(a.decimals))
@@ -351,8 +398,10 @@ export async function fetchSession(signal?: AbortSignal): Promise<SessionState> 
 }
 
 export type DataMode = 'mock' | 'live' | 'unknown';
-/** Which data mode lookups use on this deployment (same-origin health endpoint; no address is sent). */
-export async function fetchDataMode(signal?: AbortSignal): Promise<DataMode> {
+export type HealthInfo = { mode: DataMode; aave: boolean };
+/** One same-origin health read (no address is sent): the deployment's data mode and whether it
+ *  reads Aave V3 positions. Unknown health degrades to 'unknown'/false, never a guessed state. */
+export async function fetchHealth(signal?: AbortSignal): Promise<HealthInfo> {
   try {
     const r = await fetch('/api/v1/health', {
       cache: 'no-store',
@@ -361,10 +410,17 @@ export async function fetchDataMode(signal?: AbortSignal): Promise<DataMode> {
     });
     const j: unknown = r.ok ? await r.json() : null;
     const m = (j as { mode?: unknown } | null)?.mode;
-    return m === 'mock' || m === 'live' ? m : 'unknown';
+    return {
+      mode: m === 'mock' || m === 'live' ? m : 'unknown',
+      aave: (j as { aave?: unknown } | null)?.aave === true,
+    };
   } catch {
-    return 'unknown';
+    return { mode: 'unknown', aave: false };
   }
+}
+/** Which data mode lookups use on this deployment. */
+export async function fetchDataMode(signal?: AbortSignal): Promise<DataMode> {
+  return (await fetchHealth(signal)).mode;
 }
 
 /**

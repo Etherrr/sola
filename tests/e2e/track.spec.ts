@@ -771,3 +771,121 @@ test.describe('manual retries and request ownership', () => {
     });
   });
 });
+
+test.describe('/track Aave V3 positions section', () => {
+  const aavePositions = [
+    {
+      underlyingAsset: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+      symbol: 'USDC',
+      decimals: 6,
+      supplied: '500.25',
+      variableDebt: '0',
+      suppliedValueUsd: '500.25',
+      variableDebtValueUsd: '0',
+      priceSource: 'chainlink:USDC/USD',
+      priceObservedAt: '2026-10-23T11:58:00Z',
+      observedAt: '2026-10-21T02:13:20Z',
+      usageAsCollateralEnabled: true,
+      reserveNote: null,
+    },
+    {
+      underlyingAsset: '0x6b175474e89094c44da98b954eedeac495271d0f',
+      symbol: 'DAI',
+      decimals: 18,
+      supplied: '0',
+      variableDebt: '120.5',
+      suppliedValueUsd: '0',
+      variableDebtValueUsd: '120.5',
+      priceSource: 'chainlink:DAI/USD',
+      priceObservedAt: '2026-10-23T11:58:00Z',
+      observedAt: '2026-10-21T02:14:20Z',
+      usageAsCollateralEnabled: false,
+      reserveNote: 'This reserve is frozen on Aave.',
+    },
+  ];
+  const bodyWith = (aave: unknown) => ({
+    ...okBody,
+    wallets: [{ ...okBody.wallets[0], aave }],
+  });
+  const lookup = async (page: Page) => {
+    await page.goto('/track/');
+    await page.locator('#main').getByRole('textbox').fill(ADDR);
+    await page.locator('#main').getByRole('button', { name: /look up/i }).click();
+  };
+
+  test('renders supplied and variable-debt positions with stored-index times and feed-only values', async ({
+    page,
+  }) => {
+    await mock(page, 200, bodyWith({ status: 'ok', positions: aavePositions }));
+    await lookup(page);
+    const main = page.locator('#main');
+    const section = main.getByRole('region', { name: 'Aave V3 positions (Ethereum)' });
+    await expect(main.getByRole('heading', { name: 'Aave V3 positions (Ethereum)' })).toBeVisible();
+    await expect(section.getByText(/Supplied and variable-debt balances on Aave V3 \(Ethereum\) only/)).toBeVisible();
+    await expect(section.getByText(/No stable debt, health factor, APY, or other protocols/)).toBeVisible();
+    await expect(section.getByText(/A missing position is not a zero/)).toBeVisible();
+    // USDC supplied row: amount + USD value from the app's own feed, collateral flag noted.
+    const usdc = section.getByRole('row', { name: /USDC/ });
+    await expect(usdc.getByRole('cell').nth(0)).toContainText('500.25');
+    await expect(usdc.getByRole('cell').nth(0)).toContainText('$500.25');
+    await expect(usdc.getByRole('cell').nth(1)).toContainText('0');
+    await expect(usdc.getByRole('cell').nth(2)).toContainText('reserve stored index time 2026-10-21 02:13 UTC');
+    await expect(usdc.getByRole('rowheader')).toContainText('usable as collateral');
+    // DAI debt row: debt in the debt column, never negative styling, reserve note shown.
+    const dai = section.getByRole('row', { name: /DAI/ });
+    await expect(dai.getByRole('cell').nth(1)).toContainText('120.5');
+    await expect(dai.getByRole('cell').nth(1)).toContainText('$120.50');
+    await expect(dai.getByRole('rowheader')).toContainText('This reserve is frozen on Aave.');
+    await expect(dai.getByRole('cell').nth(2)).toContainText('reserve stored index time 2026-10-21 02:14 UTC');
+    await expect(section.getByText(/not your total account value/)).toBeVisible();
+    // The wallet subtotal stays wallet-only: it is the fixture's $3,000, not positions-inclusive.
+    await expect(main.getByText(/Recognized priced subtotal/)).toBeVisible();
+    await expect(main.locator('.track-total')).toContainText('$3,000.00');
+  });
+
+  test('a true empty says so, without implying other protocols were read', async ({ page }) => {
+    await mock(page, 200, bodyWith({ status: 'ok', positions: [] }));
+    await lookup(page);
+    const section = page.locator('#main').getByRole('region', { name: 'Aave V3 positions (Ethereum)' });
+    await expect(section.getByText(/No supplied or variable-debt positions were found/)).toBeVisible();
+    await expect(section.getByText(/Other protocols were not checked/)).toBeVisible();
+    await expect(section.getByRole('table')).toHaveCount(0);
+  });
+
+  test('an Aave-side failure is an honest unavailable section beside intact wallet balances', async ({
+    page,
+  }) => {
+    await mock(page, 200, bodyWith({ status: 'unavailable', reason: 'rate_limited' }));
+    await lookup(page);
+    const main = page.locator('#main');
+    const section = main.getByRole('region', { name: 'Aave V3 positions (Ethereum)' });
+    await expect(section.getByText('Aave positions could not be read. Nothing was substituted.')).toBeVisible();
+    await expect(section.getByText(/no automatic retry/)).toBeVisible();
+    await expect(section.getByRole('table')).toHaveCount(0);
+    // The wallet balances from the same response still render.
+    await expect(main.getByRole('table', { name: /Wallet balances table/ })).toBeVisible();
+    await expect(main.locator('.track-total')).toContainText('$3,000.00');
+  });
+
+  test('a malformed aave section rejects the whole answer rather than guessing', async ({
+    page,
+  }) => {
+    await mock(page, 200, bodyWith({ status: 'ok', positions: [{ symbol: 'USDC' }] }));
+    await lookup(page);
+    await expect(
+      page.locator('#main').getByText(/The answer was not in the expected form/),
+    ).toBeVisible();
+    await expect(
+      page.locator('#main').getByRole('heading', { name: 'Aave V3 positions (Ethereum)' }),
+    ).toHaveCount(0);
+  });
+
+  test('no section is rendered when the server omits it (flag off)', async ({ page }) => {
+    await mock(page, 200, okBody);
+    await lookup(page);
+    await expect(page.locator('#main').getByRole('heading', { name: 'Result' })).toBeVisible();
+    await expect(
+      page.locator('#main').getByRole('heading', { name: 'Aave V3 positions (Ethereum)' }),
+    ).toHaveCount(0);
+  });
+});

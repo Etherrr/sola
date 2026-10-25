@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { readAaveV3Positions, type RpcCall } from '../server/portfolio/aave-v3-read';
+import {
+  readAaveV3Positions,
+  readAaveV3PositionsForUsers,
+  type RpcCall,
+} from '../server/portfolio/aave-v3-read';
 import { keccak256 } from './helpers/keccak';
 
 const sel = (sig: string) => '0x' + keccak256(sig).slice(0, 8);
@@ -75,5 +79,45 @@ describe('readAaveV3Positions', () => {
     const orphan = '0x' + w(0x40) + w(0) + w(1) + aw('0x' + 'ff'.repeat(20)) + w(1) + w(0) + w(0);
     expect(await readAaveV3Positions(caller(encReserves(), orphan), ADDRESSES))
       .toEqual({ kind: 'unavailable', reason: 'bad_payload' });
+  });
+});
+
+describe('readAaveV3PositionsForUsers', () => {
+  const USER2 = '0x' + 'cd'.repeat(20);
+  it('shares one reserves read across users and isolates per-user failures', async () => {
+    let reservesCalls = 0;
+    let userCalls = 0;
+    const rpc: RpcCall = async (_to, data) => {
+      const isReserves = data.startsWith(sel('getReservesData(address)'));
+      if (isReserves) {
+        reservesCalls += 1;
+        return { ok: true, result: encReserves() };
+      }
+      userCalls += 1;
+      // The second user's read fails: only that user's section is unavailable.
+      if (userCalls === 2) return { ok: false, reason: 'rate_limited' };
+      return { ok: true, result: encUser(5n * 10n ** 6n, 0n) };
+    };
+    const out = await readAaveV3PositionsForUsers(rpc, { ...ADDRESSES, users: [ADDRESSES.user, USER2] });
+    expect(reservesCalls).toBe(1);
+    expect(userCalls).toBe(2);
+    expect(out.get(ADDRESSES.user)?.kind).toBe('ok');
+    expect(out.get(USER2)).toEqual({ kind: 'unavailable', reason: 'rate_limited' });
+  });
+  it('a reserves-side failure marks every user unavailable with the same honest reason', async () => {
+    const rpc: RpcCall = async () => ({ ok: false, reason: 'timeout' });
+    const out = await readAaveV3PositionsForUsers(rpc, { ...ADDRESSES, users: [ADDRESSES.user, USER2] });
+    expect(out.get(ADDRESSES.user)).toEqual({ kind: 'unavailable', reason: 'timeout' });
+    expect(out.get(USER2)).toEqual({ kind: 'unavailable', reason: 'timeout' });
+  });
+  it('no users is an empty result with no calls', async () => {
+    let calls = 0;
+    const rpc: RpcCall = async () => {
+      calls += 1;
+      return { ok: false, reason: 'unavailable' };
+    };
+    const out = await readAaveV3PositionsForUsers(rpc, { ...ADDRESSES, users: [] });
+    expect(out.size).toBe(0);
+    expect(calls).toBe(0);
   });
 });

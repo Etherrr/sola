@@ -43,47 +43,79 @@ export type AavePositionsRead =
   | { kind: 'ok'; positions: AavePosition[] }
   | { kind: 'unavailable'; reason: RpcFailure | 'bad_payload' };
 
+export async function readAaveV3PositionsForUsers(
+  rpcCall: RpcCall,
+  addresses: { poolAddressesProvider: string; uiPoolDataProvider: string; users: string[] },
+): Promise<Map<string, AavePositionsRead>> {
+  const out = new Map<string, AavePositionsRead>();
+  if (addresses.users.length === 0) return out;
+  const unavailable = (reason: RpcFailure | 'bad_payload') => {
+    for (const u of addresses.users) out.set(u, { kind: 'unavailable', reason });
+    return out;
+  };
+  // One reserves read serves every requested user; only the per-user read repeats.
+  const reservesRes = await rpcCall(
+    addresses.uiPoolDataProvider,
+    encodeGetReservesData(addresses.poolAddressesProvider),
+  );
+  if (!reservesRes.ok) return unavailable(reservesRes.reason);
+  const reservesDecoded = decodeGetReservesData(reservesRes.result);
+  if (reservesDecoded === null) return unavailable('bad_payload');
+  const byAsset = new Map<string, ReserveData>(
+    reservesDecoded.reserves.map((r) => [r.underlyingAsset, r]),
+  );
+  await Promise.all(
+    addresses.users.map(async (user) => {
+      const userRes = await rpcCall(
+        addresses.uiPoolDataProvider,
+        encodeGetUserReservesData(addresses.poolAddressesProvider, user),
+      );
+      if (!userRes.ok) {
+        out.set(user, { kind: 'unavailable', reason: userRes.reason });
+        return;
+      }
+      const userDecoded = decodeGetUserReservesData(userRes.result);
+      if (userDecoded === null) {
+        out.set(user, { kind: 'unavailable', reason: 'bad_payload' });
+        return;
+      }
+      const positions: AavePosition[] = [];
+      for (const u of userDecoded.userReserves) {
+        if (u.scaledATokenBalance === 0n && u.scaledVariableDebt === 0n) continue;
+        const r = byAsset.get(u.underlyingAsset);
+        if (r === undefined) {
+          // A user position in an unknown reserve: never guess.
+          out.set(user, { kind: 'unavailable', reason: 'bad_payload' });
+          return;
+        }
+        positions.push({
+          underlyingAsset: u.underlyingAsset,
+          symbol: r.symbol,
+          decimals: r.decimals,
+          suppliedRaw: currentSupplied(u.scaledATokenBalance, r.liquidityIndex),
+          variableDebtRaw: currentVariableDebt(u.scaledVariableDebt, r.variableBorrowIndex),
+          usageAsCollateralEnabled: u.usageAsCollateralEnabled,
+          reserveFlags: { isActive: r.isActive, isFrozen: r.isFrozen, isPaused: r.isPaused },
+          aTokenAddress: r.aTokenAddress,
+          variableDebtTokenAddress: r.variableDebtTokenAddress,
+          observedAt: r.lastUpdateTimestamp,
+          valueUsd: null,
+        });
+      }
+      out.set(user, { kind: 'ok', positions });
+    }),
+  );
+  return out;
+}
+
 export async function readAaveV3Positions(
   rpcCall: RpcCall,
   addresses: { poolAddressesProvider: string; uiPoolDataProvider: string; user: string },
 ): Promise<AavePositionsRead> {
-  const [reservesRes, userRes] = await Promise.all([
-    rpcCall(
-      addresses.uiPoolDataProvider,
-      encodeGetReservesData(addresses.poolAddressesProvider),
-    ),
-    rpcCall(
-      addresses.uiPoolDataProvider,
-      encodeGetUserReservesData(addresses.poolAddressesProvider, addresses.user),
-    ),
-  ]);
-  if (!reservesRes.ok) return { kind: 'unavailable', reason: reservesRes.reason };
-  if (!userRes.ok) return { kind: 'unavailable', reason: userRes.reason };
-  const reservesDecoded = decodeGetReservesData(reservesRes.result);
-  const userDecoded = decodeGetUserReservesData(userRes.result);
-  if (reservesDecoded === null || userDecoded === null)
-    return { kind: 'unavailable', reason: 'bad_payload' };
-  const byAsset = new Map<string, ReserveData>(
-    reservesDecoded.reserves.map((r) => [r.underlyingAsset, r]),
-  );
-  const positions: AavePosition[] = [];
-  for (const u of userDecoded.userReserves) {
-    if (u.scaledATokenBalance === 0n && u.scaledVariableDebt === 0n) continue;
-    const r = byAsset.get(u.underlyingAsset);
-    if (r === undefined) return { kind: 'unavailable', reason: 'bad_payload' }; // user position in an unknown reserve: never guess
-    positions.push({
-      underlyingAsset: u.underlyingAsset,
-      symbol: r.symbol,
-      decimals: r.decimals,
-      suppliedRaw: currentSupplied(u.scaledATokenBalance, r.liquidityIndex),
-      variableDebtRaw: currentVariableDebt(u.scaledVariableDebt, r.variableBorrowIndex),
-      usageAsCollateralEnabled: u.usageAsCollateralEnabled,
-      reserveFlags: { isActive: r.isActive, isFrozen: r.isFrozen, isPaused: r.isPaused },
-      aTokenAddress: r.aTokenAddress,
-      variableDebtTokenAddress: r.variableDebtTokenAddress,
-      observedAt: r.lastUpdateTimestamp,
-      valueUsd: null,
-    });
-  }
-  return { kind: 'ok', positions };
+  const byUser = await readAaveV3PositionsForUsers(rpcCall, {
+    poolAddressesProvider: addresses.poolAddressesProvider,
+    uiPoolDataProvider: addresses.uiPoolDataProvider,
+    users: [addresses.user],
+  });
+  return byUser.get(addresses.user)!;
 }

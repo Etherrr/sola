@@ -71,7 +71,8 @@ describe('network-specific result copy never names the wrong chain', () => {
     expect(form).toContain('only when PublicNode answers rate limiting');
   });
   it('the Ethereum result privacy line sends the address to an Ethereum node, never a Solana one', () => {
-    const ethLine = form.match(/sent the address to a public Ethereum node[^"]*"/);
+    // The line is a template literal (it conditionally names the Aave read), so accept either delimiter.
+    const ethLine = form.match(/sent the address to a public Ethereum node[^"`]*["`]/);
     expect(ethLine).not.toBeNull();
     expect(ethLine![0]).not.toContain('Solana node');
   });
@@ -240,5 +241,41 @@ describe('the orientation page is discoverable from the shell', () => {
     expect(shell).toContain("label: 'Start here'");
     expect(menu).toContain('href="/welcome"');
     expect(menu).toContain('Start here - what this app does');
+  });
+});
+
+describe('the Aave V3 section copy stays inside its approved scope', () => {
+  const section = readFileSync('features/portfolio/aave-section.tsx', 'utf8');
+  it('names exactly what is covered and what is not, with no all-debt or net-worth claim', () => {
+    expect(section).toContain('Supplied and variable-debt balances on Aave V3 (Ethereum) only');
+    expect(section).toMatch(/No stable debt,\s+health\s+factor, APY, or other protocols/);
+    expect(section).toContain('A missing position is not a zero');
+    expect(section).toContain('not your total account value');
+    expect(section).not.toMatch(/all (of )?(your |the )?debt/i);
+    expect(section).not.toMatch(/net worth|total exposure|complete (exposure|picture|view)/i);
+  });
+  it('observation times are the reserve stored-index time, never "current now"', () => {
+    expect(section).toContain('reserve stored index time');
+    expect(section).not.toMatch(/as of now|live balance|current now/i);
+  });
+  it('a failed read is an honest unavailable state, never substituted and never a silent empty', () => {
+    expect(section).toContain('Aave positions could not be read. Nothing was substituted.');
+    expect(section).toContain('no automatic retry');
+    expect(section).not.toMatch(/showing (you )?(your )?(last|cached|previous)/i);
+  });
+  it('a true empty says so without implying other protocols were read', () => {
+    expect(section).toContain('No supplied or variable-debt positions were found');
+    expect(section).toContain('Other protocols were not checked');
+  });
+  it('the handler coverage warning names Aave only when the flag is on', () => {
+    const handler = readFileSync('server/portfolio/handler.ts', 'utf8');
+    expect(handler).toContain('Aave V3 shows supplied and variable-debt positions only');
+    expect(handler).toContain('Aave V3 positions are listed separately and are never added to this subtotal');
+    // Both warning variants exist; the old one is preserved for flag-off deployments.
+    expect(handler).toContain('other tokens, NFTs and DeFi positions are not shown.');
+  });
+  it('the Track intro names the Aave scope limits when the deployment enables it', () => {
+    const intro = readFileSync('features/portfolio/track-intro.tsx', 'utf8');
+    expect(intro).toContain('no stable debt, health factor or APY; other DeFi positions are not read');
   });
 });

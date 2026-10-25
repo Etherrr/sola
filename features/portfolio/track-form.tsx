@@ -4,6 +4,7 @@ import { ModeMarker } from '@/components/mode-marker';
 import { lookupAddress, type LookupOutcome } from './api-client';
 import { useTrackNetwork } from './track-network-context';
 import { differsWhenRounded, fmtAmount, fmtPrice, fmtUsd } from './format';
+import { AaveSection } from './aave-section';
 
 const SAMPLES: { label: string; address: string }[] = [
   { label: 'Empty wallet', address: '0x1111111111111111111111111111111111111110' },
@@ -19,7 +20,13 @@ const SOL_SAMPLE = 'So11111111111111111111111111111111111111112';
 const SOL_ADDR = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
 const feedTime = (iso: string) => iso.slice(0, 16).replace('T', ' ') + ' UTC';
-export function TrackForm({ mode = 'mock' }: { mode?: 'checking' | 'mock' | 'live' | 'unknown' }) {
+export function TrackForm({
+  mode = 'mock',
+  aave = false,
+}: {
+  mode?: 'checking' | 'mock' | 'live' | 'unknown';
+  aave?: boolean;
+}) {
   const examples = mode === 'mock';
   // Shared with the top-bar network selector: both controls drive one Track network choice.
   const { network, setNetwork, prefillEvent } = useTrackNetwork();
@@ -194,7 +201,7 @@ export function TrackForm({ mode = 'mock' }: { mode?: 'checking' | 'mock' | 'liv
             {mode === 'live'
               ? network === 'solana'
                 ? "A pasted address is sent to this app's lookup service and then to PublicNode, a public Solana node, to read its SOL balance - or, only when PublicNode answers rate limiting, once to Solana's public RPC endpoint instead. PublicNode's policy text says it keeps data at most 24 hours; that is not verified. The address is not saved in your browser. It is observed, not proven to be yours."
-                : "A pasted address is sent to this app's lookup service and then to PublicNode, a public Ethereum node, to read its balances. PublicNode's policy text says it keeps data at most 24 hours; that is not verified. The address is not saved in your browser. It is observed, not proven to be yours."
+                : `A pasted address is sent to this app's lookup service and then to PublicNode, a public Ethereum node, to read its balances${aave ? ' and its Aave V3 positions' : ''}. PublicNode's policy text says it keeps data at most 24 hours; that is not verified. The address is not saved in your browser. It is observed, not proven to be yours.`
               : mode === 'mock'
                 ? "A pasted address is sent to this app's own lookup service and is not saved in your browser. It is observed, not proven to be yours."
                 : "A pasted address is sent to this app's lookup service. This deployment's mode is not confirmed yet, so the lookup could be live, in which case the address is also sent to a public node. It is not saved in your browser."}
@@ -388,6 +395,7 @@ export function TrackForm({ mode = 'mock' }: { mode?: 'checking' | 'mock' | 'liv
                     </table>
                   </div>
                 )}
+                {w.aave && <AaveSection section={w.aave} exact={exact} />}
                 {w.warnings.map((m) => (
                   <p key={m} className="fine">
                     {m}
@@ -426,7 +434,7 @@ export function TrackForm({ mode = 'mock' }: { mode?: 'checking' | 'mock' | 'liv
                   ? ok.provider === 'solana-public-rpc+chainlink'
                     ? "Privacy: this lookup sent the address from the app server to a public Solana node (Solana's public RPC endpoint, api.mainnet.solana.com), after PublicNode answered rate limiting, and read the Chainlink SOL/USD price feed through a public Ethereum node (PublicNode). The node operators' published data policies are their own statements and are not verified here. Prices are on-chain feed values at the time shown on each feed, not market quotes."
                     : "Privacy: this lookup sent the address to a public Solana node (PublicNode) from the app server, and read the Chainlink SOL/USD price feed through a public Ethereum node (PublicNode). PublicNode's published policy says it keeps IP addresses and request data for at most 24 hours; that is their statement and is not verified here. Prices are on-chain feed values at the time shown on each feed, not market quotes."
-                  : "Privacy: this lookup sent the address to a public Ethereum node (PublicNode) from the app server and read Chainlink USD price feeds through it. PublicNode's published policy says it keeps IP addresses and request data for at most 24 hours; that is their statement and is not verified here. Prices are on-chain feed values at the time shown on each feed, not market quotes."}
+                  : `Privacy: this lookup sent the address to a public Ethereum node (PublicNode) from the app server and read Chainlink USD price feeds through it${ok.wallets.some((w) => w.aave) ? ', plus Aave V3 position data through the same node' : ''}. PublicNode's published policy says it keeps IP addresses and request data for at most 24 hours; that is their statement and is not verified here. Prices are on-chain feed values at the time shown on each feed, not market quotes.`}
               </p>
             )}
           </section>

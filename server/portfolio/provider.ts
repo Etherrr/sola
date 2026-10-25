@@ -25,10 +25,14 @@ export type ProviderResult =
   | { ok: true; provider: string; simulated: boolean; observedAt: string; wallets: WalletResult[] }
   | ({ ok: false; provider: string } & ProviderError);
 
+/** Per-request options. `aave` asks for the Aave V3 positions section (Ethereum only); providers
+ *  that cannot read positions simply omit the section - it is never fabricated. */
+export type FetchOptions = { aave?: boolean };
+
 export interface PortfolioProvider {
   readonly name: string;
   readonly simulated: boolean;
-  fetchWallets(addresses: string[], signal: AbortSignal): Promise<ProviderResult>;
+  fetchWallets(addresses: string[], signal: AbortSignal, opts?: FetchOptions): Promise<ProviderResult>;
 }
 
 type Raw = { id: string; symbol: string; decimals: number; raw: bigint; price: string | null };
@@ -100,10 +104,70 @@ const SCENARIOS: Record<
 };
 const DEFAULT = SCENARIOS['2']!;
 
+// Simulated Aave V3 sections, chosen by the same last-hex-digit rule. Values are invented
+// fixtures labelled simulated by the response itself; nothing is read from any chain.
+type MockAave = WalletResult['aave'];
+const MOCK_AAVE: Record<string, MockAave> = {
+  '0': { status: 'ok', positions: [] }, // a true empty: no positions exist for this fixture
+  '2': {
+    status: 'ok',
+    positions: [
+      {
+        underlyingAsset: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+        symbol: 'USDC',
+        decimals: 6,
+        supplied: '500.25',
+        variableDebt: '0',
+        suppliedValueUsd: '500.25',
+        variableDebtValueUsd: '0',
+        priceSource: 'mock-fixture',
+        priceObservedAt: OBSERVED,
+        observedAt: OBSERVED,
+        usageAsCollateralEnabled: true,
+        reserveNote: null,
+      },
+      {
+        underlyingAsset: '0x6b175474e89094c44da98b954eedeac495271d0f',
+        symbol: 'DAI',
+        decimals: 18,
+        supplied: '0',
+        variableDebt: '120.5',
+        suppliedValueUsd: '0',
+        variableDebtValueUsd: '120.5',
+        priceSource: 'mock-fixture',
+        priceObservedAt: OBSERVED,
+        observedAt: OBSERVED,
+        usageAsCollateralEnabled: false,
+        reserveNote: null,
+      },
+    ],
+  },
+  '3': {
+    status: 'ok',
+    positions: [
+      {
+        underlyingAsset: '0x1f9840a85d5af5bf1d1762f925bdaddc4201f984',
+        symbol: 'UNI',
+        decimals: 18,
+        supplied: '42',
+        variableDebt: '0',
+        suppliedValueUsd: null, // no verified feed price: Unknown, never zero
+        variableDebtValueUsd: '0',
+        priceSource: null,
+        priceObservedAt: null,
+        observedAt: OBSERVED,
+        usageAsCollateralEnabled: true,
+        reserveNote: null,
+      },
+    ],
+  },
+  a: { status: 'unavailable', reason: 'unavailable' },
+};
+
 export const mockProvider: PortfolioProvider = {
   name: 'mock-fixtures',
   simulated: true,
-  async fetchWallets(addresses) {
+  async fetchWallets(addresses, _signal, opts) {
     const last = (a: string) => a.slice(-1).toLowerCase();
     if (addresses.some((a) => last(a) === 'f'))
       return { ok: false, provider: 'mock-fixtures', kind: 'unavailable' };
@@ -113,11 +177,13 @@ export const mockProvider: PortfolioProvider = {
       return { ok: false, provider: 'mock-fixtures', kind: 'timeout' };
     const wallets: WalletResult[] = addresses.map((address) => {
       const sc = SCENARIOS[last(address)] ?? DEFAULT;
+      const aave = opts?.aave ? MOCK_AAVE[last(address)] : undefined;
       return {
         address,
         assets: sc.raws.map(asset),
         partial: sc.partial ?? false,
         warnings: sc.warnings,
+        ...(aave !== undefined ? { aave } : {}),
       };
     });
     return { ok: true, provider: 'mock-fixtures', simulated: true, observedAt: OBSERVED, wallets };

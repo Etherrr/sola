@@ -392,7 +392,7 @@ describe('endpoint security and behavior', () => {
       });
     expect((await handleHealth(get('/api/v1/health', null), ENV, d)).status).toBe(401);
     const h = await (await handleHealth(get('/api/v1/health', jwt), ENV, d)).json();
-    expect(Object.keys(h).sort()).toEqual(['mode', 'requestId', 'status']);
+    expect(Object.keys(h).sort()).toEqual(['aave', 'mode', 'requestId', 'status']);
     const n = await (await handleNetworks(get('/api/v1/networks', jwt), ENV, d)).json();
     expect(n.networks).toEqual([
       { id: 'ethereum', chainId: 1, status: 'mock' },
@@ -1008,5 +1008,151 @@ describe('live data kill switch', () => {
       (await (await handleNetworks(req(), { ...ENV, PORTFOLIO_LIVE_DATA: '1' }, d)).json())
         .networks[0].status,
     ).toBe('live');
+  });
+});
+
+describe('Aave V3 flag gating and response shape', () => {
+  const AAVE_ENV: Env = { ...ENV, PORTFOLIO_AAVE_V3: '1' };
+  it('off: no aave section is emitted and providers are asked without it', async () => {
+    const s = await signer();
+    let asked: boolean | undefined;
+    const spy = {
+      name: 'spy', simulated: true,
+      async fetchWallets(addresses: string[], _sig: AbortSignal, opts?: { aave?: boolean }) {
+        asked = opts?.aave;
+        return mockProvider.fetchWallets(addresses, _sig, opts);
+      },
+    };
+    const r = await handleResolve(
+      post(valid, await s.sign(good())),
+      { ...ENV, PORTFOLIO_AAVE_V3: 'yes' }, // only the exact string '1' counts
+      deps(s.keys, { provider: spy as never }),
+    );
+    expect(r.status).toBe(200);
+    const body = await r.json();
+    expect(asked).toBe(false);
+    expect(body.wallets[0].aave).toBeUndefined();
+    expect(parseApiSuccess(body)).not.toBeNull();
+  });
+  it('on: the mock fixture section rides along, clearly simulated, in all three states', async () => {
+    const s = await signer();
+    const jwt = await s.sign(good());
+    const get = async (addr: string) => {
+      const r = await handleResolve(
+        post({ network: 'ethereum', addresses: [addr], currency: 'USD' }, jwt),
+        AAVE_ENV,
+        deps(s.keys),
+      );
+      expect(r.status).toBe(200);
+      const body = await r.json();
+      expect(parseApiSuccess(body)).not.toBeNull(); // the strict parser accepts the section
+      expect(body.simulated).toBe(true);
+      return body.wallets[0].aave;
+    };
+    const withPositions = await get(A('2'));
+    expect(withPositions.status).toBe('ok');
+    expect(withPositions.positions).toHaveLength(2);
+    expect(withPositions.positions.map((p: { symbol: string }) => p.symbol).sort()).toEqual(['DAI', 'USDC']);
+    expect(withPositions.positions[0].observedAt).toBe('2026-01-01T00:00:00.000Z'); // fixture time, not now
+    expect(await get(A('0'))).toEqual({ status: 'ok', positions: [] });
+    expect(await get(A('a'))).toEqual({ status: 'unavailable', reason: 'unavailable' });
+  });
+  it('on: solana lookups never carry the section and solana providers are never asked for it', async () => {
+    const s = await signer();
+    let asked: boolean | undefined = true;
+    const spySol = {
+      name: 'spy-sol', simulated: true,
+      async fetchWallets(addresses: string[], _sig: AbortSignal, opts?: { aave?: boolean }) {
+        asked = opts?.aave;
+        return {
+          ok: true, provider: 'spy-sol', simulated: true, observedAt: NOW.toISOString(),
+          wallets: addresses.map((a) => ({ address: a, assets: [], partial: false, warnings: [] })),
+        };
+      },
+    };
+    const r = await handleResolve(
+      post({ network: 'solana', addresses: ['So11111111111111111111111111111111111111112'], currency: 'USD' }, await s.sign(good())),
+      AAVE_ENV,
+      deps(s.keys, { solanaProvider: spySol as never }),
+    );
+    expect(r.status).toBe(200);
+    const body = await r.json();
+    expect(asked).toBe(false);
+    expect(body.wallets[0].aave).toBeUndefined();
+  });
+  it('live wording names the Aave coverage only when the flag is on, and the subtotal never includes it', async () => {
+    const s = await signer();
+    const liveStub = {
+      name: 'stub-live', simulated: false,
+      async fetchWallets(addresses: string[]) {
+        return {
+          ok: true, provider: 'stub-live', simulated: false, observedAt: NOW.toISOString(),
+          wallets: addresses.map((a) => ({ address: a, assets: [], partial: false, warnings: [] })),
+        };
+      },
+    };
+    const envLive = (flag: boolean) => ({
+      ...ENV,
+      PORTFOLIO_LIVE_DATA: '1',
+      ...(flag ? { PORTFOLIO_AAVE_V3: '1' } : {}),
+    });
+    const jwt = await s.sign(good());
+    const on = await (await handleResolve(post(valid, jwt), envLive(true), deps(s.keys, { liveProvider: liveStub as never }))).json();
+    expect(on.warnings[0]).toContain('Aave V3 shows supplied and variable-debt positions only');
+    expect(on.warnings[0]).toContain('no stable debt, health factor or APY');
+    expect(on.warnings[0]).toContain('other DeFi positions are not shown');
+    expect(on.totals.note).toContain('never added to this subtotal');
+    expect(on.totals.note).toContain('not total net worth');
+    const off = await (await handleResolve(post(valid, jwt), envLive(false), deps(s.keys, { liveProvider: liveStub as never }))).json();
+    expect(off.warnings[0]).toBe('Live read-only Ethereum data. Only ETH, USDC, USDT, DAI and WETH are checked; other tokens, NFTs and DeFi positions are not shown.');
+    expect(off.totals.note).not.toContain('subtotal;');
+  });
+  it('health exposes the flag so the UI can hide the section when off', async () => {
+    const s = await signer();
+    const jwt = await s.sign(good());
+    const get = (env: Env) => handleHealth(new Request('https://app.example/api/v1/health', { headers: { 'cf-access-jwt-assertion': jwt } }), env, deps(s.keys));
+    expect((await (await get(ENV)).json()).aave).toBe(false);
+    expect((await (await get(AAVE_ENV)).json()).aave).toBe(true);
+    expect((await (await get({ ...ENV, PORTFOLIO_AAVE_V3: 'yes' })).json()).aave).toBe(false);
+  });
+  it('the strict browser parser rejects a malformed aave section instead of guessing', async () => {
+    const s = await signer();
+    const r = await handleResolve(
+      post({ network: 'ethereum', addresses: [A('2')], currency: 'USD' }, await s.sign(good())),
+      AAVE_ENV,
+      deps(s.keys),
+    );
+    const body = await r.json();
+    expect(parseApiSuccess(body)).not.toBeNull();
+    const w0 = body.wallets[0];
+    const bad: unknown[] = [
+      { ...w0, aave: { status: 'bogus' } },
+      { ...w0, aave: { status: 'ok' } }, // positions missing
+      { ...w0, aave: { status: 'unavailable' } }, // reason missing
+      { ...w0, aave: { status: 'unavailable', reason: 'exploded' } },
+      { ...w0, aave: { status: 'ok', positions: [{ symbol: 'USDC' }] } },
+      {
+        ...w0,
+        aave: {
+          status: 'ok',
+          positions: [{ ...w0.aave.positions[0], supplied: '1e999' }], // not a decimal string
+        },
+      },
+      {
+        ...w0,
+        aave: {
+          status: 'ok',
+          positions: [{ ...w0.aave.positions[0], observedAt: 'not-a-date' }],
+        },
+      },
+      {
+        ...w0,
+        aave: {
+          status: 'ok',
+          positions: [{ ...w0.aave.positions[0], underlyingAsset: '0x123' }],
+        },
+      },
+    ];
+    for (const w of bad) expect(parseApiSuccess({ ...body, wallets: [w] })).toBeNull();
   });
 });

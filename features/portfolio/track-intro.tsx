@@ -2,33 +2,36 @@
 import { useEffect, useState } from 'react';
 import { ModeMarker } from '@/components/mode-marker';
 import { TrackForm } from './track-form';
-import { fetchDataMode, type DataMode } from './api-client';
+import { fetchHealth, type DataMode } from './api-client';
 
 type Shown = 'checking' | DataMode;
-function useDataMode(): Shown {
-  const [mode, setMode] = useState<Shown>('checking');
+function useHealth(): { mode: Shown; aave: boolean } {
+  const [health, setHealth] = useState<{ mode: Shown; aave: boolean }>({
+    mode: 'checking',
+    aave: false,
+  });
   useEffect(() => {
     const ctl = new AbortController();
-    void fetchDataMode(ctl.signal).then((m) => {
-      if (!ctl.signal.aborted) setMode(m);
+    void fetchHealth(ctl.signal).then((h) => {
+      if (!ctl.signal.aborted) setHealth(h);
     });
     return () => ctl.abort();
   }, []);
-  return mode;
+  return health;
 }
 
 export function TrackApp() {
-  const mode = useDataMode();
+  const { mode, aave } = useHealth();
   return (
     <>
-      <TrackIntro mode={mode} />
+      <TrackIntro mode={mode} aave={aave} />
       {/* Fixture examples are offered only when the mode is confirmed simulated: otherwise they could be real addresses. */}
-      <TrackForm mode={mode} />
+      <TrackForm mode={mode} aave={aave} />
     </>
   );
 }
 
-function TrackIntro({ mode }: { mode: Shown }) {
+function TrackIntro({ mode, aave }: { mode: Shown; aave: boolean }) {
   return (
     <>
       <p className="eyebrow">
@@ -43,7 +46,11 @@ function TrackIntro({ mode }: { mode: Shown }) {
         <>
           <p>
             Look up a public Ethereum or Solana address. This deployment reads real public data.
-            On Ethereum: ETH and a short list of tokens (USDC, USDT, DAI, WETH). On Solana: the SOL
+            On Ethereum: ETH and a short list of tokens (USDC, USDT, DAI, WETH)
+            {aave
+              ? ', plus Aave V3 supplied and variable-debt positions (no stable debt, health factor or APY; other DeFi positions are not read)'
+              : ''}
+            . On Solana: the SOL
             balance only - SPL tokens (including USDC and USDT), NFTs and DeFi positions are not
             read. On both networks a result is not a full portfolio and a missing token is not
             proof of an empty wallet. WETH is priced with the ETH/USD feed, so it is a proxy and can
