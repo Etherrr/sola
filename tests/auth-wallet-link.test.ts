@@ -349,3 +349,49 @@ describe('atomic admission (reviewer): no pre-write, no residue, no challenge bu
     expect(m7).not.toBe(m6); // fresh challenge issued, no replay weakening
   });
 });
+
+describe('cap revival leak (reviewer)', () => {
+  it('re-linking a REMOVED wallet at cap is refused - revive counts as admission', async () => {
+    const cookie = await makeUser('u1');
+    const mk = () => {
+      const priv = secp256k1.utils.randomPrivateKey();
+      const address = toEip55('0x' + [...keccak_256(secp256k1.getPublicKey(priv, false).slice(1))].slice(-20).map((b) => b.toString(16).padStart(2, '0')).join(''));
+      return { priv, address };
+    };
+    const link = async (w: { priv: Uint8Array; address: string }) => {
+      const ch = await handleWalletLinkChallenge(post({ address: w.address }, cookie), env, 'evm');
+      const { message } = (await ch.json()) as { message: string };
+      return handleWalletLinkVerify(post({ address: w.address, message, signature: signEvm(w.priv)(message) }, cookie), env, 'evm');
+    };
+    const wallets = Array.from({ length: 5 }, () => mk());
+    for (const w of wallets) expect((await link(w)).status).toBe(200);
+    // remove one wallet from the book (identity stays), add a 5th active
+    await db.prepare("UPDATE portfolio_addresses SET removed_at = ? WHERE address = ?")
+      .bind(new Date().toISOString(), wallets[0].address.toLowerCase()).run();
+    const w5 = mk();
+    expect((await link(w5)).status).toBe(200);
+    const n = await db.prepare("SELECT COUNT(*) AS n FROM portfolio_addresses WHERE network='ethereum' AND removed_at IS NULL").bind().first<{ n: number }>();
+    expect(n!.n).toBe(5);
+    // re-linking the REMOVED wallet must now pass the cap like a new admission: refused at 5
+    expect((await link(wallets[0])).status).toBe(409);
+    const n2 = await db.prepare("SELECT COUNT(*) AS n FROM portfolio_addresses WHERE network='ethereum' AND removed_at IS NULL").bind().first<{ n: number }>();
+    expect(n2!.n).toBe(5);
+  });
+
+  it('re-linking an ACTIVE wallet at cap still consumes no slot', async () => {
+    const cookie = await makeUser('u1');
+    const mk = () => {
+      const priv = secp256k1.utils.randomPrivateKey();
+      const address = toEip55('0x' + [...keccak_256(secp256k1.getPublicKey(priv, false).slice(1))].slice(-20).map((b) => b.toString(16).padStart(2, '0')).join(''));
+      return { priv, address };
+    };
+    const link = async (w: { priv: Uint8Array; address: string }) => {
+      const ch = await handleWalletLinkChallenge(post({ address: w.address }, cookie), env, 'evm');
+      const { message } = (await ch.json()) as { message: string };
+      return handleWalletLinkVerify(post({ address: w.address, message, signature: signEvm(w.priv)(message) }, cookie), env, 'evm');
+    };
+    const wallets = Array.from({ length: 5 }, () => mk());
+    for (const w of wallets) expect((await link(w)).status).toBe(200);
+    expect((await link(wallets[2])).status).toBe(200); // already active: always admitted
+  });
+});

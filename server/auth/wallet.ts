@@ -441,8 +441,10 @@ export async function handleWalletLinkVerify(
   // ATOMIC ADMISSION (reviewer 2026-10-25): everything happens in ONE D1
   // batch - no pre-write of a verified row, no manual revert (which could
   // clobber a concurrent remove/re-verify or leave residue):
-  //   1. book upsert, admitted ONLY when the row already exists (no new slot)
-  //      or the network is below the cap (count evaluated in-statement);
+  //   1. book upsert, admitted ONLY when the row is already ACTIVE (no new
+  //      slot; reviving a REMOVED row counts as a fresh admission and must
+  //      pass the cap - policy is TOTAL active = 5, no leak via revive) or
+  //      the network is below the cap (count evaluated in-statement);
   //   2. identity + wallet_links inserts, each GATED on the exact active
   //      verified book row this batch just admitted.
   // If the cap refused the upsert, the gates fail, NOTHING is written, and the
@@ -456,7 +458,7 @@ export async function handleWalletLinkVerify(
       `INSERT INTO portfolio_addresses (portfolio_id, network, address, label, verification, created_at)
        SELECT ?, ?, ?, ?, 'verified', ?
        WHERE EXISTS(SELECT 1 FROM portfolio_addresses
-                     WHERE portfolio_id = ? AND network = ? AND address = ?)
+                     WHERE portfolio_id = ? AND network = ? AND address = ? AND removed_at IS NULL)
           OR (SELECT COUNT(*) FROM portfolio_addresses
                WHERE portfolio_id = ? AND network = ? AND removed_at IS NULL) < ?
        ON CONFLICT (portfolio_id, network, address)
