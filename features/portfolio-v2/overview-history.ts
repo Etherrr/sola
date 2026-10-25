@@ -114,3 +114,18 @@ export function fetchOverview(): Promise<OverviewResult> {
   }
   return inFlight;
 }
+
+/** Rows of a normalized overview payload belonging to ONE address.
+ *  Case-aware: EVM hex compares case-insensitively, Solana base58 exactly. */
+export function rowsForAddress(
+  rows: ObservedAmount[],
+  network: 'ethereum' | 'solana',
+  address: string,
+): ObservedAmount[] {
+  const want = network === 'ethereum' ? address.toLowerCase() : address;
+  return rows.filter(
+    (r) =>
+      r.network === network &&
+      (network === 'ethereum' ? r.address.toLowerCase() : r.address) === want,
+  );
+}

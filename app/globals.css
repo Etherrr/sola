@@ -3126,6 +3126,21 @@ html {
   margin-top: 0.75rem;
   font-size: 0.9rem;
 }
+.accounts .ab-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+}
+.accounts .ab-actions {
+  white-space: nowrap;
+}
+.accounts .ab-details {
+  background: rgba(127, 127, 127, 0.06);
+  font-size: 0.9rem;
+  padding: 0.75rem 1rem;
+}
+.accounts .ab-details table {
+  margin-top: 0.5rem;
+}
 .muted {
   opacity: 0.7;
 }

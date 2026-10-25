@@ -1,10 +1,11 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import {
   addressBookRequest,
   addressRenameRequest,
   addressRemoveRequest,
 } from '../portfolio/api-client';
+import { fetchOverview, rowsForAddress, type OverviewResult } from './overview-history';
 
 /**
  * Native address book (v0.2): the only actions the signed-in user has on the
@@ -55,6 +56,8 @@ export async function statusOf(res: Response): Promise<Load> {
 
 export function AddressBook() {
   const [load, setLoad] = useState<Load>({ kind: 'loading' });
+  const [open, setOpen] = useState<string | null>(null);
+  const [hist, setHist] = useState<OverviewResult | null>(null);
   const [network, setNetwork] = useState<'ethereum' | 'solana'>('ethereum');
   const [address, setAddress] = useState('');
   const [label, setLabel] = useState('');
@@ -129,6 +132,30 @@ export function AddressBook() {
     }
   };
 
+  const keyOf = (e: Entry) => `${e.network}:${e.address}`;
+
+  const toggleDetails = (e: Entry) => {
+    const k = keyOf(e);
+    if (open === k) {
+      setOpen(null);
+      return;
+    }
+    setOpen(k);
+    // Recorded observations come from the SAME normalized overview payload the
+    // portfolio panels use - figures reconcile by construction (plan line 177:
+    // no parallel state). Loaded lazily on first expand.
+    if (!hist) void fetchOverview().then(setHist);
+  };
+
+  const copyAddress = async (e: Entry) => {
+    try {
+      await navigator.clipboard.writeText(e.address);
+      setNote('Address copied.');
+    } catch {
+      setNote('Copy failed - select the address text instead.');
+    }
+  };
+
   const remove = async (e: Entry) => {
     if (!window.confirm(`Remove ${e.label} (${short(e.address)})?`)) return;
     setBusy(true); setNote(null);
@@ -160,6 +187,7 @@ export function AddressBook() {
           {load.addresses.length === 0 ? (
             <p><em>No addresses yet - add one to watch its balances.</em></p>
           ) : (
+            <div className="ab-scroll">
             <table>
               <thead>
                 <tr>
@@ -167,20 +195,89 @@ export function AddressBook() {
                 </tr>
               </thead>
               <tbody>
-                {load.addresses.map((e) => (
-                  <tr key={`${e.network}:${e.address}`}>
-                    <td>{e.label}</td>
-                    <td>{e.network === 'ethereum' ? 'EVM' : 'Solana'}</td>
-                    <td><code>{short(e.address)}</code></td>
-                    <td>{e.verification === 'verified' ? 'Verified' : 'Watched (no ownership proof)'}</td>
-                    <td>
-                      <button type="button" onClick={() => rename(e)} disabled={busy}>Rename</button>{' '}
-                      <button type="button" onClick={() => remove(e)} disabled={busy}>Remove</button>
-                    </td>
-                  </tr>
-                ))}
+                {load.addresses.map((e) => {
+                  const k = keyOf(e);
+                  const expanded = open === k;
+                  const rows =
+                    expanded && hist?.kind === 'ok'
+                      ? rowsForAddress(hist.latest, e.network, e.address)
+                      : [];
+                  const netAt =
+                    expanded && hist?.kind === 'ok'
+                      ? (hist.networks.find((n) => n.network === e.network)?.at ?? null)
+                      : null;
+                  return (
+                    <Fragment key={k}>
+                      <tr>
+                        <td>{e.label}</td>
+                        <td>{e.network === 'ethereum' ? 'EVM' : 'Solana'}</td>
+                        <td>
+                          <code title={e.address}>{short(e.address)}</code>{' '}
+                          <button type="button" onClick={() => void copyAddress(e)} disabled={busy}>
+                            Copy
+                          </button>
+                        </td>
+                        <td>{e.verification === 'verified' ? 'Verified' : 'Watched (no ownership proof)'}</td>
+                        <td className="ab-actions">
+                          <button
+                            type="button"
+                            onClick={() => toggleDetails(e)}
+                            disabled={busy}
+                            aria-expanded={expanded}
+                          >
+                            Details
+                          </button>{' '}
+                          <button type="button" onClick={() => rename(e)} disabled={busy}>Rename</button>{' '}
+                          <button type="button" onClick={() => remove(e)} disabled={busy}>Remove</button>
+                        </td>
+                      </tr>
+                      {expanded && (
+                        <tr key={`${k}:details`}>
+                          <td colSpan={5} className="ab-details">
+                            {!hist && <em>Loading recorded observations…</em>}
+                            {hist?.kind === 'signin' && <em>Sign in to load recorded observations.</em>}
+                            {hist?.kind === 'off' && <em>Recorded history is off on this build.</em>}
+                            {hist?.kind === 'empty' && (
+                              <em>No recorded observations yet - turn on recording and refresh.</em>
+                            )}
+                            {(hist?.kind === 'failed' || hist?.kind === 'notinvited') && (
+                              <em>Recorded observations unavailable right now.</em>
+                            )}
+                            {hist?.kind === 'ok' && rows.length === 0 && (
+                              <em>No recorded observations for this address yet.</em>
+                            )}
+                            {hist?.kind === 'ok' && rows.length > 0 && (
+                              <>
+                                <table>
+                                  <thead>
+                                    <tr><th>Asset</th><th>Amount</th></tr>
+                                  </thead>
+                                  <tbody>
+                                    {rows.map((r) => (
+                                      <tr key={`${r.assetId}:${r.kind}`}>
+                                        <td>{r.assetId.split('/').pop()}</td>
+                                        <td>{r.amount}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                                <p>
+                                  <em>
+                                    Latest complete observation{netAt ? `: ${netAt}` : ''}. Spot
+                                    balances only.
+                                  </em>
+                                </p>
+                              </>
+                            )}
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
               </tbody>
             </table>
+            </div>
           )}
         </>
       )}
