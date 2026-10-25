@@ -139,6 +139,18 @@ describe('native logout', () => {
     expect((await readLiveSession(db, s.id, now))?.id).toBe(s.id);
   });
 
+  it('revokes only the named session - a second live session survives', async () => {
+    const first = await createSession(db, 'u1', now);
+    const second = await createSession(db, 'u1', now);
+    const res = await handleNativeLogout(
+      req(first.id, 'POST', 'https://preview.sola-lens.pages.dev'),
+      env(),
+    );
+    expect(res.status).toBe(200);
+    expect(await readLiveSession(db, first.id, now)).toBeNull();
+    expect((await readLiveSession(db, second.id, now))?.id).toBe(second.id);
+  });
+
   it('is idempotent for a dead session - still clears the cookie', async () => {
     const res = await handleNativeLogout(
       req('gone', 'POST', 'https://preview.sola-lens.pages.dev'),

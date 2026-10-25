@@ -55,9 +55,13 @@ export function AccountMenu() {
   }, [open]);
   // A live native session is the identity the app greets (main 2026-10-25:
   // the native journey must reflect the native identity, not the Access
-  // profile). The Access email remains the fallback when native is off/none.
+  // profile). The Access email is the fallback ONLY where native sign-in is
+  // switched off (production). Where native is enabled but signed out
+  // ('none'), greeting the Access email would be a false signed-in state
+  // while the app's own pages say "Sign in" - so nothing is greeted.
   const nativeEmail = native.kind === 'ok' ? native.email : null;
-  const email = nativeEmail ?? (s.kind === 'verified' ? s.email : null);
+  const email =
+    nativeEmail ?? (native.kind === 'off' && s.kind === 'verified' ? s.email : null);
   const label = email
     ? `Account: ${email}`
     : s.kind === 'rejected'
@@ -98,6 +102,10 @@ export function AccountMenu() {
               <>
                 Signed in as <strong>{nativeEmail}</strong>
               </>
+            ) : native.kind === 'none' ? (
+              <>
+                Not signed in. <Link href="/dev/sign-in">Sign in</Link>
+              </>
             ) : email ? (
               <>
                 Signed in via Cloudflare Access as <strong>{email}</strong>
@@ -122,7 +130,7 @@ export function AccountMenu() {
                 </button>
                 <p className="acct-signout-note">Ends this Sola sign-in on this device.</p>
               </>
-            ) : (
+            ) : native.kind === 'none' ? null : (
               <>
                 <button type="button" className="acct-signout-btn" onClick={signOut}>
                   Sign out
