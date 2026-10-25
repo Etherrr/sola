@@ -767,6 +767,39 @@ test('native welcome door: real 48px actions, visible keyboard focus, nothing se
   expect(posts).toEqual([]);
 });
 
+test('v2 overview: signed-out shows one honest card; live session keeps sections', async ({
+  page,
+}) => {
+  // 401 branch: one unified card with one action, no repeated sign-in lines.
+  await page.route('**/api/v1/auth/email/session', (r) =>
+    r.fulfill({ status: 401, contentType: 'application/json', body: '{}' }),
+  );
+  await page.goto('/dev/overview-v2');
+  const main = page.locator('#main');
+  await expect(
+    main.getByText('Sign in to see your holdings, addresses and recorded history.'),
+  ).toBeVisible();
+  await expect(main.getByRole('link', { name: 'Sign in', exact: true })).toHaveAttribute(
+    'href',
+    '/dev/sign-in',
+  );
+  await expect(main).not.toContainText('Sign in to load your recorded holdings.');
+  await page.unroute('**/api/v1/auth/email/session');
+  // Live native session: the per-section structure renders instead of the card.
+  await page.route('**/api/v1/auth/email/session', (r) =>
+    r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'ok', email: 'owner@example.com', fresh: true }),
+    }),
+  );
+  await page.goto('/dev/overview-v2');
+  await expect(main.locator('.ov2-block').first()).toBeVisible();
+  await expect(
+    main.getByText('Sign in to see your holdings, addresses and recorded history.'),
+  ).toHaveCount(0);
+});
+
 test('shell nav is keyboard-reachable in DOM order', async ({ page }) => {
   await page.goto('/portfolio');
   const nav = page.locator('nav[aria-label="Main"]');

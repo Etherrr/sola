@@ -3415,3 +3415,15 @@ html {
   max-width: none;
   margin: 0;
 }
+
+/* Unified signed-out card on the v2 Overview. */
+.ov2-signedout {
+  padding: 8px 0 4px;
+}
+.ov2-signedout-line {
+  color: var(--muted);
+  font-size: 0.94rem;
+}
+.ov2-signedout .actions {
+  margin-top: 18px;
+}

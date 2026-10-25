@@ -1,3 +1,4 @@
+import { SignedOutGate } from '@/features/portfolio-v2/signed-out-gate';
 import { WhatChanged } from '@/features/portfolio-v2/what-changed';
 import { SnapshotConsent } from '@/features/portfolio-v2/snapshot-consent';
 import { AddressBook } from '@/features/portfolio-v2/address-book';
@@ -16,18 +17,20 @@ export default function OverviewV2() {
 
       <section className="panel">
         <h2>Holdings</h2>
-        <div className="ov2-block">
-          <HoldingsTable />
-        </div>
-        <div className="ov2-block">
-          <AddressBook />
-        </div>
-        <div className="ov2-block">
-          <SnapshotConsent />
-        </div>
-        <div className="ov2-block">
-          <WhatChanged />
-        </div>
+        <SignedOutGate>
+          <div className="ov2-block">
+            <HoldingsTable />
+          </div>
+          <div className="ov2-block">
+            <AddressBook />
+          </div>
+          <div className="ov2-block">
+            <SnapshotConsent />
+          </div>
+          <div className="ov2-block">
+            <WhatChanged />
+          </div>
+        </SignedOutGate>
       </section>
 
       <section className="panel">
