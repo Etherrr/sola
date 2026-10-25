@@ -3,6 +3,7 @@ import { WhatChanged } from '@/features/portfolio-v2/what-changed';
 import { SnapshotConsent } from '@/features/portfolio-v2/snapshot-consent';
 import { AddressBook } from '@/features/portfolio-v2/address-book';
 import { AddressLookup } from '@/features/portfolio-v2/address-lookup';
+import { CombinedBalances } from '@/features/portfolio-v2/combined-balances';
 import { HoldingsTable } from '@/features/portfolio-v2/holdings-table';
 export const metadata = { title: 'Overview (preview build)' };
 
@@ -28,6 +29,9 @@ export default function OverviewV2() {
           </div>
           <div className="ov2-block">
             <AddressLookup />
+          </div>
+          <div className="ov2-block">
+            <CombinedBalances />
           </div>
           <div className="ov2-block">
             <SnapshotConsent />

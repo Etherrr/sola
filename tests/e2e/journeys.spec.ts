@@ -1448,6 +1448,131 @@ test('v2 address lookup: an Aave-side failure is honest beside intact wallet bal
   await expect(section.getByText(/rate limiting/)).toBeVisible();
 });
 
+test('v2 combined balances: explicit load combines saved addresses honestly', async ({
+  page,
+}) => {
+  await page.route('**/api/v1/auth/email/session', (r) =>
+    r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'ok', email: 'owner@example.com', fresh: true }),
+    }),
+  );
+  await page.route('**/api/v1/portfolio/addresses**', (r) => {
+    if (r.request().method() !== 'GET') return r.continue();
+    return r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        status: 'ok',
+        addresses: [
+          {
+            network: 'ethereum',
+            address: '0xAbC1230000000000000000000000000000000000',
+            label: 'Main',
+            verification: 'watched',
+            createdAt: '2026-10-25T00:00:00Z',
+            lastObservedAt: null,
+          },
+          {
+            network: 'solana',
+            address: 'SoLanaVaultAddress111111111111111111111111',
+            label: 'Vault',
+            verification: 'watched',
+            createdAt: '2026-10-25T00:00:00Z',
+            lastObservedAt: null,
+          },
+        ],
+      }),
+    });
+  });
+  await page.route('**/api/v1/portfolio/overview**', (r) =>
+    r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'empty', newerPartial: false }),
+    }),
+  );
+  await page.route('**/api/v1/portfolio/resolve**', (r) => {
+    const network = JSON.parse(r.request().postData() ?? '{}').network;
+    const wallet =
+      network === 'solana'
+        ? {
+            address: 'SoLanaVaultAddress111111111111111111111111',
+            partial: false,
+            warnings: [],
+            assets: [
+              {
+                assetId: 'solana:mainnet/native',
+                symbol: 'SOL',
+                decimals: 9,
+                amount: '10',
+                price: null,
+                value: null,
+              },
+            ],
+          }
+        : {
+            address: '0xabc1230000000000000000000000000000000000',
+            partial: false,
+            warnings: [],
+            assets: [
+              {
+                assetId: 'eip155:1/native',
+                symbol: 'ETH',
+                decimals: 18,
+                amount: '1.5',
+                price: '3000',
+                value: '4500',
+              },
+            ],
+          };
+    return r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        schemaVersion: 1,
+        mode: 'mock',
+        simulated: true,
+        provider: 'fixture',
+        generatedAt: '2026-10-25T01:00:00Z',
+        observedAt: '2026-10-25T01:00:00Z',
+        wallets: [wallet],
+        totals: {
+          recognizedPricedSubtotalUsd: network === 'solana' ? null : '4500',
+          unpricedAssetCount: network === 'solana' ? 1 : 0,
+          note: 'Subtotal covers only assets priced by verified feeds.',
+        },
+        partial: false,
+        warnings: [],
+      }),
+    });
+  });
+  await page.goto('/dev/overview-v2');
+  const main = page.locator('#main');
+  const block = main.locator('.ov2-combined');
+  // Nothing loads automatically: only the explicit action exists before the click.
+  await expect(block.getByRole('button', { name: 'Load combined balances' })).toBeVisible();
+  await expect(block.getByText('Combined priced value')).toHaveCount(0);
+  await block.getByRole('button', { name: 'Load combined balances' }).click();
+  // The EVM address contributes its priced $4,500.00; the SOL address is
+  // honestly unpriced (n/a + 1 unknown), never read as zero.
+  await expect(block.getByText('Combined priced value (simulated)')).toBeVisible();
+  await expect(block.locator('.metric strong').first()).toHaveText('$4,500.00');
+  // Only priced contributors count in the numerator (Track rule): the unpriced
+  // SOL address is loaded but contributes no priced value.
+  await expect(block.getByText('1 of 2')).toBeVisible();
+  const vaultRow = block.getByRole('row', { name: /Vault/ });
+  await expect(vaultRow).toContainText('n/a');
+  await expect(vaultRow).toContainText('+ 1 unknown');
+  const mainRow = block.getByRole('row', { name: /Main/ });
+  await expect(mainRow).toContainText('$4,500.00');
+  await expect(mainRow).toContainText('Loaded');
+  // Incomplete is named with its reason; sources keep their own time.
+  await expect(block.getByText(/Incomplete: 1 unpriced asset/)).toBeVisible();
+  await expect(block.getByText(/never zero/)).toBeVisible();
+});
+
 test('v2 address lookup: Solana SOL-only footer; empty incomplete answer says unknown', async ({
   page,
 }) => {
