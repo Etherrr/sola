@@ -113,7 +113,9 @@ every query carries user_id/owner predicates (existing D1 store pattern extends)
 4. Rollback: copy-not-move means tracked_addresses stays intact; reverting is removing
    the claim affordance. Data deletion of legacy rows is a separate, later,
    owner-approved operation.
-5. Claim window (explicit, not "claimable forever"): after the customer-facing Access
+5. Claim window (PROPOSED operational design — a design default, not a timed
+   commitment; the exact window is confirmed only when retention and support
+   feasibility are known): after the customer-facing Access
    policy is removed from the app host, the Access application RETAINS a narrow policy
    protecting only the claim route family (/claim/* and its API) for a defined window
    of 90 days post-cutover. Claims inside the window follow step 2. After the window,
