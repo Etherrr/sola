@@ -61,11 +61,15 @@ describe('learning and safety boundaries', () => {
     // @noble/curves + @noble/hashes (exact-pinned) verify SIWE/SIWS SIGN-IN signatures
     // in server/auth only - message-signature verification, NEVER transaction or
     // approval signing, and never imported by application code.
-    expect(Object.keys(pkg.dependencies).sort()).toEqual(['@noble/curves', '@noble/hashes', 'jose', 'next', 'react', 'react-dom']);
+    // @simplewebauthn/server (exact-pinned, WebCrypto-based) verifies passkey
+    // ceremonies in server/auth only; never imported by application code.
+    expect(Object.keys(pkg.dependencies).sort()).toEqual(['@noble/curves', '@noble/hashes', '@simplewebauthn/server', 'jose', 'next', 'react', 'react-dom']);
+    expect(pkg.dependencies['@simplewebauthn/server']).toMatch(/^\d+\.\d+\.\d+$/);
     expect(pkg.dependencies.jose).toMatch(/^\d+\.\d+\.\d+$/);
     expect(pkg.dependencies['@noble/curves']).toMatch(/^\d+\.\d+\.\d+$/);
     expect(pkg.dependencies['@noble/hashes']).toMatch(/^\d+\.\d+\.\d+$/);
     expect(source).not.toMatch(/@noble\//);
+    expect(source).not.toMatch(/@simplewebauthn/);
     expect(source).not.toMatch(/from 'jose'/);
   });
   it('keeps server-only API code out of the browser bundle directories', () => {
