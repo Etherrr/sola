@@ -10,10 +10,13 @@ import {
   type SendCode,
 } from '../server/auth/email';
 
-const post = (body: unknown): Request =>
+const post = (body: unknown, origin: string | null = 'https://preview.test'): Request =>
   new Request('https://preview.test/api/v1/auth/email/x', {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: {
+      'content-type': 'application/json',
+      ...(origin ? { origin } : {}),
+    },
     body: JSON.stringify(body),
   });
 
@@ -146,5 +149,16 @@ describe('sender construction', () => {
     expect(calls[0].auth).toBe('Bearer re_test_key');
     expect(calls[0].body).toContain('"to":["u@x.co"]');
     expect(calls[0].body).toContain('abc123');
+  });
+});
+
+describe('strict Origin checks (login CSRF)', () => {
+  it('rejects cross-origin and missing-origin auth POSTs before any work', async () => {
+    expect((await handleEmailChallenge(post({ email: 'a@b.co' }, 'https://evil.example'), env)).status).toBe(403);
+    expect((await handleEmailChallenge(post({ email: 'a@b.co' }, null), env)).status).toBe(403);
+    expect((await handleEmailVerify(post({ email: 'a@b.co', code: 'x' }, 'https://evil.example'), env)).status).toBe(403);
+    expect((await handleEmailVerify(post({ email: 'a@b.co', code: 'x' }, null), env)).status).toBe(403);
+    const row = await db.prepare('SELECT COUNT(*) AS n FROM challenges').bind().first<{ n: number }>();
+    expect(row!.n).toBe(0);
   });
 });

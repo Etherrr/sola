@@ -16,6 +16,7 @@ import {
   type ChallengeDb,
 } from './challenges';
 import { createSession } from './sessions';
+import { requireSameOrigin } from './guards';
 import { createD1Limiter } from '../accounts/d1-limiter';
 import type { LimitWindow } from '../accounts/limiter';
 
@@ -102,6 +103,8 @@ export async function handleEmailChallenge(
   const requestId = crypto.randomUUID();
   if (req.method !== 'POST')
     return json(405, { error: 'method_not_allowed', requestId }, { allow: 'POST' });
+  const csrf = requireSameOrigin(req);
+  if (csrf) return csrf;
   const off = unavailable(env);
   if (off) return off;
   const send = sendCode ?? senderFromEnv(env);
@@ -134,6 +137,8 @@ export async function handleEmailVerify(req: Request, env: NativeAuthEnv): Promi
   const requestId = crypto.randomUUID();
   if (req.method !== 'POST')
     return json(405, { error: 'method_not_allowed', requestId }, { allow: 'POST' });
+  const csrf = requireSameOrigin(req);
+  if (csrf) return csrf;
   const off = unavailable(env);
   if (off) return off;
   const body = await readBody(req);
