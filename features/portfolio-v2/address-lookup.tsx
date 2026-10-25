@@ -199,6 +199,19 @@ export function AddressLookup() {
             {state.data.partial ? ' Some sources did not answer - figures may be incomplete.' : ''}
             {state.data.warnings.length > 0 ? ` ${state.data.warnings.join('; ')}.` : ''}
           </em></p>
+          {/* Provider privacy (parity with /track, live answers only): names the actual
+              node the address went to, the rate-limit failover when it happened, the
+              retention claim as the operator's own unverified statement, and what the
+              prices are. */}
+          {!state.data.simulated && (
+            <p className="ov2-quiet">
+              {state.network === 'solana'
+                ? state.data.provider === 'solana-public-rpc+chainlink'
+                  ? "Privacy: this lookup sent the address from the app server to a public Solana node (Solana's public RPC endpoint, api.mainnet.solana.com), after PublicNode answered rate limiting, and read the Chainlink SOL/USD price feed through a public Ethereum node (PublicNode). The node operators' published data policies are their own statements and are not verified here. Prices are on-chain feed values at the time shown on each feed, not market quotes."
+                  : "Privacy: this lookup sent the address to a public Solana node (PublicNode) from the app server, and read the Chainlink SOL/USD price feed through a public Ethereum node (PublicNode). PublicNode's published policy says it keeps IP addresses and request data for at most 24 hours; that is their statement and is not verified here. Prices are on-chain feed values at the time shown on each feed, not market quotes."
+                : `Privacy: this lookup sent the address to a public Ethereum node (PublicNode) from the app server and read Chainlink USD price feeds through it${state.data.wallets.some((w) => w.aave) ? ', plus Aave V3 position data through the same node' : ''}. PublicNode's published policy says it keeps IP addresses and request data for at most 24 hours; that is their statement and is not verified here. Prices are on-chain feed values at the time shown on each feed, not market quotes.`}
+            </p>
+          )}
         </>
       )}
     </div>

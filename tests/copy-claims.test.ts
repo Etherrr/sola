@@ -89,6 +89,38 @@ describe('network-specific result copy never names the wrong chain', () => {
   });
 });
 
+describe('v2 lookup provider privacy copy matches live behavior (parity with Track)', () => {
+  const v2 = readFileSync('features/portfolio-v2/address-lookup.tsx', 'utf8');
+  it('the Solana privacy line sends the address to a Solana node, never an Ethereum one', () => {
+    const solLines = [
+      ...v2.matchAll(/sent the address (?:from the app server )?to a public Solana node[^"]*"/g),
+    ];
+    expect(solLines.length).toBeGreaterThanOrEqual(2); // primary + rate-limit failover variant
+    for (const m of solLines) {
+      expect(m[0]).not.toContain('sent the address to a public Ethereum node');
+      expect(m[0]).toContain('SOL/USD price feed through a public Ethereum node');
+    }
+  });
+  it('the failover variant names the actual endpoint and its rate-limit precondition', () => {
+    expect(v2).toContain("Solana's public RPC endpoint, api.mainnet.solana.com");
+    expect(v2).toContain('after PublicNode answered rate limiting');
+    expect(v2).toContain("state.data.provider === 'solana-public-rpc+chainlink'");
+  });
+  it('the Ethereum line names the Ethereum node and the conditional Aave read', () => {
+    const ethLine = v2.match(/sent the address to a public Ethereum node[^"`]*["`]/);
+    expect(ethLine).not.toBeNull();
+    expect(ethLine![0]).not.toContain('Solana node');
+    expect(v2).toContain("w.aave) ? ', plus Aave V3 position data through the same node' : ''");
+  });
+  it('retention is always the operator\'s own unverified statement; prices are feed values', () => {
+    expect(v2).toContain('keeps IP addresses and request data for at most 24 hours');
+    expect(v2).toContain('their statement and is not verified here');
+    expect(v2).toContain('not market quotes');
+    // The privacy footer is live-only, like Track: it never appears on a simulated answer.
+    expect(v2).toContain('!state.data.simulated && (');
+  });
+});
+
 describe('the markets top-bar pill never contradicts the live panel', () => {
   const shell = readFileSync('components/app-shell.tsx', 'utf8');
   it('defers the mode claim to the panel instead of a global DATA UNAVAILABLE', () => {

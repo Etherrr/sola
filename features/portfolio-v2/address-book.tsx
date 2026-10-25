@@ -12,6 +12,12 @@ import {
   type OverviewResult,
 } from './overview-history';
 import { SYNCED_EVENT } from './snapshot-consent';
+
+/** Dispatched after a saved address is added, renamed or removed, so readers of
+ *  the saved list (the combined view) drop now-stale results immediately. */
+export const ADDRESSES_CHANGED_EVENT = 'sola:addresses-changed';
+const announceAddressesChanged = () =>
+  window.dispatchEvent(new CustomEvent(ADDRESSES_CHANGED_EVENT));
 import { assetLabel } from './asset-label';
 import { fmtTimestamp } from './format-time';
 
@@ -133,6 +139,7 @@ export function AddressBook() {
       const res = await addressBookRequest('POST', { network, address: address.trim(), label: label.trim() });
       if (res.ok) {
         setAddress(''); setLabel('');
+        announceAddressesChanged();
         await refresh();
       } else {
         setNote(await failNote(res, 'add this address'));
@@ -150,8 +157,10 @@ export function AddressBook() {
     setBusy(true); setNote(null);
     try {
       const res = await addressRenameRequest({ network: e.network, address: e.address, label: next.trim() });
-      if (res.ok) await refresh();
-      else setNote(await failNote(res, 'rename this address'));
+      if (res.ok) {
+        announceAddressesChanged();
+        await refresh();
+      } else setNote(await failNote(res, 'rename this address'));
     } catch {
       setNote('Could not rename this address.');
     } finally {
@@ -194,8 +203,10 @@ export function AddressBook() {
     setBusy(true); setNote(null);
     try {
       const res = await addressRemoveRequest({ network: e.network, address: e.address });
-      if (res.ok) await refresh();
-      else setNote(await failNote(res, 'remove this address'));
+      if (res.ok) {
+        announceAddressesChanged();
+        await refresh();
+      } else setNote(await failNote(res, 'remove this address'));
     } catch {
       setNote('Could not remove this address.');
     } finally {

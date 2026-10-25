@@ -1,5 +1,5 @@
 'use client';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { lookupAddresses, addressBookRequest } from '../portfolio/api-client';
 import { aggregateAddresses } from '../portfolio/aggregate';
 import {
@@ -12,6 +12,8 @@ import {
 import { money, summarize } from '../portfolio/model';
 import type { SavedAccount } from '../portfolio/accounts-client';
 import { fmtTimestamp } from './format-time';
+import { ADDRESSES_CHANGED_EVENT } from './address-book';
+import { SYNCED_EVENT } from './snapshot-consent';
 
 /**
  * v0.2 "All saved addresses" - the combined multi-address read the plan keeps
@@ -48,6 +50,22 @@ const short = (a: string) => (a.length > 12 ? `${a.slice(0, 6)}…${a.slice(-4)}
 export function CombinedBalances() {
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
   const generation = useRef(0);
+
+  // An address add/rename/remove, a sync, or a recording withdrawal invalidates
+  // any shown combination: drop back to idle and bump the generation so an
+  // in-flight response from before the change can never paint stale figures.
+  useEffect(() => {
+    const reset = () => {
+      generation.current++;
+      setPhase({ kind: 'idle' });
+    };
+    window.addEventListener(ADDRESSES_CHANGED_EVENT, reset);
+    window.addEventListener(SYNCED_EVENT, reset);
+    return () => {
+      window.removeEventListener(ADDRESSES_CHANGED_EVENT, reset);
+      window.removeEventListener(SYNCED_EVENT, reset);
+    };
+  }, []);
 
   async function onLoad() {
     if (phase.kind === 'loading') return;
@@ -122,6 +140,12 @@ export function CombinedBalances() {
   const contributing = ready
     ? ready.result.perAddress.filter((a) => a.pricedValueCents !== null).length
     : 0;
+  const loadedCount = ready
+    ? ready.result.perAddress.filter((a) => a.status === 'ok' || a.status === 'partial').length
+    : 0;
+  const hasSolana = ready
+    ? ready.result.perAddress.some((a) => a.network === 'solana')
+    : false;
 
   return (
     <div className="combined ov2-combined" aria-busy={phase.kind === 'loading'}>
@@ -129,8 +153,9 @@ export function CombinedBalances() {
       {phase.kind === 'idle' ? (
         <>
           <p className="ov2-quiet">
-            Reads every saved address through the read-only API and combines them. On your
-            request only - nothing loads automatically.
+            Loading sends your saved addresses to third-party blockchain data providers.
+            Nothing is stored by this action. On your request only - nothing loads
+            automatically.
           </p>
           <button type="button" className="button primary" onClick={() => void onLoad()}>
             Load combined balances
@@ -149,7 +174,12 @@ export function CombinedBalances() {
         </>
       ) : null}
       {phase.kind === 'empty' ? (
-        <p className="ov2-quiet">No saved addresses yet. Add one above, then load.</p>
+        <>
+          <p className="ov2-quiet">No saved addresses yet. Add one above, then load.</p>
+          <button type="button" className="button primary" onClick={() => void onLoad()}>
+            Load combined balances
+          </button>
+        </>
       ) : null}
       {ready && totals ? (
         <div data-sensitive>
@@ -166,10 +196,13 @@ export function CombinedBalances() {
               ) : null}
             </div>
             <div className="metric">
-              <p>Addresses combined</p>
+              <p>Addresses loaded</p>
               <strong>
-                {contributing} of {ready.totalSaved}
+                {loadedCount} of {ready.totalSaved}
               </strong>
+              <small>
+                {contributing} with a priced value
+              </small>
             </div>
             <div className="metric">
               <p>Observation window</p>
@@ -236,6 +269,7 @@ export function CombinedBalances() {
           <p className="ov2-quiet">
             Priced values cover only assets with verified-feed prices; anything else is unknown,
             never zero. Each address counted once; a duplicate is never a second holding.
+            {hasSolana ? ' Solana lookups show the SOL balance only.' : ''}
             {ready.providers.length > 0 ? ` Sources: ${ready.providers.join(', ')}.` : ''}{' '}
             Loaded at your request at {fmtTimestamp(ready.loadedAt)} - the request time, not an
             observation time.
