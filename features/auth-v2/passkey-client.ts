@@ -78,6 +78,7 @@ const explain = (status: number, body: { error?: string; retryAfterSec?: number 
   switch (e) {
     case 'auth_required':
     case 'session_expired': return 'Sign in first, then set up a passkey.';
+    case 'reauth_required': return 'For your security, sign in again to add a passkey.';
     case 'invalid_or_consumed_challenge': return 'That attempt expired. Try again.';
     case 'verification_failed': return 'The passkey check failed. Try again.';
     case 'credential_exists': return 'This passkey is already on your account.';

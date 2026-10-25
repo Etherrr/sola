@@ -35,12 +35,13 @@ const responseWithChallenge = (challenge: string, id = 'cred-1') => ({
 });
 
 let db: ReturnType<typeof createSqliteD1>['db'];
+let raw: ReturnType<typeof createSqliteD1>['raw'];
 let env: NativeAuthEnv;
 let deps: PasskeyDeps;
 let lastOptionsChallenge: string;
 
 beforeEach(async () => {
-  ({ db } = createSqliteD1());
+  ({ db, raw } = createSqliteD1());
   env = { NATIVE_AUTH_ENABLED: 'true', PORTFOLIO_ACCOUNTS_DB: db };
   deps = {
     generateRegistrationOptions: (async (o: { challenge: Uint8Array }) => {
@@ -109,6 +110,41 @@ describe('passkey registration (session-gated)', () => {
     expect(r.status).toBe(409);
     expect((await r.json() as { error: string }).error).toBe('credential_exists');
   });
+  it('registration options refuse a STALE session (reauth_required, no challenge issued)', async () => {
+    const cookie = await makeUser();
+    raw.exec("UPDATE sessions SET created_at = strftime('%Y-%m-%dT%H:%M:%fZ','now','-30 minutes')");
+    const r = await handlePasskeyRegisterOptions(post({}, cookie), env, deps);
+    expect(r.status).toBe(403);
+    expect(((await r.json()) as { error: string }).error).toBe('reauth_required');
+    const rows = raw.prepare("SELECT COUNT(*) AS n FROM challenges WHERE kind='webauthn_register'").get() as { n: number };
+    expect(rows.n).toBe(0);
+  });
+
+  it('registration verify refuses a STALE session WITHOUT consuming the challenge (expiry between steps)', async () => {
+    const cookie = await makeUser();
+    // fresh at options: challenge issued
+    await handlePasskeyRegisterOptions(post({}, cookie), env, deps);
+    expect(lastOptionsChallenge).toBeTruthy();
+    // session goes stale between options and verify
+    raw.exec("UPDATE sessions SET created_at = strftime('%Y-%m-%dT%H:%M:%fZ','now','-30 minutes')");
+    const body = { response: responseWithChallenge(lastOptionsChallenge) };
+    const staleAttempt = await handlePasskeyRegisterVerify(post(body, cookie), env, deps);
+    expect(staleAttempt.status).toBe(403);
+    expect(((await staleAttempt.json()) as { error: string }).error).toBe('reauth_required');
+    // the challenge was NOT burned by the stale attempt: after re-authenticating
+    // (freshness restored), the same challenge still verifies.
+    raw.exec("UPDATE sessions SET created_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')");
+    const ok = await handlePasskeyRegisterVerify(post(body, cookie), env, deps);
+    expect(ok.status).toBe(200);
+  });
+
+  it('login endpoints are EXEMPT from the fresh-session gate (the ceremony is the auth)', async () => {
+    const cookie = await makeUser();
+    raw.exec("UPDATE sessions SET created_at = strftime('%Y-%m-%dT%H:%M:%fZ','now','-30 minutes')");
+    const o = await handlePasskeyLoginOptions(post({}, cookie), env, deps);
+    expect(o.status).toBe(200);
+  });
+
   it('a challenge issued to one user cannot be claimed by another', async () => {
     const cookie = await makeUser();
     await handlePasskeyRegisterOptions(post({}, cookie), env, deps);

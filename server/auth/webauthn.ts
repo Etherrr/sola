@@ -28,7 +28,7 @@ import {
   issueChallenge,
   type ChallengeDb,
 } from './challenges';
-import { createSession, readLiveSession } from './sessions';
+import { createSession, readLiveSession, recentlyAuthenticated, type SessionRow } from './sessions';
 import { requireSameOrigin } from './guards';
 import { createD1Limiter } from '../accounts/d1-limiter';
 import type { LimitWindow } from '../accounts/limiter';
@@ -110,12 +110,22 @@ function clientChallenge(response: { response?: { clientDataJSON?: string } } | 
   }
 }
 
-async function liveUser(req: Request, db: ChallengeDb): Promise<string | Response> {
+async function liveUser(req: Request, db: ChallengeDb): Promise<SessionRow | Response> {
   const id = readSessionCookie(req);
   if (!id) return json(401, { error: 'auth_required' });
   const session = await readLiveSession(db, id);
   if (!session) return json(401, { error: 'session_expired' });
-  return session.user_id;
+  return session;
+}
+
+/** Registration ADDS a persistent credential, so like wallet linking it
+ *  requires a FRESH session (10-minute window, SENSITIVE_REAUTH_MS) at BOTH
+ *  steps. A stale session gets 403 reauth_required and the challenge is
+ *  never issued or consumed - passkey setup stays unavailable rather than
+ *  letting a stolen old session escalate itself. Login is exempt: the
+ *  passkey ceremony IS the fresh authentication. */
+function requireFresh(session: SessionRow): Response | null {
+  return recentlyAuthenticated(session) ? null : json(403, { error: 'reauth_required' });
 }
 
 export async function handlePasskeyRegisterOptions(
@@ -131,8 +141,11 @@ export async function handlePasskeyRegisterOptions(
   if (env.NATIVE_AUTH_ENABLED !== 'true' || !env.PORTFOLIO_ACCOUNTS_DB)
     return json(503, { error: 'unavailable', requestId });
   const db = env.PORTFOLIO_ACCOUNTS_DB;
-  const user = await liveUser(req, db);
-  if (user instanceof Response) return user;
+  const session = await liveUser(req, db);
+  if (session instanceof Response) return session;
+  const stale = requireFresh(session);
+  if (stale) return stale;
+  const user = session.user_id;
   const { rpID, origin } = rpOf(req);
   const wc = newWebauthnChallenge();
   const issued = await issueChallenge(db, 'webauthn_register', user, TTL_MS, new Date(), wc.b64);
@@ -160,8 +173,11 @@ export async function handlePasskeyRegisterVerify(
   if (env.NATIVE_AUTH_ENABLED !== 'true' || !env.PORTFOLIO_ACCOUNTS_DB)
     return json(503, { error: 'unavailable', requestId });
   const db = env.PORTFOLIO_ACCOUNTS_DB;
-  const user = await liveUser(req, db);
-  if (user instanceof Response) return user;
+  const session = await liveUser(req, db);
+  if (session instanceof Response) return session;
+  const stale = requireFresh(session);
+  if (stale) return stale;
+  const user = session.user_id;
   const body = (await req.json().catch(() => null)) as {
     response?: { response?: { clientDataJSON?: string } };
   } | null;
