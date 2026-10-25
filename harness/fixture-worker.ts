@@ -4,10 +4,11 @@
 // JWKS through the real checkAccessJwt — the production JWT code path is unchanged; only the
 // key SOURCE is a fixture (the fetchKeys dependency seam the handlers already expose).
 import { SignJWT, generateKeyPair, exportJWK } from 'jose';
-import { handleAccounts, type AccountsDeps, type AccountsEnv } from '/tmp/codex-review/server/accounts/handler';
-import { handleSession, type Deps } from '/tmp/codex-review/server/portfolio/handler';
-import { mockProvider, solanaMockProvider } from '/tmp/codex-review/server/portfolio/provider';
-import type { Jwk } from '/tmp/codex-review/server/portfolio/access';
+import { handleAccounts, type AccountsDeps, type AccountsEnv } from '../server/accounts/handler';
+import type { D1Like } from '../server/accounts/d1';
+import { handleSession, type Deps } from '../server/portfolio/handler';
+import { mockProvider, solanaMockProvider } from '../server/portfolio/provider';
+import type { Jwk } from '../server/portfolio/access';
 
 const MIGRATION_SQL: string = "-- Applied once, only after the owner approves creating the D1 binding.\n-- Mirrors server/accounts/d1.ts SCHEMA_SQL + COUNTERS_SQL; keep in sync.\nCREATE TABLE IF NOT EXISTS tracked_addresses (\n  owner_issuer_subject TEXT NOT NULL,\n  network TEXT NOT NULL CHECK (network IN ('ethereum', 'solana')),\n  address TEXT NOT NULL,\n  label TEXT NOT NULL CHECK (length(label) BETWEEN 1 AND 40),\n  created_at TEXT NOT NULL,\n  updated_at TEXT NOT NULL,\n  PRIMARY KEY (owner_issuer_subject, network, address)\n);\nCREATE TABLE IF NOT EXISTS rate_counters (\n  scope TEXT NOT NULL,\n  owner TEXT NOT NULL,\n  window_start INTEGER NOT NULL,\n  window_ms INTEGER NOT NULL,\n  count INTEGER NOT NULL CHECK (count >= 0),\n  PRIMARY KEY (scope, owner, window_start, window_ms)\n);\n";
 const MIGRATION = MIGRATION_SQL.replace(/--[^\n]*/g, '').split(';').map((s) => s.trim()).filter(Boolean);
@@ -52,9 +53,9 @@ const ENV: AccountsEnv & { PORTFOLIO_API_ENABLED: string; ACCESS_TEAM_DOMAIN: st
 };
 
 let migrated = false;
-async function migrate(db: any) {
+async function migrate(db: D1Like) {
   if (migrated) return;
-  for (const stmt of MIGRATION) await db.prepare(stmt).run();
+  for (const stmt of MIGRATION) await db.prepare(stmt).bind().run();
   migrated = true;
 }
 
@@ -62,7 +63,7 @@ const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 
 export default {
-  async fetch(req: Request, env: { DB: any }): Promise<Response> {
+  async fetch(req: Request, env: { DB: D1Like }): Promise<Response> {
     const url = new URL(req.url);
     // Harness-only fixture route: mints a REAL signed JWT for a synthetic identity. This
     // route does not exist in production code; it plays the role Cloudflare Access plays at

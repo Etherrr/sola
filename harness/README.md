@@ -21,13 +21,13 @@ What is FIXTURE (and would be Cloudflare Access in production):
   cross-origin calls — the edge must present its own origin).
 - /api/v1/health and /api/v1/portfolio/resolve stay stubbed (not under test).
 
-Setup (from the sola repo root, patch applied):
-  cd harness && npm install        # miniflare, esbuild, jose
-  # Edit the three /tmp/sola-repo import paths in fixture-worker.ts to the repo path,
-  # then: npx esbuild fixture-worker.ts --bundle --format=esm --platform=neutral --outfile=fixture-worker.mjs
+Setup (from the sola repo root; imports are relative, no path edits needed):
+  cd harness && npm install        # miniflare, esbuild (jose comes from the repo root)
+  npx esbuild fixture-worker.ts --bundle --format=esm --platform=neutral --outfile=fixture-worker.mjs
   node serve.mjs                   # fixture worker on 127.0.0.1:8788, in-memory D1
-  # In the repo: cp harness/local-d1-contract.spec.ts tests/e2e/
-  npx playwright test tests/e2e/local-d1-contract.spec.ts
+  # In the repo root: npx playwright test tests/e2e/local-d1-contract.spec.ts
+  # (the spec is committed at tests/e2e/local-d1-contract.spec.ts and skips cleanly
+  # when the fixture worker is not running)
 
 Verified at d842d71 (2026-10-24): 3 specs x desktop/mobile = 6 passed:
 1. Full CRUD through the real handler: add 5, real 409 cap on the 6th, relabel AT cap
