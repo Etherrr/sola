@@ -51,8 +51,8 @@ describe('simulated financial accounting', () => {
 
 it('derives gross network allocation without debt, receipts, or missing prices', () => {
   expect(networkAllocation(fixture.positions)).toEqual([
-    { network: 'Ethereum', value: 700000n, percent: 58.3 },
-    { network: 'Solana', value: 500000n, percent: 41.7 },
+    { network: 'Ethereum', value: 700000n, percent: 58.3, roundedZero: false },
+    { network: 'Solana', value: 500000n, percent: 41.7, roundedZero: false },
   ]);
   expect(networkAllocation([])).toEqual([]);
 });

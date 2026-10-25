@@ -1,9 +1,10 @@
 'use client';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ChainSelector } from './chain-selector';
 import { AccountMenu } from './account-menu';
+import { fetchHealth } from '@/features/portfolio/api-client';
 import { SessionProvider } from '@/features/portfolio/session-context';
 import { TrackNetworkProvider } from '@/features/portfolio/track-network-context';
 const sections = [
@@ -26,6 +27,16 @@ const settingsLink = { href: '/settings', label: 'Settings', icon: '⚙', cls: '
 export function AppShell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
   const bar = useRef<HTMLElement>(null);
+  // The demo label is only honest when this deployment's health endpoint reports mock mode;
+  // on live (or unknown) it must not claim the data is demo.
+  const [mode, setMode] = useState<'mock' | 'live' | 'unknown'>('unknown');
+  useEffect(() => {
+    let live = true;
+    fetchHealth().then((h) => live && setMode(h.mode)).catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, []);
   // Publish the real sticky-bar height so focus and scroll offsets follow it when the bar wraps
   // to two rows on narrow screens.
   useEffect(() => {
@@ -95,7 +106,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <p className="side-foot">
             v0.1 · PREVIEW
             <br />
-            Demo data.
+            {mode === 'mock' ? 'Demo data.' : null}
             <br />
             Lookups and prices show their own source and time.
           </p>

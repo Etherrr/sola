@@ -51,8 +51,13 @@ export function networkAllocation(positions: readonly Position[]) {
     value,
     // Only the bounded percentage becomes a Number; monetary calculations remain exact.
     percent: total === 0n ? 0 : Number((value * 1000n + total / 2n) / total) / 10,
+    roundedZero: total !== 0n && value > 0n && (value * 1000n + total / 2n) / total === 0n,
   }));
 }
+
+/** Percent display: a true nonzero share that rounds to 0.0 reads '<0.1', never '0'. */
+export const fmtPercent = (percent: number, roundedZero?: boolean): string =>
+  roundedZero ? '<0.1' : String(percent);
 
 /**
  * Gross priced allocation by holding, keyed by assetId (never by ticker: two assets can share a
@@ -78,6 +83,7 @@ export function assetAllocation(positions: readonly Position[]) {
       symbol: v.symbol,
       value: v.value,
       percent: total === 0n ? 0 : Number((v.value * 1000n + total / 2n) / total) / 10,
+      roundedZero: total !== 0n && v.value > 0n && (v.value * 1000n + total / 2n) / total === 0n,
     }));
 }
 /** Stable palette index per symbol so a symbol keeps its colour in the donut, legend and table. */

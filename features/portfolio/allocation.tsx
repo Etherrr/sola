@@ -1,4 +1,4 @@
-import { assetAllocation, money, symbolColor } from './model';
+import { assetAllocation, fmtPercent, money, symbolColor } from './model';
 import { fixture } from './fixture';
 import { Donut } from './donut';
 export function Allocation() {
@@ -17,6 +17,7 @@ export function Allocation() {
           slices={rows.map((r) => ({
             label: r.symbol,
             percent: r.percent,
+            roundedZero: r.roundedZero,
             color: symbolColor(r.symbol),
           }))}
           caption="holdings"
@@ -27,7 +28,7 @@ export function Allocation() {
               <i style={{ background: symbolColor(r.symbol) }} aria-hidden="true" />
               <span className="alloc-sym">{r.symbol}</span>
               <span className="alloc-val">{money(r.value)}</span>
-              <span className="alloc-pct">{r.percent}%</span>
+              <span className="alloc-pct">{fmtPercent(r.percent, r.roundedZero)}%</span>
             </li>
           ))}
         </ul>

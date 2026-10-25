@@ -1,6 +1,6 @@
 'use client';
 import { Donut } from '../portfolio/donut';
-import { assetAllocation, money, networkAllocation, symbolColor } from '../portfolio/model';
+import { assetAllocation, fmtPercent, money, networkAllocation, symbolColor } from '../portfolio/model';
 import { useNativeSession } from '@/features/auth-v2/native-session';
 import { useCombined } from './combined-context';
 import { fmtTimestamp } from './format-time';
@@ -76,7 +76,12 @@ export function AllocationV2() {
       <p className="ov2-quiet">Share of gross priced holdings, by chain:</p>
       <div className="alloc-wrap">
         <Donut
-          slices={chains.map((c) => ({ label: c.network, percent: c.percent, color: c.color }))}
+          slices={chains.map((c) => ({
+            label: c.network,
+            percent: c.percent,
+            color: c.color,
+            roundedZero: c.roundedZero,
+          }))}
           caption={chains.length === 1 ? '' : 'by chain'}
           center={chains.length === 1 ? '1 chain' : undefined}
         />
@@ -86,7 +91,7 @@ export function AllocationV2() {
               <i style={{ background: symbolColor(r.symbol) }} aria-hidden="true" />
               <span className="alloc-sym">{r.symbol}</span>
               <span className="alloc-val">{money(r.value)}</span>
-              <span className="alloc-pct">{r.percent}%</span>
+              <span className="alloc-pct">{fmtPercent(r.percent, r.roundedZero)}%</span>
             </li>
           ))}
         </ul>

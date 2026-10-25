@@ -101,15 +101,17 @@ export function CombinedBalances() {
               </small>
             </div>
             <div className="metric">
-              <p>Snapshot taken</p>
+              <p>Balances read</p>
               <strong className="obs-value">
-                {ready.result.observedRange
-                  ? ready.result.observedRange.earliest === ready.result.observedRange.latest
-                    ? fmtTimestamp(ready.result.observedRange.earliest)
-                    : `${fmtTimestamp(ready.result.observedRange.earliest)} – ${fmtTimestamp(
-                        ready.result.observedRange.latest,
-                      )}`
-                  : 'n/a'}
+                {(() => {
+                  const r = ready.result.observedRange;
+                  if (!r) return 'n/a';
+                  // Collapse on the FORMATTED label: two reads in the same minute differ in
+                  // ISO but are one time to the reader - never render "6:31 PM – 6:31 PM".
+                  const a = fmtTimestamp(r.earliest);
+                  const b = fmtTimestamp(r.latest);
+                  return a === b ? a : `${a} – ${b}`;
+                })()}
               </strong>
             </div>
           </div>

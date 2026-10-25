@@ -204,13 +204,17 @@ export function CombinedWallets() {
               <small>Each address counted once; a duplicate is never a second holding</small>
             </div>
             <div className="metric">
-              <p>Snapshot taken</p>
+              <p>Balances read</p>
               <strong className="obs-value">
-                {ready.result.observedRange
-                  ? ready.result.observedRange.earliest === ready.result.observedRange.latest
-                    ? `${dayLabel(ready.result.observedRange.earliest)} · ${hhmm(ready.result.observedRange.earliest)} UTC`
-                    : `${dayLabel(ready.result.observedRange.earliest)} · ${hhmm(ready.result.observedRange.earliest)} – ${hhmm(ready.result.observedRange.latest)} UTC`
-                  : 'n/a'}
+                {(() => {
+                  const r = ready.result.observedRange;
+                  if (!r) return 'n/a';
+                  // Collapse on the FORMATTED label: same-minute reads are one time to the
+                  // reader, never "05:58 – 05:58".
+                  const a = `${dayLabel(r.earliest)} · ${hhmm(r.earliest)}`;
+                  const b = `${dayLabel(r.latest)} · ${hhmm(r.latest)}`;
+                  return a === b ? `${a} UTC` : `${a} – ${hhmm(r.latest)} UTC`;
+                })()}
               </strong>
               {mixedSnapshots ? <small>Mixed snapshots</small> : null}
             </div>

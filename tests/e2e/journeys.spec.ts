@@ -1617,7 +1617,7 @@ test('v2 combined balances: explicit load combines saved addresses honestly', as
         simulated: true,
         provider: 'fixture',
         generatedAt: '2026-10-25T01:00:00Z',
-        observedAt: '2026-10-25T01:00:00Z',
+        observedAt: network === 'solana' ? '2026-10-25T01:00:58.082Z' : '2026-10-25T01:00:17.875Z',
         wallets: [wallet],
         totals: {
           recognizedPricedSubtotalUsd: network === 'solana' ? null : '4500',
@@ -1660,6 +1660,12 @@ test('v2 combined balances: explicit load combines saved addresses honestly', as
   // Incomplete is named with its reason; sources keep their own time.
   await expect(block.getByText(/Incomplete: 1 unpriced asset/)).toBeVisible();
   await expect(block.getByText(/never zero/)).toBeVisible();
+  // Two networks read in the same minute (17.875s vs 58.082s) collapse to ONE formatted
+  // time - the metric never renders a "9:00 PM – 9:00 PM" style duplicate range.
+  const read = block.locator('.metric', { hasText: 'Balances read' }).locator('strong');
+  await expect(read).toContainText(/\d{1,2}:00\s/);
+  await expect(read).not.toContainText('\u2013');
+  await expect(block.getByText('Balances read')).toBeVisible();
 });
 
 test('v2 combined balances: empty, sign-in and switched-off states are honest', async ({

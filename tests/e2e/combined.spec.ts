@@ -69,6 +69,8 @@ async function stubResolve(
     failSolana?: boolean;
     ethWallets?: unknown[];
     solWallets?: unknown[];
+    ethAt?: string;
+    solAt?: string;
   } = {},
 ) {
   const calls: string[] = [];
@@ -78,11 +80,11 @@ async function stubResolve(
     if (body.network === 'ethereum') {
       if (opts.failEthereum)
         return json(route, 429, { error: { code: 'rate_limited', message: 'limited' }, requestId: 'r' });
-      return json(route, 200, { ...resolveBody(opts.ethWallets ?? ETH_WALLETS, T2), network: 'ethereum' });
+      return json(route, 200, { ...resolveBody(opts.ethWallets ?? ETH_WALLETS, opts.ethAt ?? T2), network: 'ethereum' });
     }
     if (opts.failSolana)
       return json(route, 429, { error: { code: 'rate_limited', message: 'limited' }, requestId: 'r' });
-    return json(route, 200, { ...resolveBody(opts.solWallets ?? SOL_WALLETS, T1), network: 'solana', chainId: null });
+    return json(route, 200, { ...resolveBody(opts.solWallets ?? SOL_WALLETS, opts.solAt ?? T1), network: 'solana', chainId: null });
   });
   return calls;
 }
@@ -193,6 +195,18 @@ test('a failed network marks only its own addresses failed; nothing is substitut
   await expect(section.getByText('05:58 – 05:58 UTC')).toHaveCount(0);
   await section.scrollIntoViewIfNeeded();
   await page.screenshot({ path: `test-results/combined-failed-${info.project.name}.png` });
+});
+
+test('same-minute reads with differing milliseconds collapse to one time label', async ({ page }) => {
+  await stubAccounts(page, SEED);
+  await stubResolve(page, { ethAt: '2026-10-25T05:58:17.875Z', solAt: '2026-10-25T05:58:58.082Z' });
+  await page.goto('/portfolio');
+  const section = page.locator('#main .combined');
+  await section.getByRole('button', { name: 'Load saved addresses, combined' }).click();
+  await expect(section.locator('.metric strong').first()).toHaveText('$10,750.00');
+  // Both networks read inside 05:58 - one time, never a '05:58 – 05:58' duplicate.
+  await expect(section.getByText(/· 05:58 UTC$/)).toBeVisible();
+  await expect(section.getByText(/05:58 – 05:58/)).toHaveCount(0);
 });
 
 test('when every network fails the badge claims no data mode', async ({ page }) => {
