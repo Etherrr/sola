@@ -34,6 +34,8 @@ export type AddressStatus = {
   /** The source's own observation time for this address; null when no data was read. */
   observedAt: string | null;
   unpricedAssets: number;
+  /** Sum of this address's priced values; null when no data was read (failed/duplicate). */
+  pricedValueCents: bigint | null;
 };
 
 export type AggregateResult = {
@@ -81,6 +83,7 @@ export function aggregateAddresses(inputs: readonly AggregateInput[]): Aggregate
         warnings: ['Same address submitted twice; counted once.'],
         observedAt: null,
         unpricedAssets: 0,
+        pricedValueCents: null,
       });
       continue;
     }
@@ -95,6 +98,7 @@ export function aggregateAddresses(inputs: readonly AggregateInput[]): Aggregate
         warnings: [input.outcome.message],
         observedAt: null,
         unpricedAssets: 0,
+        pricedValueCents: null,
       });
       continue;
     }
@@ -102,6 +106,7 @@ export function aggregateAddresses(inputs: readonly AggregateInput[]): Aggregate
     const { data } = input.outcome;
     const warnings = [...data.warnings];
     let unpriced = 0;
+    let pricedSum = 0n;
     const seenAssets = new Set<string>();
     for (const wallet of data.wallets) {
       for (const asset of wallet.assets) {
@@ -112,6 +117,7 @@ export function aggregateAddresses(inputs: readonly AggregateInput[]): Aggregate
         seenAssets.add(asset.assetId);
         const cents = asset.value === null ? null : usdToCents(asset.value);
         if (cents === null) unpriced++;
+        else pricedSum += cents;
         const id = `${input.network}:${input.address}:${asset.assetId}`;
         positions.push({
           id,
@@ -136,6 +142,7 @@ export function aggregateAddresses(inputs: readonly AggregateInput[]): Aggregate
       warnings,
       observedAt: data.observedAt,
       unpricedAssets: unpriced,
+      pricedValueCents: pricedSum,
     });
   }
 
