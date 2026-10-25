@@ -1,6 +1,6 @@
 # Reliability and source preparation — handoff, 2026-10-24
 
-Branch: `feat/portfolio-reliability-accounts`. Baseline: `origin/feat/live-wallet-app` at `a63b465`. Local work only; not deployed, pushed or merged. `main` and the production release branch were not changed.
+Branch: `feat/portfolio-reliability-accounts`. Baseline: `origin/feat/live-wallet-app` at `a63b465`. Written as local work only; after this handoff the branch was pushed to GitHub at `76b676e` (2026-10-24) and Cloudflare auto-created preview deployment `8f33e7eb`. Not merged. `main` and the production release branch were not changed.
 
 ## Completed changes
 
@@ -8,7 +8,7 @@ Branch: `feat/portfolio-reliability-accounts`. Baseline: `origin/feat/live-walle
 - Reject unusable response timestamps and extra unrequested wallets. Show balance observation separately from response completion and each price-feed update. Solana's observation now uses balance-response receipt, not the Ethereum pricing block time. This is receipt time, not a Solana block timestamp.
 - Markets UI has four source-pending areas with no values. Typed server provider interface plus a disabled implementation perform no vendor IO. No live market adapter or cache is implemented before source approval.
 - Correct Settings/privacy copy; preserve one Education navigation exit, verified identity flow, entrance animation, reduced motion and clearly simulated Overview.
-- Document account storage/isolation/deletion proposal and market candidate terms/coverage/costs. Owner explicitly chose to defer persistence and finish reliability/source preparation. No local or server address storage was added.
+- Document account storage/isolation/deletion proposal and market candidate terms/coverage/costs. The original handoff text stated the owner explicitly chose to defer persistence; independent review on 2026-10-24 found no owner-channel confirmation of that choice, so it is preserved here as reported state, not established fact. No local or server address storage was added.
 
 ## Verification actually run
 
@@ -39,3 +39,9 @@ Rollback impact: reverting this change restores prior lookup UX and removes Mark
 ## Pending / next item
 
 Owner review of the local branch is next. PR publication and any preview/release need a coordinated handoff; nothing was pushed in this change. Account persistence, account-scoped returning-user address lists and real Overview aggregation remain deferred. Before market integration: owner source choice, confirmed display rights/geography, credentials and cost approval, then schemas/bounded server fetch/cache and one approved real lookup. Before incident confirmation: authorized sanitized request-log correlation. No production release is authorized by these checks.
+
+## Review corrections (2026-10-24, independent review)
+
+- Header updated: the branch was pushed after this handoff was written (auto-preview `8f33e7eb` exists); "local work only" was stale.
+- The owner-deferral sentence above is re-attributed as a handoff claim; no owner decision is inferred from it.
+- Independent re-verification on an integrated local branch (this branch plus the pending 390px focus-offset fix `f3a00f3`): `npx vitest run` 242/242, `npx tsc --noEmit` clean, ESLint clean, `npm run build` + `npm run verify:export` 21 routes, full Playwright 119 passed + 1 existing skip + 0 failed, served build verified by chunk hash before counting. The two baseline failures the handoff mentions (`getByLabel('Network')` ambiguity) reproduce on the true baseline `a63b465` and are fixed by this branch's combobox locator change.
