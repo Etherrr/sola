@@ -1,4 +1,5 @@
 import { PageIntro } from '@/components/ui';
+import { WhatChanged } from '@/features/portfolio-v2/what-changed';
 export const metadata = { title: 'Overview v2 (preview build)' };
 
 /**
@@ -30,11 +31,7 @@ export default function OverviewV2() {
 
       <section className="panel">
         <h2>What changed</h2>
-        <p>
-          <em>History begins after your first recorded observation.</em> Deltas compare the latest
-          complete observation against the prior complete one; an incomplete observation is never
-          treated as &quot;zero&quot;.
-        </p>
+        <WhatChanged />
       </section>
 
       <section className="panel">
