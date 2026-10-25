@@ -3402,3 +3402,16 @@ html {
   font-size: 0.8rem;
   margin-bottom: 12px;
 }
+
+/* A signed-out sub-block (e.g. recording consent) renders nothing - its
+   wrapper must not leave a stray divider. */
+.ov2-block:empty {
+  display: none;
+}
+
+/* Inside the v2 Overview panel, sub-blocks span the panel width - the
+   standalone 44rem centered column reads as misaligned here. */
+.ov2 .accounts {
+  max-width: none;
+  margin: 0;
+}
