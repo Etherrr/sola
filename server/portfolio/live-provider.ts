@@ -1,4 +1,5 @@
 import { formatUnits, valueUsd } from './units';
+import { SUPPORTED_EVM_TOKENS } from '../../lib/supported-evm-tokens';
 import type { AavePositionView, Asset, WalletResult } from './contract';
 import type { Diag, FetchOptions, PortfolioProvider, ProviderResult } from './provider';
 import {
@@ -60,34 +61,7 @@ export const FEEDS = {
   'DAI/USD': feed('0xAed0c38402a5d19df6E4c03F4E2DcEd6e29c1ee9', 3600),
 };
 
-// symbol() and decimals() of each contract were read on-chain on 2026-10-23.
-export const TOKENS: { symbol: string; address: string; decimals: number; feed: FeedId }[] = [
-  {
-    symbol: 'USDC',
-    address: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
-    decimals: 6,
-    feed: 'USDC/USD',
-  },
-  {
-    symbol: 'USDT',
-    address: '0xdac17f958d2ee523a2206206994597c13d831ec7',
-    decimals: 6,
-    feed: 'USDT/USD',
-  },
-  {
-    symbol: 'DAI',
-    address: '0x6b175474e89094c44da98b954eedeac495271d0f',
-    decimals: 18,
-    feed: 'DAI/USD',
-  },
-  // Wrapped ether is priced with the ETH/USD feed (a 1:1 wrapper; a depeg would not show).
-  {
-    symbol: 'WETH',
-    address: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
-    decimals: 18,
-    feed: 'ETH/USD',
-  },
-];
+export const TOKENS = SUPPORTED_EVM_TOKENS;
 
 const HEX = /^0x[0-9a-fA-F]+$/; // a bare "0x" is not a value
 type Rpc = { jsonrpc?: unknown; id?: unknown; result?: unknown; error?: unknown };

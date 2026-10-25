@@ -4,6 +4,7 @@
 // then runs the reviewed aggregateAddresses model. Never loads automatically; every source
 // keeps its own observation time; watched addresses are observed, not proven to be yours.
 import Link from 'next/link';
+import { evmCoverageLabel, SUPPORTED_EVM_SYMBOLS } from '@/lib/supported-evm-tokens';
 import { useEffect, useRef, useState } from 'react';
 import { useSession } from './session-context';
 import { listAccounts, type AccountsFailure } from './accounts-client';
@@ -280,7 +281,7 @@ export function CombinedWallets() {
             </ul>
           ) : null}
           <div className="combined-coverage">
-            <span className="cov-badge">Ethereum: ETH + 4 tokens</span>
+            <span className="cov-badge">Ethereum: {SUPPORTED_EVM_SYMBOLS.join(', ')}</span>
             <span className="cov-badge">Solana: SOL balance only</span>
             <span className="cov-badge">Observed, not owned</span>
             {ready.result.priceAsOf ? (
@@ -292,8 +293,8 @@ export function CombinedWallets() {
               <summary>Coverage details</summary>
           <ul className="fine muted combined-notes">
             <li>
-              Coverage: Ethereum ETH plus USDC, USDT, DAI and WETH (five assets total); Solana
-              SOL balance only. A missing token is not a zero balance.
+              Coverage: Ethereum {evmCoverageLabel()}; Solana SOL balance only. A missing token
+              is not a zero balance.
             </li>
             <li>Watched addresses are observed, not proven to be yours.</li>
             <li>

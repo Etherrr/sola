@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { evmCoverageLabel, SUPPORTED_EVM_SYMBOLS } from '../../lib/supported-evm-tokens';
 
 // Real saved-address combined view on /portfolio, exercised against stubbed same-origin APIs.
 // Synthetic fixture addresses only; the stubs read no chain and no real user data.
@@ -150,12 +151,13 @@ test('loads nothing until asked, then renders the real combined view with per-ad
   await expect(section.getByText('05:55 – 05:58 UTC')).toBeVisible();
   await expect(section.getByText(/One source was unreachable/)).toBeVisible();
   // Compact badges visible; the full honesty notes live one tap away in the details panel.
-  await expect(section.getByText('Ethereum: ETH + 4 tokens')).toBeVisible();
+  await expect(section.getByText(`Ethereum: ${SUPPORTED_EVM_SYMBOLS.join(', ')}`)).toBeVisible();
   await expect(section.getByText('Solana: SOL balance only')).toBeVisible();
   await expect(section.getByText('Observed, not owned')).toBeVisible();
-  await expect(section.getByText(/Coverage: Ethereum ETH plus USDC, USDT, DAI and WETH/)).toHaveCount(1);
+  const covRe = new RegExp(`Coverage: Ethereum ${evmCoverageLabel().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`);
+  await expect(section.getByText(covRe)).toHaveCount(1);
   await section.locator('.cov-details summary').click();
-  await expect(section.getByText(/Coverage: Ethereum ETH plus USDC, USDT, DAI and WETH/)).toBeVisible();
+  await expect(section.getByText(covRe)).toBeVisible();
   await expect(section.getByText(/not a zero balance/)).toBeVisible();
   await expect(section.getByText(/observed, not proven to be yours/)).toBeVisible();
   await expect(section.getByText(/Refreshes only when you ask/)).toBeVisible();
