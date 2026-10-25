@@ -6,6 +6,7 @@ import {
   runSync,
   type ConsentState,
 } from './snapshot-sync';
+import { invalidateOverview } from './overview-history';
 
 /**
  * Balance-history recording: explicit opt-in, honest cadence (records when
@@ -45,6 +46,7 @@ export function SnapshotConsent() {
     if (!window.confirm('Stop recording and permanently delete your recorded balance history?'))
       return;
     await act(() => changeConsent('withdraw'));
+    invalidateOverview();
     window.dispatchEvent(new CustomEvent(SYNCED_EVENT));
   };
 
@@ -60,7 +62,10 @@ export function SnapshotConsent() {
           : out.notes.length > 0
             ? out.notes.join('; ') + '.'
             : 'Nothing new to record.');
-        if (out.recorded) window.dispatchEvent(new CustomEvent(SYNCED_EVENT));
+        if (out.recorded) {
+          invalidateOverview();
+          window.dispatchEvent(new CustomEvent(SYNCED_EVENT));
+        }
         break;
       case 'no_consent': setNote('Recording is off - turn it on first.'); break;
       case 'no_addresses': setNote('Add an address first.'); break;

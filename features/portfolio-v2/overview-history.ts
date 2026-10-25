@@ -104,15 +104,27 @@ let inFlight: Promise<OverviewResult> | null = null;
 /** One shared in-flight request; each call joins the same promise. */
 export function fetchOverview(): Promise<OverviewResult> {
   if (!inFlight) {
-    inFlight = overviewHistoryRequest()
+    const p = overviewHistoryRequest()
       .then(mapOverviewResponse)
       .catch((): OverviewResult => ({ kind: 'failed' }));
+    inFlight = p;
+    // Identity-guarded: a superseded request must not clear a newer one.
     const clear = () => {
-      inFlight = null;
+      if (inFlight === p) inFlight = null;
     };
-    inFlight.then(clear, clear);
+    p.then(clear, clear);
   }
   return inFlight;
+}
+
+/**
+ * Recorded balances changed (sync, refresh, recording withdrawal): drop the
+ * shared in-flight request so no caller can join a pre-change response.
+ * Callers must also discard their own pending .then results (generation
+ * guard) - a promise already handed out still resolves.
+ */
+export function invalidateOverview(): void {
+  inFlight = null;
 }
 
 /** Rows of a normalized overview payload belonging to ONE address.

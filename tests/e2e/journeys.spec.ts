@@ -909,6 +909,112 @@ test('v2 address book: Details expands recorded rows from the shared payload', a
   );
 });
 
+test('v2 address book: a pre-event in-flight response cannot repopulate cleared rows', async ({
+  page,
+}) => {
+  await page.route('**/api/v1/auth/email/session', (r) =>
+    r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'ok', email: 'owner@example.com', fresh: true }),
+    }),
+  );
+  await page.route('**/api/v1/portfolio/addresses**', (r) => {
+    if (r.request().method() !== 'GET') return r.continue();
+    return r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        status: 'ok',
+        addresses: [
+          {
+            network: 'ethereum',
+            address: '0xAbC1230000000000000000000000000000000000',
+            label: 'Main',
+            verification: 'watched',
+            createdAt: '2026-10-25T00:00:00Z',
+            lastObservedAt: null,
+          },
+        ],
+      }),
+    });
+  });
+  const overviewBody = (amount: string) =>
+    JSON.stringify({
+      status: 'ok',
+      scope: 'spot_balances_only',
+      latestCompleteObservedAt: '2026-10-25T01:00:00Z',
+      newerPartial: false,
+      latest: [
+        {
+          assetId: 'eth/native',
+          network: 'ethereum',
+          address: '0xabc1230000000000000000000000000000000000',
+          kind: 'wallet_balance',
+          amount,
+          observedAt: '2026-10-25T01:00:00Z',
+        },
+      ],
+      prior: null,
+      networks: [
+        {
+          network: 'ethereum',
+          latestObservedAt: '2026-10-25T01:00:00Z',
+          latest: [
+            {
+              assetId: 'eth/native',
+              network: 'ethereum',
+              address: '0xabc1230000000000000000000000000000000000',
+              kind: 'wallet_balance',
+              amount,
+              observedAt: '2026-10-25T01:00:00Z',
+            },
+          ],
+          prior: null,
+        },
+      ],
+    });
+  // The Details-triggered request (call 2) is held; after the sync event it
+  // resolves with STALE 1.5 while every later request serves FRESH 2.5.
+  let overviewCalls = 0;
+  let release!: () => void;
+  const gate = new Promise<void>((res) => {
+    release = res;
+  });
+  await page.route('**/api/v1/portfolio/overview**', async (r) => {
+    overviewCalls += 1;
+    const stale = overviewCalls <= 2;
+    if (overviewCalls === 2) await gate;
+    return r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: overviewBody(stale ? '1.5' : '2.5'),
+    });
+  });
+  await page.goto('/dev/overview-v2');
+  const main = page.locator('#main');
+  // Page load consumed overview request 1 before we interact.
+  await expect(main.getByRole('cell', { name: 'eth/native' }).first()).toBeVisible();
+  const details = main.getByRole('button', { name: /Details for Main/ });
+  await details.click();
+  await expect(details).toHaveAttribute('aria-expanded', 'true');
+  await expect(main.locator('.ab-details')).toHaveCount(1);
+  // Sync/withdraw lands while the Details request is still in flight.
+  await page.evaluate(() =>
+    window.dispatchEvent(new CustomEvent('sola:observation-synced')),
+  );
+  await expect(main.locator('.ab-details')).toHaveCount(0);
+  // The held pre-event response now resolves; it must NOT repopulate the row.
+  release();
+  await page.waitForTimeout(500);
+  await expect(main.locator('.ab-details')).toHaveCount(0);
+  // The next expand fetches fresh (stale 1.5 impossible, fresh 2.5 shown).
+  await details.click();
+  const region = main.locator('.ab-details');
+  await expect(region.getByRole('cell', { name: '2.5' })).toBeVisible();
+  await expect(region).not.toContainText('1.5');
+});
+
 test('shell nav is keyboard-reachable in DOM order', async ({ page }) => {
   await page.goto('/portfolio');
   const nav = page.locator('nav[aria-label="Main"]');

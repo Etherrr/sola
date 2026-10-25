@@ -1,11 +1,16 @@
 'use client';
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import {
   addressBookRequest,
   addressRenameRequest,
   addressRemoveRequest,
 } from '../portfolio/api-client';
-import { fetchOverview, rowsForAddress, type OverviewResult } from './overview-history';
+import {
+  fetchOverview,
+  invalidateOverview,
+  rowsForAddress,
+  type OverviewResult,
+} from './overview-history';
 import { SYNCED_EVENT } from './snapshot-consent';
 
 /**
@@ -59,6 +64,9 @@ export function AddressBook() {
   const [load, setLoad] = useState<Load>({ kind: 'loading' });
   const [open, setOpen] = useState<string | null>(null);
   const [hist, setHist] = useState<OverviewResult | null>(null);
+  // Bumped on every sync event: a pre-event fetch that resolves late is
+  // discarded instead of repopulating the cleared cache.
+  const histGen = useRef(0);
   const [network, setNetwork] = useState<'ethereum' | 'solana'>('ethereum');
   const [address, setAddress] = useState('');
   const [label, setLabel] = useState('');
@@ -82,6 +90,10 @@ export function AddressBook() {
   // deleted figures never stay visible; the next expand refetches fresh.
   useEffect(() => {
     const onSynced = () => {
+      histGen.current++;
+      // Drop the shared in-flight request too, so nothing joins a response
+      // from before the change (covers dispatchers outside this component).
+      invalidateOverview();
       setHist(null);
       setOpen(null);
     };
@@ -156,8 +168,14 @@ export function AddressBook() {
     setOpen(k);
     // Recorded observations come from the SAME normalized overview payload the
     // portfolio panels use - figures reconcile by construction (plan line 177:
-    // no parallel state). Loaded lazily on first expand.
-    if (!hist) void fetchOverview().then(setHist);
+    // no parallel state). Loaded lazily on expand; a non-ok result (failed /
+    // signin / off / empty) is retried on the next expand, never stuck.
+    if (!hist || hist.kind !== 'ok') {
+      const g = histGen.current;
+      void fetchOverview().then((r) => {
+        if (histGen.current === g) setHist(r);
+      });
+    }
   };
 
   const copyAddress = async (e: Entry) => {
