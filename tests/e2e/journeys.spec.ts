@@ -2236,6 +2236,7 @@ test('v2 allocation derives from the same combined read - no extra provider requ
   await expect(alloc.getByText('ETH', { exact: true })).toBeVisible();
   await expect(alloc.getByText('2 of 2 addresses loaded', { exact: true })).toBeVisible();
   await expect(alloc.getByText('1 unpriced asset unknown', { exact: true })).toBeVisible();
+  await expect(alloc.getByText('Gross priced holdings only - debt excluded')).toBeVisible();
   await expect(alloc.getByText('Solana: SOL balance only')).toBeVisible();
   await expect(alloc.locator('.cov-details')).toContainText(/Coverage: 2 of 2 addresses loaded/);
   await expect(alloc.locator('.cov-details')).toContainText(/never zero/);

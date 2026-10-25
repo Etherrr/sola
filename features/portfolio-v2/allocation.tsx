@@ -109,6 +109,7 @@ export function AllocationV2() {
             {unpriced} unpriced {unpriced === 1 ? 'asset' : 'assets'} unknown
           </span>
         ) : null}
+        <span className="cov-badge">Gross priced holdings only - debt excluded</span>
         {hasSolana ? <span className="cov-badge">Solana: SOL balance only</span> : null}
         {phase.result.priceAsOf ? (
           <span className="cov-badge">Prices {fmtTimestamp(phase.result.priceAsOf)}</span>
