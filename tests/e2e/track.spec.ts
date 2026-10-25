@@ -60,6 +60,16 @@ test.beforeEach(async ({ page }) => {
       body: JSON.stringify({ status: 'ok', via: 'cloudflare-access', identity: null }),
     }),
   );
+  // The shell also asks for the NATIVE session (AccountMenu). On production
+  // native routes are off; a 200 non-ok body maps to 'off' without a console
+  // error, exactly like a host where the routes are disabled.
+  await page.route('**/api/v1/auth/email/session', (r) =>
+    r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'off' }),
+    }),
+  );
 });
 test.describe('/track data mode follows the server', () => {
   test('live mode: labelled live, lists the covered tokens, discloses where the address goes', async ({
