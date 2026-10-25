@@ -1,6 +1,13 @@
 'use client';
-import { useEffect, useState } from 'react';
-import { fetchOverview, type NetworkSlice, type ObservedAmount } from './overview-history';
+import { useEffect, useRef, useState } from 'react';
+import {
+  fetchOverview,
+  invalidateOverview,
+  type NetworkSlice,
+  type ObservedAmount,
+  type OverviewResult,
+} from './overview-history';
+import { SYNCED_EVENT } from './snapshot-consent';
 
 /**
  * v0.2 Holdings table: renders the caller's OWN latest COMPLETE recorded
@@ -22,21 +29,47 @@ type Load =
 
 const short = (a: string) => (a.length > 12 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a);
 
+const toLoad = (r: OverviewResult): Load => {
+  if (r.kind === 'empty') return { kind: 'empty', newerPartial: r.newerPartial };
+  if (r.kind === 'ok')
+    return { kind: 'ok', at: r.at, newerPartial: r.newerPartial, rows: r.latest, networks: r.networks };
+  return { kind: r.kind };
+};
+
 export function HoldingsTable() {
   const [load, setLoad] = useState<Load>({ kind: 'loading' });
+  // Bumped on every sync event: a pre-event response resolving late is
+  // discarded instead of repainting deleted or superseded balances.
+  const gen = useRef(0);
 
   useEffect(() => {
     let live = true;
+    const g = gen.current;
     fetchOverview().then((r) => {
-      if (!live) return;
-      if (r.kind === 'empty') setLoad({ kind: 'empty', newerPartial: r.newerPartial });
-      else if (r.kind === 'ok')
-        setLoad({ kind: 'ok', at: r.at, newerPartial: r.newerPartial, rows: r.latest, networks: r.networks });
-      else setLoad({ kind: r.kind });
+      if (live && gen.current === g) setLoad(toLoad(r));
     });
     return () => {
       live = false;
     };
+  }, []);
+
+  // Sync/refresh/withdrawal consistency (reviewer requirement, shared with
+  // address-book and what-changed): withdrawal clears the panel at once -
+  // deleted amounts never stay visible; a recorded refresh keeps the current
+  // figures until the fresh ones arrive. The shared in-flight request is
+  // dropped so no consumer joins a pre-change response.
+  useEffect(() => {
+    const onSynced = (e: Event) => {
+      gen.current++;
+      invalidateOverview();
+      if ((e as CustomEvent).detail?.reason === 'withdraw') setLoad({ kind: 'loading' });
+      const g = gen.current;
+      fetchOverview().then((r) => {
+        if (gen.current === g) setLoad(toLoad(r));
+      });
+    };
+    window.addEventListener(SYNCED_EVENT, onSynced);
+    return () => window.removeEventListener(SYNCED_EVENT, onSynced);
   }, []);
 
   if (load.kind === 'loading') return <p><em>Loading holdings…</em></p>;

@@ -1015,6 +1015,81 @@ test('v2 address book: a pre-event in-flight response cannot repopulate cleared 
   await expect(region).not.toContainText('1.5');
 });
 
+test('v2 overview: withdrawal clears every panel without reload; stale mount response discarded', async ({
+  page,
+}) => {
+  await page.route('**/api/v1/auth/email/session', (r) =>
+    r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'ok', email: 'owner@example.com', fresh: true }),
+    }),
+  );
+  await page.route('**/api/v1/portfolio/addresses**', (r) => {
+    if (r.request().method() !== 'GET') return r.continue();
+    return r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'ok', addresses: [] }),
+    });
+  });
+  const row = {
+    assetId: 'eth/native',
+    network: 'ethereum',
+    address: '0xabc1230000000000000000000000000000000000',
+    kind: 'wallet_balance',
+    amount: '1.5',
+    observedAt: '2026-10-25T01:00:00Z',
+  };
+  const okBody = JSON.stringify({
+    status: 'ok',
+    scope: 'spot_balances_only',
+    latestCompleteObservedAt: '2026-10-25T01:00:00Z',
+    newerPartial: false,
+    latest: [row],
+    prior: null,
+    networks: [{ network: 'ethereum', latestObservedAt: '2026-10-25T01:00:00Z', latest: [row], prior: null }],
+  });
+  // Call 1 (mount, shared by Holdings + WhatChanged) is held; every later
+  // call answers empty, as after a recording withdrawal.
+  let calls = 0;
+  let release!: () => void;
+  const gate = new Promise<void>((res) => {
+    release = res;
+  });
+  await page.route('**/api/v1/portfolio/overview**', async (r) => {
+    calls += 1;
+    if (calls === 1) {
+      await gate;
+      return r.fulfill({ status: 200, contentType: 'application/json', body: okBody });
+    }
+    return r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'empty', newerPartial: false }),
+    });
+  });
+  await page.goto('/dev/overview-v2');
+  const main = page.locator('#main');
+  await expect(main.getByText('Loading holdings…')).toBeVisible();
+  // Withdrawal lands while the mount request is still in flight: both panels
+  // clear and refetch, and the fresh empty answer renders.
+  await page.evaluate(() =>
+    window.dispatchEvent(
+      new CustomEvent('sola:observation-synced', { detail: { reason: 'withdraw' } }),
+    ),
+  );
+  await expect(main.getByText(/No recorded balances yet/)).toBeVisible();
+  await expect(
+    main.getByText(/History begins after your first recorded observation/),
+  ).toBeVisible();
+  // The stale 1.5 mount response now resolves; no panel may paint it.
+  release();
+  await page.waitForTimeout(500);
+  await expect(main.getByText(/No recorded balances yet/)).toBeVisible();
+  await expect(main).not.toContainText('1.5');
+});
+
 test('shell nav is keyboard-reachable in DOM order', async ({ page }) => {
   await page.goto('/portfolio');
   const nav = page.locator('nav[aria-label="Main"]');

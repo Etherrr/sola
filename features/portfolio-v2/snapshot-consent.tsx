@@ -47,7 +47,7 @@ export function SnapshotConsent() {
       return;
     await act(() => changeConsent('withdraw'));
     invalidateOverview();
-    window.dispatchEvent(new CustomEvent(SYNCED_EVENT));
+    window.dispatchEvent(new CustomEvent(SYNCED_EVENT, { detail: { reason: 'withdraw' } }));
   };
 
   const refresh = async () => {
@@ -64,7 +64,7 @@ export function SnapshotConsent() {
             : 'Nothing new to record.');
         if (out.recorded) {
           invalidateOverview();
-          window.dispatchEvent(new CustomEvent(SYNCED_EVENT));
+          window.dispatchEvent(new CustomEvent(SYNCED_EVENT, { detail: { reason: 'recorded' } }));
         }
         break;
       case 'no_consent': setNote('Recording is off - turn it on first.'); break;

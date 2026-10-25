@@ -28,7 +28,13 @@ export function WhatChanged() {
   const [load, setLoad] = useState<Load>({ kind: 'loading' });
   const [round, setRound] = useState(0);
   useEffect(() => {
-    const bump = () => setRound((n) => n + 1);
+    const bump = (e: Event) => {
+      // Withdrawal deleted the recorded history: clear at once rather than
+      // showing deleted figures until the refetch lands. A recorded refresh
+      // keeps the current figures until fresh ones arrive.
+      if ((e as CustomEvent).detail?.reason === 'withdraw') setLoad({ kind: 'loading' });
+      setRound((n) => n + 1);
+    };
     window.addEventListener(SYNCED_EVENT, bump);
     return () => window.removeEventListener(SYNCED_EVENT, bump);
   }, []);
