@@ -54,8 +54,9 @@ function TrackIntro({ mode }: { mode: Shown }) {
           <p className="notice">
             Live mode is on for this deployment. Read-only: no wallet connects and nothing is
             signed. A pasted address is sent to a public node (PublicNode) for the chosen network
-            to read its balances; PublicNode's policy text says it keeps request data at most 24
-            hours, and that statement is not verified here. Each result below says when it was
+            to read its balances - or, for a Solana lookup only when PublicNode answers rate limiting,
+            once to Solana's public RPC endpoint; PublicNode's policy text says it keeps request
+            data at most 24 hours, and that statement is not verified here. Each result below says when it was
             read.
           </p>
         </>

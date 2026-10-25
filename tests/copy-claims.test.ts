@@ -173,3 +173,22 @@ describe('markets coverage and privacy claims', () => {
     expect(form).toContain('feed updated');
   });
 });
+
+describe('the orientation page keeps coverage claims honest', () => {
+  const page = readFileSync('app/welcome/page.tsx', 'utf8');
+  it('states Solana coverage as the SOL balance only', () => {
+    expect(page).toMatch(/SOL\s+balance\s+only/);
+  });
+  it('keeps observed-not-owned and no-substitution honesty', () => {
+    expect(page).toMatch(/observed,\s+not\s+proven\s+to\s+be\s+yours/);
+    expect(page).toMatch(/never\s+substitutes\s+an\s+invented\s+number/);
+  });
+  it('promises no wallet connection, signing or transactions', () => {
+    expect(page).toMatch(/No\s+wallet\s+ever\s+connects/);
+    expect(page).toMatch(/nothing\s+is\s+signed/);
+    expect(page).toMatch(/no\s+transactions\s+exist/);
+  });
+  it('labels the native sign-in as a design preview only', () => {
+    expect(page).toContain('design preview');
+  });
+});

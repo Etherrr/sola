@@ -21,6 +21,7 @@ const routes = [
   '/learn/security-lab',
   '/settings',
   '/onboarding',
+  '/welcome',
 ];
 test.beforeEach(async ({ page }) => {
   // The intro plays on every load now; tests that are not about it opt out via reduced motion.
@@ -664,6 +665,24 @@ test('onboarding prototype is clearly nonfunctional: every control disabled, not
   for (let i = 0; i < count; i += 1) {
     await expect(controls.nth(i)).toBeDisabled();
   }
+  await page.waitForTimeout(500);
+  expect(posts).toEqual([]);
+});
+
+test('orientation page is honest, inert and sends nothing', async ({ page }) => {
+  const posts: string[] = [];
+  page.on('request', (r) => {
+    if (r.method() === 'POST') posts.push(r.url());
+  });
+  await page.goto('/welcome');
+  await expect(page.locator('#main')).toContainText('What this app does, honestly.');
+  await expect(page.locator('#main')).toContainText('SOL balance only');
+  await expect(page.locator('#main')).toContainText('not proven to be yours');
+  await expect(page.locator('#main')).toContainText('nothing is signed');
+  await expect(page.locator('#main')).toContainText('never substitutes an invented number');
+  await expect(page.locator('#main')).toContainText('design preview');
+  await expect(page.locator('#main input')).toHaveCount(0);
+  await expect(page.locator('#main button')).toHaveCount(0);
   await page.waitForTimeout(500);
   expect(posts).toEqual([]);
 });
