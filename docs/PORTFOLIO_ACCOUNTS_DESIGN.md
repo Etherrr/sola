@@ -65,3 +65,34 @@ tests/d1-adapter.test.ts and tests/accounts.test.ts (265 tests total):
    ('disabled'/'not_configured') matches the existing resolve handler's published contract;
    both endpoints sit behind Cloudflare Access, so these categories reach only
    Access-admitted callers. Clarified in a code comment.
+
+## Review addendum 3 (2026-10-24, retention and backup facts settled)
+
+Supersedes addendum 1's "backup/Time-Travel uninspected" line.
+
+- Plan-specific restore windows (D1 platform limits, checked 2026-10-24,
+  https://developers.cloudflare.com/d1/platform/limits/): Time Travel point-in-time
+  recovery is 7 days on Workers FREE, 30 days on Workers Paid; restores are capped at
+  10 per 10 minutes per database. Time Travel is always on, with no documented opt-out
+  or way to shorten the window (https://developers.cloudflare.com/d1/reference/time-travel/).
+- Exact disclosure wording: deleting an address or clearing an account removes rows from
+  the live table immediately, but they remain restorable through D1 Time Travel for up to
+  the plan window (7 days on Workers Free). After the window, D1's DOCUMENTED restore path
+  can no longer recover them. That is a restore-window statement, NOT a total-erasure
+  guarantee: Cloudflare publishes no provider-side erasure commitment beyond it (internal
+  backups, logs and similar retention are outside the published scope), and any export the
+  owner makes (wrangler d1 export) retains data independently.
+- A tracked address stored with a verified identity (iss#sub) and a user label is personal
+  data, even though the address itself is public on-chain. Retention policy must treat it
+  as such.
+- UI gap (corrected 2026-10-24): the candidate has NO account-management UI. List, add,
+  remove and clear are implemented, route-wired (functions/api/v1/portfolio/accounts.ts)
+  and tested at the API level only. Until minimal controls are built and render-verified,
+  deletion is an operator/API capability, not a user-facing one.
+- Minimal retention recommendation for this small private app: adopt delete/clear as the
+  stated policy and EITHER ship minimal render-verified delete/clear controls with
+  activation OR state operator-run deletion on request as the interim; accept the plan
+  window disclosure (7 days on Workers Free) with the no-total-erasure-guarantee wording
+  above; defer the 90-day inactivity job (requires new last-seen tracking; little value at
+  this scale); handle orphaned identities (re-added Access users get a new sub) by manual
+  review when Access membership changes.
