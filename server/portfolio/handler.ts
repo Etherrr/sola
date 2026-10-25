@@ -10,6 +10,8 @@ import {
 } from './access';
 import { mockProvider, solanaMockProvider, type Diag, type PortfolioProvider } from './provider';
 import { createLimiter, LOOKUP_WINDOWS } from '../accounts/limiter';
+import { createD1Limiter } from '../accounts/d1-limiter';
+import type { D1Like } from '../accounts/d1';
 import { readOwnerKey } from '../accounts/handler';
 import { createLiveProvider } from './live-provider';
 import { createSolanaLiveProvider } from './live-provider-solana';
@@ -22,6 +24,8 @@ export type Env = {
   ACCESS_AUD?: string;
   /** Optional per-identity lookup limiter. Only the exact string '1' turns it on. */
   PORTFOLIO_LOOKUP_LIMIT?: string;
+  /** Optional approved D1 binding; when present the limiter adds a durable global counter layer. */
+  PORTFOLIO_ACCOUNTS_DB?: D1Like;
 };
 export type Deps = {
   provider: PortfolioProvider;
@@ -118,6 +122,16 @@ async function readAll(
 
 /** Gate every request: kill switch, then Access JWT (never trust an email header). Fails closed. */
 const lookupLimiter = createLimiter(LOOKUP_WINDOWS);
+let lastSweepAt = 0;
+const d1Limiters = new WeakMap<object, ReturnType<typeof createD1Limiter>>();
+function d1LimiterFor(db: D1Like) {
+  let l = d1Limiters.get(db as object);
+  if (!l) {
+    l = createD1Limiter(db, LOOKUP_WINDOWS);
+    d1Limiters.set(db as object, l);
+  }
+  return l;
+}
 const lastLogged = new Map<string, number>();
 /** At most one log line per category per minute per isolate, so rejections cannot amplify log volume. */
 function logOnce(category: string, nowMs: number) {
@@ -163,10 +177,23 @@ export async function handleResolve(
   if (env.PORTFOLIO_LOOKUP_LIMIT === '1') {
     const key = readOwnerKey(req.headers.get('cf-access-jwt-assertion'));
     if (key) {
+      // Layer 1: per-isolate memory. Alone it is NOT a global guardrail: distributed Pages
+      // instances each hold their own counters. Layer 2 (only with the approved D1 binding):
+      // one atomic UPSERT per window, UTC-aligned, failing CLOSED on any storage error.
       const lim = lookupLimiter.check(key);
-      if (!lim.allowed)
+      let blocked = lim.allowed ? null : lim;
+      if (!blocked && env.PORTFOLIO_ACCOUNTS_DB) {
+        const global = await d1LimiterFor(env.PORTFOLIO_ACCOUNTS_DB).check(key);
+        if (!global.allowed) blocked = global;
+        const t = d.now().getTime();
+        if (t - lastSweepAt > 3_600_000) {
+          lastSweepAt = t;
+          void d1LimiterFor(env.PORTFOLIO_ACCOUNTS_DB).sweep(2 * 86_400_000);
+        }
+      }
+      if (blocked)
         return err(429, 'rate_limited', 'Too many lookups. Try again later.', requestId, {
-          'retry-after': String(lim.retryAfterSec),
+          'retry-after': String(blocked.retryAfterSec),
         });
     }
   }

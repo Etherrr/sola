@@ -112,3 +112,12 @@ export const SCHEMA_SQL = `CREATE TABLE IF NOT EXISTS tracked_addresses (
   updated_at TEXT NOT NULL,
   PRIMARY KEY (owner_issuer_subject, network, address)
 );`;
+
+/** Counters for the durable global limiter layer (same binding decision as account storage). */
+export const COUNTERS_SQL = `CREATE TABLE IF NOT EXISTS rate_counters (
+  owner TEXT NOT NULL,
+  window_start INTEGER NOT NULL,
+  window_ms INTEGER NOT NULL,
+  count INTEGER NOT NULL CHECK (count >= 0),
+  PRIMARY KEY (owner, window_start, window_ms)
+);`;

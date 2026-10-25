@@ -28,3 +28,10 @@ Test signed users A/B across list/add/update/delete and object-reference attacks
 Rollback: retry UX has no migration. A future storage feature must be disabled independently and keep its database for owner-reviewed export/deletion; reverting UI does not delete stored personal data. No migration/production deploy or Access/DNS change is included here.
 
 Sources checked 2026-10-24: https://developers.cloudflare.com/d1/platform/pricing/ and https://developers.cloudflare.com/kv/platform/pricing/. Account-specific usage, region configuration, backup retention and current production bindings have NOT been inspected. Proposed retention requires owner acceptance and an implemented purge path.
+
+## Review addendum (2026-10-24, independent review)
+
+- Identity key: the Access `sub` claim is the user ID, unique to an email address per Zero Trust account, per Cloudflare's application-token documentation (checked 2026-10-24). Caveat: a user removed and re-added to the organization receives a NEW `sub`; their saved rows would be orphaned. The purge path below must cover orphaned owners.
+- Purge and backups are NOT implemented. The 90-day inactivity purge is a proposal without a scheduled job; D1 backup/Time-Travel recovery windows are uninspected and must be disclosed before any real user data is saved. Deletion today means deletion from the live table only.
+- Rate limiting has two honest layers. Layer 1 is per-isolate process memory: distributed Pages instances each hold their own counters, so it is NOT a durable global guardrail by itself. Layer 2 (requires the approved D1 binding) is one atomic UPSERT ... RETURNING count per UTC-aligned fixed window, failing CLOSED (deny with bounded retry delay) on any storage error. The account cap and unique-key isolation are verified on real SQLite executing the actual migration and adapter SQL (tests/d1-adapter.test.ts over node:sqlite); that is D1-compatible statement execution, still not a workerd D1 binding.
+- Migration: migrations/0001_accounts_and_counters.sql is applied once, only after binding approval, through the owner-approved path.

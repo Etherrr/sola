@@ -2,6 +2,7 @@ import { decodeJwt } from 'jose';
 import { checkAccessJwt, isValidTeamHost, type KeyFetcher } from '../portfolio/access';
 import { createD1Store, type D1Like } from './d1';
 import { createLimiter, MUTATION_WINDOWS, type LimitCheck } from './limiter';
+import { createD1Limiter } from './d1-limiter';
 import { ownerKey, parseEntry, MAX_PER_NETWORK, type AccountsStore } from './store';
 
 /**
@@ -25,6 +26,8 @@ export type AccountsDeps = {
   /** Test seam: when set, used instead of the D1 binding. Production code never sets this. */
   storeOverride?: AccountsStore;
   limiter?: { check(key: string): LimitCheck };
+  /** Test seam for the durable layer: async counter check (e.g. D1-backed). */
+  asyncLimiter?: { check(key: string): Promise<LimitCheck> };
 };
 
 const HEADERS = {
@@ -97,9 +100,20 @@ export async function handleAccounts(
 
   if (req.method === 'POST' || req.method === 'DELETE') {
     const lim = (d.limiter ?? mutationLimiter).check(owner);
-    if (!lim.allowed)
+    let blocked = lim.allowed ? null : lim;
+    // Durable global layer when the real binding serves this request (never in storeOverride tests
+    // unless the test injects an asyncLimiter): atomic UPSERT, UTC windows, fails closed.
+    if (!blocked && !d.storeOverride && env.PORTFOLIO_ACCOUNTS_DB) {
+      const global = await createD1Limiter(env.PORTFOLIO_ACCOUNTS_DB, MUTATION_WINDOWS).check(owner);
+      if (!global.allowed) blocked = global;
+    }
+    if (!blocked && d.asyncLimiter) {
+      const injected = await d.asyncLimiter.check(owner);
+      if (!injected.allowed) blocked = injected;
+    }
+    if (blocked)
       return err(429, 'rate_limited', 'Too many changes. Try again later.', requestId, {
-        'retry-after': String(lim.retryAfterSec),
+        'retry-after': String(blocked.retryAfterSec),
       });
     if (!/^application\/json\s*(;.*)?$/i.test(req.headers.get('content-type') ?? ''))
       return err(415, 'unsupported_media_type', 'Send application/json.', requestId);
