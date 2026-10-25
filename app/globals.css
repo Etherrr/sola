@@ -3152,3 +3152,7 @@ html {
   flex-wrap: wrap;
   margin: 4px 0 0;
 }
+/* The global .app .panel > .eyebrow rule hides direct-child eyebrows; price cards need theirs. */
+.app .panel.price-card > .eyebrow {
+  display: block;
+}
