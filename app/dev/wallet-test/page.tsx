@@ -21,11 +21,18 @@ export default function WalletTest() {
       <section className="panel">
         <h2>What you are asked to approve</h2>
         <p>
-          Linking a wallet asks your wallet app to <strong>sign a plain-text message</strong>. The
-          signature proves you hold the wallet, so the preview can treat it as yours. Signing a
-          message is free (no gas) and cannot move funds.
+          Linking a wallet asks your wallet app to{' '}
+          <strong>sign one short, domain-bound, expiring authentication message</strong>. That
+          specific Sola sign-in message is not a transaction and grants no spending approval - it
+          only proves you control the wallet, so the preview can treat it as yours. Other apps can
+          ask for very different signatures that DO move funds or grant permissions, so always read
+          exactly what your wallet asks you to sign, every time.
         </p>
-        <p>The exact message an Ethereum wallet shows looks like this:</p>
+        <p>
+          An EVM wallet shows a sign-in message in this shape. This example is illustrative only -
+          the real domain, address, one-time code and expiry are generated at sign-in time and
+          shown by your wallet:
+        </p>
         <pre
           style={{
             whiteSpace: 'pre-wrap',
@@ -38,21 +45,22 @@ export default function WalletTest() {
             fontSize: '0.85rem',
           }}
         >
-{`preview.solacapitalpartners.com wants you to sign in with your Ethereum account:
-0xYourAddress...
+{`<the site's domain> wants you to sign in with your Ethereum account:
+<your wallet address>
 
 Sign in to Sola Lens preview to link this wallet to your account.
 
-URI: https://preview.solacapitalpartners.com/signin
+URI: <the page's address>
 Version: 1
 Chain ID: 1
 Nonce: <one-time code, valid 10 minutes>
 Issued At: <timestamp>`}
         </pre>
         <p>
-          A Solana wallet shows the same fields as plain text. If your wallet ever shows a
-          transaction, an approval, or a spending cap instead of plain text like this,{' '}
-          <strong>cancel and report it</strong> - that is not this flow.
+          Solana wallets sign a plain-text message with the same purpose and expiry instead; the
+          SIWE fields above are EVM-specific. If your wallet ever shows a transaction, an approval,
+          or a spending cap instead of a plain sign-in message, <strong>cancel and report it</strong>{' '}
+          - that is not this flow.
         </p>
       </section>
 
