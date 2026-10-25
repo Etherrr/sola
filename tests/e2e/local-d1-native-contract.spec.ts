@@ -31,8 +31,14 @@ test.beforeEach(async () => {
   test.skip(!up, 'native fixture worker not running: start harness/serve-native.mjs');
 });
 
+// 0002 enforces (kind, identifier) uniqueness - correct production behavior - so each
+// Playwright invocation needs fresh seed identities (desktop and mobile projects share one
+// in-memory D1). Plus-addressing keeps the seeded identity/entitlement pair consistent.
+const RUN = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+
 async function seed(email: string): Promise<string> {
-  const r = await fetch(`${FIXTURE}/fixture/seed-native?email=${encodeURIComponent(email)}`);
+  const unique = email.replace('@', `+${RUN}@`);
+  const r = await fetch(`${FIXTURE}/fixture/seed-native?email=${encodeURIComponent(unique)}`);
   return (await r.json()).session as string;
 }
 
@@ -167,12 +173,18 @@ test('native consent → sync records into real D1 → reads reflect it → with
   const overview = await (await api('/api/v1/portfolio/overview')).json();
   expect(overview.status).toBe('ok');
   expect(overview.latest.length).toBeGreaterThan(0);
+  // The recorded row carries the recordable fixture's exact value - handler semantics,
+  // not a shape check.
+  expect(
+    overview.latest.some((r: { assetId?: string; amount?: string }) => r.assetId === 'eip155:1/native' && r.amount === '1.25'),
+  ).toBe(true);
 
   // The UI's expanded row reads that recorded observation back through the real overview route.
   await main.getByRole('button', { name: /Details for Observed/ }).click();
   const region = main.locator('.ab-details');
   await expect(region).toContainText('Latest complete observation');
   await expect(region).toContainText('ETH');
+  await expect(region).toContainText('1.25');
 
   // Withdrawal deletes the recorded history for real, and every reader agrees.
   page.once('dialog', (d) => void d.accept());
@@ -201,7 +213,39 @@ test('native session required: no valid cookie means 401 and an honest signed-ou
     await route.fulfill({ response: resp });
   });
   await page.goto('/dev/overview-v2');
-  await expect(page.locator('#main').getByText('Sign in to manage your addresses.')).toBeVisible();
+  const main = page.locator('#main');
+  // One honest gate for the whole page (not four per-section "Sign in to..." lines).
+  await expect(
+    main.getByText('Sign in to see your holdings, addresses and recorded history.'),
+  ).toBeVisible();
+  await expect(main.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/dev/sign-in');
+  // The data route itself still refuses the bogus session with a real 401.
   const res = await api('/api/v1/portfolio/addresses');
   expect(res.status).toBe(401);
+});
+
+test('simulated reads are never recorded: the production guard refuses them even with consent granted', async () => {
+  session = await seed('owner-guard@example.com');
+  const add = await api('/api/v1/portfolio/addresses', {
+    method: 'POST',
+    body: JSON.stringify({ network: 'ethereum', address: ETH('a'), label: 'Guard' }),
+  });
+  expect(add.ok).toBe(true);
+  const consent = await api('/api/v1/portfolio/snapshots/consent', {
+    method: 'POST',
+    body: JSON.stringify({ action: 'grant' }),
+  });
+  expect(consent.ok).toBe(true);
+  // The harness seam selects the genuinely simulated providers; the UNCHANGED production
+  // sync handler must refuse to persist their reads (server/portfolio/sync.ts).
+  const sync = await fetch(`${FIXTURE}/api/v1/portfolio/sync`, {
+    method: 'POST',
+    headers: { ...cookieHeader(), 'content-type': 'application/json', origin: FIXTURE, 'x-fixture-provider': 'simulated' },
+    body: '{}',
+  });
+  const body = await sync.json();
+  expect(body.recorded).toBe(false);
+  expect(JSON.stringify(body)).toContain('simulated_refused');
+  // Nothing reached storage: the overview read agrees.
+  expect((await (await api('/api/v1/portfolio/overview')).json()).status).toBe('empty');
 });

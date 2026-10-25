@@ -18,7 +18,7 @@ import {
 } from '../server/portfolio/consent';
 import { handleSync, type SyncDeps } from '../server/portfolio/sync';
 import { handleOverview } from '../server/portfolio/overview-handler';
-import { mockProvider, solanaMockProvider } from '../server/portfolio/provider';
+import { mockProvider, solanaMockProvider, type PortfolioProvider, type ProviderResult } from '../server/portfolio/provider';
 import type { D1Like } from '../server/accounts/d1';
 
 // Production applies 0001 (rate_counters + legacy tables) and 0002; 0003 is the pending
@@ -32,10 +32,52 @@ const MIGRATIONS = [mig1, mig2, mig3].flatMap((sql) =>
 );
 
 async function migrate(db: D1Like) {
-  for (const stmt of MIGRATIONS) await db.prepare(stmt).run();
+  for (const stmt of MIGRATIONS) await db.prepare(stmt).bind().run();
 }
 
-const syncDeps: SyncDeps = {
+/** Harness-only recordable fixture: deterministic invented values whose RESULT declares
+ *  simulated:false at the provider seam, so the unchanged production sync handler persists
+ *  them. This exercises record/withdrawal handler semantics in the sandbox only; the
+ *  production guard refusing simulated reads (server/portfolio/sync.ts) is untouched and
+ *  pinned by an explicit spec. Header x-fixture-provider: simulated selects the genuine
+ *  simulated providers instead (the refusal path). */
+const recordable = (
+  name: string,
+  assetId: string,
+  symbol: string,
+  decimals: number,
+  rawAmount: string,
+  amount: string,
+  price: string,
+  value: string,
+): PortfolioProvider => ({
+  name,
+  simulated: false,
+  async fetchWallets(addresses: string[]): Promise<ProviderResult> {
+    const at = new Date().toISOString();
+    return {
+      ok: true,
+      provider: name,
+      simulated: false,
+      observedAt: at,
+      wallets: addresses.map((address) => ({
+        address,
+        assets: [
+          { assetId, symbol, decimals, rawAmount, amount, price, value, priceSource: name, priceObservedAt: at },
+        ],
+        partial: false,
+        warnings: [],
+      })),
+    };
+  },
+});
+
+const recordableDeps: SyncDeps = {
+  ethereum: recordable('harness-recordable-fixture', 'eip155:1/native', 'ETH', 18, '1250000000000000000', '1.25', '2000', '2500'),
+  solana: recordable('harness-recordable-fixture-solana', 'solana:mainnet/native', 'SOL', 9, '2500000000', '2.5', '100', '250'),
+  timeoutMs: 5000,
+};
+const simulatedDeps: SyncDeps = {
   ethereum: mockProvider,
   solana: solanaMockProvider,
   timeoutMs: 5000,
@@ -103,7 +145,7 @@ export default {
           ? handleSnapshotConsentStatus(req, env2)
           : handleSnapshotConsentChange(req, env2);
       case '/api/v1/portfolio/sync':
-        return handleSync(req, env2, syncDeps);
+        return handleSync(req, env2, req.headers.get('x-fixture-provider') === 'simulated' ? simulatedDeps : recordableDeps);
       case '/api/v1/portfolio/overview':
         return handleOverview(req, env2);
       default:
