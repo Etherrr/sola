@@ -36,9 +36,19 @@ beforeEach(async () => {
   env = { NATIVE_AUTH_ENABLED: 'true', PORTFOLIO_ACCOUNTS_DB: db };
   const now = new Date().toISOString();
   await db.prepare("INSERT INTO users (id, status, created_at, updated_at) VALUES ('u1','active',?,?)").bind(now, now).run();
+  await entitle('u1', 'u1@x.test');
   const s = await createSession(db, 'u1');
   cookie = `${SESSION_COOKIE}=${s.id}`;
 });
+
+/** Verified email identity + active entitlement (the standing data gate). */
+const entitle = async (userId: string, email: string) => {
+  const now = new Date().toISOString();
+  await db.prepare("INSERT INTO auth_identities (id, user_id, kind, identifier, verified_at) VALUES (?, ?, 'email', ?, ?)")
+    .bind(crypto.randomUUID(), userId, email, now).run();
+  await db.prepare("INSERT INTO entitlements (id, email, granted_by, created_at) VALUES (?, ?, 'test', ?)")
+    .bind(crypto.randomUUID(), email, now).run();
+};
 
 describe('validation', () => {
   it('EVM checksummed canonical, Solana exact case-sensitive', () => {
@@ -57,8 +67,21 @@ describe('validation', () => {
 });
 
 describe('address manager (session-gated)', () => {
-  it('requires a session; lists empty initially', async () => {
+  it('requires an ENTITLED session on every method; revoked == unentitled', async () => {
     expect((await handleAddressesList(req('GET', undefined), env)).status).toBe(401);
+    // user with a live session but NO entitlement: 403 everywhere
+    const now = new Date().toISOString();
+    await db.prepare("INSERT INTO users (id, status, created_at, updated_at) VALUES ('u9','active',?,?)").bind(now, now).run();
+    const s9 = await createSession(db, 'u9');
+    const c9 = `${SESSION_COOKIE}=${s9.id}`;
+    expect((await handleAddressesList(req('GET', undefined, c9), env)).status).toBe(403);
+    expect((await handleAddressAdd(req('POST', { network: 'ethereum', address: EVM, label: 'x' }, c9), env)).status).toBe(403);
+    expect((await handleAddressRename(req('POST', { network: 'ethereum', address: EVM, label: 'x' }, c9), env)).status).toBe(403);
+    expect((await handleAddressRemove(req('POST', { network: 'ethereum', address: EVM }, c9), env)).status).toBe(403);
+    // revoked entitlement: same refusal
+    await entitle('u9', 'u9@x.test');
+    raw.exec("UPDATE entitlements SET revoked_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE email = 'u9@x.test'");
+    expect((await handleAddressesList(req('GET', undefined, c9), env)).status).toBe(403);
     const r = await handleAddressesList(req('GET', undefined, cookie), env);
     expect(r.status).toBe(200);
     expect(((await r.json()) as { addresses: unknown[] }).addresses).toHaveLength(0);
@@ -114,6 +137,7 @@ describe('address manager (session-gated)', () => {
     await handleAddressAdd(req('POST', { network: 'ethereum', address: EVM, label: 'A-main' }, cookie), env);
     const now = new Date().toISOString();
     await db.prepare("INSERT INTO users (id, status, created_at, updated_at) VALUES ('u2','active',?,?)").bind(now, now).run();
+    await entitle('u2', 'u2@x.test'); // entitled but owns NOTHING - must 404, not 403
     const s2 = await createSession(db, 'u2');
     const cookie2 = `${SESSION_COOKIE}=${s2.id}`;
     // B sees none of A's addresses

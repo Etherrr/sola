@@ -15,9 +15,9 @@
  *   attributable; a re-add of a removed address revives the row.
  */
 import { checkEvmAddress, checkSolanaAddress } from './address';
-import { readLiveSession, recentlyAuthenticated, type SessionRow } from '../auth/sessions';
-import { readSessionCookie, SESSION_COOKIE, type NativeAuthEnv } from '../auth/email';
-import { requireSameOrigin } from '../auth/guards';
+import { recentlyAuthenticated } from '../auth/sessions';
+import { SESSION_COOKIE, type NativeAuthEnv } from '../auth/email';
+import { requireSameOrigin, requireEntitledSession, type NativeIdentity } from '../auth/guards';
 import type { ChallengeDb } from '../auth/challenges';
 
 export type AddressNetwork = 'ethereum' | 'solana';
@@ -62,19 +62,15 @@ export function validateLabel(label: unknown): string | null {
     : null;
 }
 
-async function liveUser(req: Request, db: ChallengeDb): Promise<string | null> {
-  const id = readSessionCookie(req);
-  if (!id) return null;
-  const session: SessionRow | null = await readLiveSession(db, id);
-  return session?.user_id ?? null;
-}
-
-/** Fresh-auth variant for destructive mutations (removal). */
-async function freshUser(req: Request, db: ChallengeDb): Promise<string | null> {
-  const id = readSessionCookie(req);
-  if (!id) return null;
-  const session: SessionRow | null = await readLiveSession(db, id);
-  return session && recentlyAuthenticated(session) ? session.user_id : null;
+/** EVERY address route is behind the entitlement gate (reviewer 2026-10-25):
+ *  a live-but-unentitled session reads and changes nothing. Removal additionally
+ *  requires a FRESH session (re-auth window) - destructive, same bar as linking. */
+async function entitledUser(req: Request, db: ChallengeDb, fresh: boolean): Promise<string | Response> {
+  const id: NativeIdentity | Response = await requireEntitledSession(req, db);
+  if (id instanceof Response) return id;
+  if (fresh && !recentlyAuthenticated(id.session))
+    return json(403, { error: 'reauth_required' });
+  return id.userId;
 }
 
 async function ensurePortfolio(db: ChallengeDb, userId: string, now: string): Promise<string> {
@@ -110,8 +106,9 @@ export async function handleAddressesList(req: Request, env: NativeAuthEnv): Pro
   if (env.NATIVE_AUTH_ENABLED !== 'true' || !env.PORTFOLIO_ACCOUNTS_DB)
     return json(503, { error: 'unavailable', requestId });
   const db = env.PORTFOLIO_ACCOUNTS_DB;
-  const userId = await liveUser(req, db);
-  if (!userId) return json(401, { error: 'auth_required', requestId });
+  const u = await entitledUser(req, db, false);
+  if (u instanceof Response) return u;
+  const userId = u;
   const rows = await db
     .prepare(
       `SELECT ${ADDRESS_COLS} FROM portfolio_addresses pa
@@ -135,8 +132,9 @@ export async function handleAddressAdd(req: Request, env: NativeAuthEnv): Promis
   if (env.NATIVE_AUTH_ENABLED !== 'true' || !env.PORTFOLIO_ACCOUNTS_DB)
     return json(503, { error: 'unavailable', requestId });
   const db = env.PORTFOLIO_ACCOUNTS_DB;
-  const userId = await liveUser(req, db);
-  if (!userId) return json(401, { error: 'auth_required', requestId });
+  const u = await entitledUser(req, db, false);
+  if (u instanceof Response) return u;
+  const userId = u;
 
   let body: Record<string, unknown>;
   try {
@@ -209,8 +207,9 @@ export async function handleAddressRename(req: Request, env: NativeAuthEnv): Pro
   if (env.NATIVE_AUTH_ENABLED !== 'true' || !env.PORTFOLIO_ACCOUNTS_DB)
     return json(503, { error: 'unavailable', requestId });
   const db = env.PORTFOLIO_ACCOUNTS_DB;
-  const userId = await liveUser(req, db);
-  if (!userId) return json(401, { error: 'auth_required', requestId });
+  const u = await entitledUser(req, db, false);
+  if (u instanceof Response) return u;
+  const userId = u;
 
   let body: Record<string, unknown>;
   try {
@@ -246,8 +245,9 @@ export async function handleAddressRemove(req: Request, env: NativeAuthEnv): Pro
   if (env.NATIVE_AUTH_ENABLED !== 'true' || !env.PORTFOLIO_ACCOUNTS_DB)
     return json(503, { error: 'unavailable', requestId });
   const db = env.PORTFOLIO_ACCOUNTS_DB;
-  const userId = await freshUser(req, db);
-  if (!userId) return json(403, { error: 'reauth_required', requestId });
+  const u = await entitledUser(req, db, true);
+  if (u instanceof Response) return u;
+  const userId = u;
 
   let body: Record<string, unknown>;
   try {

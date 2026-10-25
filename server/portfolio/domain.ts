@@ -107,10 +107,18 @@ export function amountToRaw(amount: string, decimals: number): bigint {
 
 /* ---------- mapping from provider results ---------- */
 
+/** Chain-aware address key: EVM compares case-insensitively, Solana base58 is
+ *  EXACT (case-sensitive alphabet). Never lowercase Solana in identity, netting
+ *  or reconciliation paths (reviewer 2026-10-25). */
+export const addressKey = (network: Network, address: string): string =>
+  network === 'ethereum' ? address.toLowerCase() : address;
+
 /** One wallet's provider result -> normalized positions. Zero-value sides of a
  *  protocol position are omitted (a '0' side is a true zero per the contract,
- *  not a position). */
-export function fromWalletResult(network: Network, w: WalletResult): Position[] {
+ *  not a position). `balanceObservedAt` is the PROVIDER's balance observation
+ *  (ResolveResponse.observedAt) - NOT the price time, so the stale-price policy
+ *  has real teeth (an old quote against a fresh balance reads stale). */
+export function fromWalletResult(network: Network, w: WalletResult, balanceObservedAt: string): Position[] {
   const out: Position[] = [];
   for (const a of w.assets) {
     const price: PricePoint | null =
@@ -126,7 +134,7 @@ export function fromWalletResult(network: Network, w: WalletResult): Position[] 
       price,
       valueUsd: a.value,
       source: a.priceSource ?? 'provider',
-      observedAt: a.priceObservedAt ?? '',
+      observedAt: balanceObservedAt,
       protocol: null,
     });
   }
@@ -167,7 +175,7 @@ export function fromWalletResult(network: Network, w: WalletResult): Position[] 
 /* ---------- dedupe ---------- */
 
 const posKey = (p: Position): string =>
-  [p.kind, p.asset.assetId, p.network, p.address.toLowerCase(), p.protocol ?? ''].join('|');
+  [p.kind, p.asset.assetId, p.network, addressKey(p.network, p.address), p.protocol ?? ''].join('|');
 
 /** Merge duplicate rows (same kind+asset+network+address+protocol): amounts are
  *  summed exactly, the freshest price wins, and the value is recomputed from
@@ -222,7 +230,7 @@ export function netProtocolAmount(positions: Position[], protocol: string, netwo
   let debt = '0';
   for (const p of positions) {
     if (p.protocol !== protocol || p.network !== network || p.asset.assetId !== assetId) continue;
-    if (p.address.toLowerCase() !== address.toLowerCase()) continue;
+    if (addressKey(p.network, p.address) !== addressKey(network, address)) continue;
     if (p.kind === 'protocol_supplied') supplied = addDecimal(supplied, p.amount);
     if (p.kind === 'protocol_debt') debt = addDecimal(debt, p.amount);
   }

@@ -23,6 +23,7 @@ import { requireSameOrigin } from './guards';
 import { createD1Limiter } from '../accounts/d1-limiter';
 import type { LimitWindow } from '../accounts/limiter';
 import { readSessionCookie, SESSION_COOKIE, type NativeAuthEnv } from './email';
+import { canonicalOf } from '../portfolio/addresses';
 import {
   buildSiweMessage,
   isValidEvmAddress,
@@ -400,41 +401,78 @@ export async function handleWalletLinkVerify(
     return json(409, { error: 'wallet_linked_elsewhere', requestId });
 
   const now = new Date().toISOString();
+  // A completed link challenge is the ONLY writer of verification='verified'
+  // in the address book (reviewer 2026-10-25): the link upserts the
+  // portfolio_addresses row ATOMICALLY with the identity/wallet_links writes,
+  // so the Addresses & Wallets view reconciles with sign-in state.
+  const portfolio = await db
+    .prepare(`SELECT id FROM portfolios WHERE user_id = ?`)
+    .bind(userId)
+    .first<{ id: string }>();
+  const portfolioId = portfolio?.id ?? crypto.randomUUID();
+  const canonical = canonicalOf(linkChainOf(chain), addr.display);
+  const shortLabel = `${addr.display.slice(0, 6)}-${addr.display.slice(-4)}`;
+  const addressUpsert = db
+    .prepare(
+      `INSERT INTO portfolio_addresses (portfolio_id, network, address, label, verification, created_at)
+       VALUES (?, ?, ?, ?, 'verified', ?)
+       ON CONFLICT (portfolio_id, network, address)
+       DO UPDATE SET verification = 'verified', removed_at = NULL`,
+    )
+    .bind(portfolioId, linkChainOf(chain), canonical, shortLabel, now);
+  const batch = (db as unknown as { batch: (stmts: unknown[]) => Promise<unknown[]> }).batch.bind(db);
+
   if (existing) {
     // Same account: idempotent - but REPAIR a partial earlier write (identity
-    // without its wallet_links row) instead of skipping it forever.
+    // without its wallet_links row, or either without the address-book row)
+    // instead of skipping it forever.
     const link = await db
       .prepare(`SELECT rowid FROM wallet_links WHERE chain = ? AND address = ? AND user_id = ?`)
       .bind(linkChainOf(chain), addr.display, userId)
       .first<{ rowid: number }>();
-    if (!link) {
-      await db
-        .prepare(
+    const bookRow = await db
+      .prepare(
+        `SELECT verification, removed_at FROM portfolio_addresses
+          WHERE portfolio_id = ? AND network = ? AND address = ?`,
+      )
+      .bind(portfolioId, linkChainOf(chain), canonical)
+      .first<{ verification: string; removed_at: string | null }>();
+    const bookNeedsRepair = !bookRow || bookRow.verification !== 'verified' || bookRow.removed_at !== null;
+    if (!link || bookNeedsRepair) {
+      const stmts: unknown[] = [];
+      if (!portfolio)
+        stmts.push(db.prepare(`INSERT INTO portfolios (id, user_id, display_prefs, created_at) VALUES (?, ?, NULL, ?)`).bind(portfolioId, userId, now));
+      if (!link)
+        stmts.push(db.prepare(
           `INSERT INTO wallet_links (chain, address, user_id, verified_at, challenge_id)
            VALUES (?, ?, ?, ?, ?)`,
-        )
-        .bind(linkChainOf(chain), addr.display, userId, now, challenge?.id ?? '')
-        .run();
+        ).bind(linkChainOf(chain), addr.display, userId, now, challenge?.id ?? ''));
+      if (bookNeedsRepair) stmts.push(addressUpsert);
+      await batch(stmts);
       return json(200, { status: 'ok', linked: 'repaired', requestId });
     }
     return json(200, { status: 'ok', linked: 'already', requestId });
   }
 
-  // identity + wallet_links commit ATOMICALLY via batch - no partial link.
+  // identity + wallet_links + address book commit ATOMICALLY - no partial link.
   // A concurrent linker loses the UNIQUE race: only that constraint conflict
   // maps to a safe 409; any other DB failure propagates as a real error.
-  const batch = (db as unknown as { batch: (stmts: unknown[]) => Promise<unknown[]> }).batch.bind(db);
+  const stmts: unknown[] = [];
+  if (!portfolio)
+    stmts.push(db.prepare(`INSERT INTO portfolios (id, user_id, display_prefs, created_at) VALUES (?, ?, NULL, ?)`).bind(portfolioId, userId, now));
+  stmts.push(
+    db.prepare(
+      `INSERT INTO auth_identities (id, user_id, kind, identifier, verified_at)
+       VALUES (?, ?, ?, ?, ?)`,
+    ).bind(crypto.randomUUID(), userId, identityKind, addr.subject, now),
+    db.prepare(
+      `INSERT INTO wallet_links (chain, address, user_id, verified_at, challenge_id)
+       VALUES (?, ?, ?, ?, ?)`,
+    ).bind(linkChainOf(chain), addr.display, userId, now, challenge?.id ?? ''),
+    addressUpsert,
+  );
   try {
-    await batch([
-      db.prepare(
-        `INSERT INTO auth_identities (id, user_id, kind, identifier, verified_at)
-         VALUES (?, ?, ?, ?, ?)`,
-      ).bind(crypto.randomUUID(), userId, identityKind, addr.subject, now),
-      db.prepare(
-        `INSERT INTO wallet_links (chain, address, user_id, verified_at, challenge_id)
-         VALUES (?, ?, ?, ?, ?)`,
-      ).bind(linkChainOf(chain), addr.display, userId, now, challenge?.id ?? ''),
-    ]);
+    await batch(stmts);
   } catch (e) {
     if (isUniqueViolation(e)) return json(409, { error: 'wallet_linked_elsewhere', requestId });
     throw e;

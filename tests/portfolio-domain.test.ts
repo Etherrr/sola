@@ -92,7 +92,7 @@ const wallet: WalletResult = {
 
 describe('fromWalletResult', () => {
   it('maps wallet balances and protocol positions into one model, zero sides omitted', () => {
-    const pos = fromWalletResult('ethereum', wallet);
+    const pos = fromWalletResult('ethereum', wallet, NOW);
     expect(pos.filter((p) => p.kind === 'wallet_balance')).toHaveLength(2);
     expect(pos.filter((p) => p.kind === 'protocol_supplied')).toHaveLength(1);
     expect(pos.filter((p) => p.kind === 'protocol_debt')).toHaveLength(1);
@@ -106,7 +106,7 @@ describe('fromWalletResult', () => {
   });
   it('aave unavailable adds nothing and fabricates no positions', () => {
     const w: WalletResult = { ...wallet, aave: { status: 'unavailable', reason: 'timeout' } };
-    expect(fromWalletResult('ethereum', w).filter((p) => p.protocol !== null)).toHaveLength(0);
+    expect(fromWalletResult('ethereum', w, NOW).filter((p) => p.protocol !== null)).toHaveLength(0);
   });
 });
 
@@ -135,7 +135,47 @@ describe('dedupe', () => {
 });
 
 describe('staleness, netting and subtotals', () => {
-  const pos = fromWalletResult('ethereum', wallet);
+  const pos = fromWalletResult('ethereum', wallet, NOW);
+  it('an OLD quote against a FRESH balance reads stale (real teeth, reviewer 2026-10-25)', () => {
+    const freshBalOldQuote: Position = {
+      kind: 'wallet_balance',
+      asset: { assetId: 'eip155:1/native', symbol: 'ETH', decimals: 18 },
+      network: 'ethereum',
+      address: '0xABC',
+      amount: '1.5',
+      price: { usd: '2000', source: 'chainlink', observedAt: STALE_PRICE_AT },
+      valueUsd: '3000',
+      source: 'chainlink',
+      observedAt: NOW, // fresh balance, stale quote
+      protocol: null,
+    };
+    expect(isPriceFresh(freshBalOldQuote)).toBe(false);
+    const s = summarize([freshBalOldQuote]);
+    expect(s.netPricedUsd).toBe('0'); // excluded from the subtotal
+    expect(s.stalePriceCount).toBe(1);
+  });
+  it('Solana addresses match EXACTLY in netting; EVM matches case-insensitively', () => {
+    const SOL_A = 'GmaDrppBC7P5ARKV8g3djiwP89vz1jLK23V2GBjuAEGB';
+    const solRows: Position[] = [{
+      kind: 'protocol_supplied',
+      asset: { assetId: 'solana/native', symbol: 'SOL', decimals: 9 },
+      network: 'solana',
+      address: SOL_A,
+      amount: '10',
+      price: null,
+      valueUsd: null,
+      source: 'provider',
+      observedAt: NOW,
+      protocol: 'marinade',
+    }];
+    // exact match nets
+    expect(netProtocolAmount(solRows, 'marinade', 'solana', SOL_A, 'solana/native')).toBe('10');
+    // case-variant does NOT match (base58 is case-sensitive)
+    expect(netProtocolAmount(solRows, 'marinade', 'solana', SOL_A.toLowerCase(), 'solana/native')).toBe('0');
+    // EVM variant matches
+    const evmRows: Position[] = [{ ...solRows[0]!, network: 'ethereum', address: '0xAbC', asset: { assetId: 'eip155:1/native', symbol: 'ETH', decimals: 18 }, protocol: 'aave-v3' }];
+    expect(netProtocolAmount(evmRows, 'aave-v3', 'ethereum', '0xabc', 'eip155:1/native')).toBe('10');
+  });
   it('price freshness is deterministic within the skew window', () => {
     const fresh = pos.find((p) => p.asset.symbol === 'ETH')!;
     expect(isPriceFresh(fresh)).toBe(true);

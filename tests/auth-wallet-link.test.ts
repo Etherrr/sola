@@ -75,6 +75,11 @@ describe('wallet link (authenticated, fresh challenge, no auto-transfer)', () =>
       .prepare("SELECT user_id, chain, address FROM wallet_links WHERE address=?")
       .bind(evmAddress).first<{ user_id: string; chain: string; address: string }>();
     expect(link!.user_id).toBe('u1');
+    // the completed link ALSO wrote the address book as verified (one atomic batch)
+    const book = await db
+      .prepare("SELECT verification, removed_at, address FROM portfolio_addresses WHERE network='ethereum'")
+      .bind().first<{ verification: string; removed_at: string | null; address: string }>();
+    expect(book).toEqual({ verification: 'verified', removed_at: null, address: evmAddress.toLowerCase() });
     // linking again is idempotent for the same user
     const ch2 = await handleWalletLinkChallenge(post({ address: evmAddress }, cookie), env, 'evm');
     const { message: m2 } = (await ch2.json()) as { message: string };
@@ -115,6 +120,9 @@ describe('wallet link (authenticated, fresh challenge, no auto-transfer)', () =>
       .prepare("SELECT user_id FROM auth_identities WHERE kind='wallet_evm' AND identifier=?")
       .bind(evmAddress.toLowerCase()).first<{ user_id: string }>();
     expect(ident!.user_id).toBe('u1'); // still u1
+    // u2's failed link created NO address-book row anywhere new
+    const books = await db.prepare("SELECT COUNT(*) AS n FROM portfolio_addresses WHERE network='ethereum'").bind().first<{ n: number }>();
+    expect(books!.n).toBe(1); // only u1's verified row
   });
 
   it('a bad signature neither links nor burns the challenge', async () => {
@@ -170,6 +178,11 @@ describe('wallet link (authenticated, fresh challenge, no auto-transfer)', () =>
       .prepare("SELECT user_id FROM wallet_links WHERE address=?")
       .bind(evmAddress).first<{ user_id: string }>();
     expect(link!.user_id).toBe('u1');
+    // the repair also restored the verified address-book row
+    const book = await db
+      .prepare("SELECT verification, removed_at FROM portfolio_addresses WHERE network='ethereum'")
+      .bind().first<{ verification: string; removed_at: string | null }>();
+    expect(book).toEqual({ verification: 'verified', removed_at: null });
   });
 
   it('a different wallet than the challenged one cannot claim (address binding)', async () => {
