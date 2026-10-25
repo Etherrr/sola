@@ -8,11 +8,9 @@ import type { D1Like } from '../../server/accounts/d1';
 
 export function createSqliteD1(): { db: D1Like; raw: DatabaseSync } {
   const raw = new DatabaseSync(':memory:');
-  const migration = readFileSync(
-    resolve(__dirname, '../../migrations/0001_accounts_and_counters.sql'),
-    'utf8',
-  );
-  raw.exec(migration);
+  for (const f of ['0001_accounts_and_counters.sql', '0002_native_auth.sql']) {
+    raw.exec(readFileSync(resolve(__dirname, '../../migrations/' + f), 'utf8'));
+  }
   const db: D1Like = {
     prepare(sql: string) {
       return {
