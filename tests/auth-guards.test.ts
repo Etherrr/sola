@@ -137,3 +137,33 @@ describe('requireEntitledSession hardening (reviewer 2026-10-25)', () => {
     expect((r as Response).status).toBe(403);
   });
 });
+
+describe('wallet chain-specific canonical matching (reviewer 2026-10-25)', () => {
+  const setup = async () => {
+    const { db } = createSqliteD1();
+    const now = new Date().toISOString();
+    await db.prepare("INSERT INTO users (id, status, created_at, updated_at) VALUES ('u1','active',?,?)").bind(now, now).run();
+    await db.prepare("INSERT INTO auth_identities (id, user_id, kind, identifier, verified_at) VALUES ('i1','u1','email','invited@x.co',?)").bind(now).run();
+    const s = await createSession(db, 'u1');
+    const req = () => new Request('https://app.test/x', { headers: { cookie: `${SESSION_COOKIE}=${s.id}` } });
+    return { db, req, now };
+  };
+  it('EVM: case-differing hex address still matches', async () => {
+    const { db, req, now } = await setup();
+    await db.prepare("INSERT INTO auth_identities (id, user_id, kind, identifier, verified_at) VALUES ('w1','u1','wallet_evm','0xABCDEF12',?)").bind(now).run();
+    await db.prepare("INSERT INTO entitlements (id, wallet_chain, wallet_address, granted_by, created_at) VALUES ('e2','ethereum','0xabcdef12','owner',?)").bind(now).run();
+    const r = await requireEntitledSession(req(), db);
+    expect(r).not.toBeInstanceOf(Response);
+  });
+  it('Solana: base58 is case-sensitive - case-differing address must NOT match', async () => {
+    const { db, req, now } = await setup();
+    await db.prepare("INSERT INTO auth_identities (id, user_id, kind, identifier, verified_at) VALUES ('w1','u1','wallet_solana','SoL4NaAdDrEsS',?)").bind(now).run();
+    await db.prepare("INSERT INTO entitlements (id, wallet_chain, wallet_address, granted_by, created_at) VALUES ('e2','solana','sol4naaddress','owner',?)").bind(now).run();
+    let r = await requireEntitledSession(req(), db);
+    expect((r as Response).status).toBe(403);
+    // exact case match passes
+    await db.prepare("UPDATE entitlements SET wallet_address='SoL4NaAdDrEsS'").bind().run();
+    r = await requireEntitledSession(req(), db);
+    expect(r).not.toBeInstanceOf(Response);
+  });
+});

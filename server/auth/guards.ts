@@ -57,8 +57,10 @@ export async function requireLiveSession(
  *  Entitlement match = ANY verified identity of the user (reviewer 2026-10-25):
  *  a verified email identity whose address matches entitlements.email
  *  (case-insensitive both sides), OR a verified wallet identity matching
- *  entitlements.wallet_chain + wallet_address (wallet_evm->ethereum,
- *  wallet_solana->solana; address compared case-insensitively). Latest-email-only
+ *  entitlements.wallet_chain + wallet_address (wallet_evm->ethereum:
+ *  case-INSENSITIVE hex compare; wallet_solana->solana: EXACT compare -
+ *  base58 Solana addresses are case-sensitive, normalizing them is wrong).
+ *  Latest-email-only
  *  matching is a hazard (adding an email flips the checked identity), so every
  *  verified identity is considered. verified_at IS NOT NULL is required even
  *  though the column is NOT NULL today, so a future pending identity cannot
@@ -81,10 +83,11 @@ export async function requireEntitledSession(
           OR EXISTS (SELECT 1 FROM auth_identities i
                   WHERE i.user_id = ?
                     AND i.verified_at IS NOT NULL
-                    AND ((i.kind = 'wallet_evm' AND e.wallet_chain = 'ethereum')
-                      OR (i.kind = 'wallet_solana' AND e.wallet_chain = 'solana'))
                     AND e.wallet_address IS NOT NULL
-                    AND LOWER(i.identifier) = LOWER(e.wallet_address))
+                    AND ((i.kind = 'wallet_evm' AND e.wallet_chain = 'ethereum'
+                          AND LOWER(i.identifier) = LOWER(e.wallet_address))
+                      OR (i.kind = 'wallet_solana' AND e.wallet_chain = 'solana'
+                          AND i.identifier = e.wallet_address)))
         ) LIMIT 1`,
     )
     .bind(base.userId, base.userId)
