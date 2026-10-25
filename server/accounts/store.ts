@@ -50,7 +50,9 @@ export function normEntry<T extends { network: Network; address: string }>(e: T)
   return e.network === 'ethereum' ? { ...e, address: e.address.toLowerCase() } : e;
 }
 
-export type StoreResult = { ok: true; entry: TrackedAddress } | { ok: false; reason: 'cap' };
+export type StoreResult =
+  | { ok: true; entry: TrackedAddress }
+  | { ok: false; reason: 'cap' | 'storage' };
 
 export interface AccountsStore {
   list(owner: string): Promise<TrackedAddress[]>;

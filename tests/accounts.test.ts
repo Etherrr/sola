@@ -281,6 +281,46 @@ describe('accounts HTTP handler', () => {
     expect(limited.status).toBe(429);
     expect(Number(limited.headers.get('retry-after'))).toBeGreaterThan(0);
   });
+  it('maps storage failures to a bounded 503, never a cap 409 (finding 7 contract)', async () => {
+    const { sign, keys } = await signer();
+    const jwt = await sign(claims('user-a'));
+    const mk = (over: object) => ({
+      list: async () => [],
+      add: async () => ({ ok: true, entry: {} }),
+      remove: async () => {},
+      clear: async () => {},
+      ...over,
+    });
+    // add reports 'storage': 503 storage_unavailable, not 409 cap.
+    const storageStore = mk({ add: async () => ({ ok: false, reason: 'storage' }) });
+    const r1 = await handleAccounts(
+      aReq('POST', { network: 'ethereum', address: ETH_A, label: 'x' }, jwt),
+      aEnv(),
+      aDeps(keys, { storeOverride: storageStore as never }),
+    );
+    expect(r1.status).toBe(503);
+    expect(((await r1.json()) as { error: { code: string } }).error.code).toBe('storage_unavailable');
+    // add throws: same bounded 503.
+    const throwingAdd = mk({
+      add: async () => {
+        throw new Error('d1 down');
+      },
+    });
+    const r2 = await handleAccounts(
+      aReq('POST', { network: 'ethereum', address: ETH_A, label: 'x' }, jwt),
+      aEnv(),
+      aDeps(keys, { storeOverride: throwingAdd as never }),
+    );
+    expect(r2.status).toBe(503);
+    // list throws: same bounded 503 on GET.
+    const throwingList = mk({
+      list: async () => {
+        throw new Error('d1 down');
+      },
+    });
+    const r3 = await handleAccounts(aReq('GET', undefined, jwt), aEnv(), aDeps(keys, { storeOverride: throwingList as never }));
+    expect(r3.status).toBe(503);
+  });
   it('rejects an over-cap declared content-length without reading the body (finding 5)', async () => {
     const { sign, keys } = await signer();
     const jwt = await sign(claims('user-a'));

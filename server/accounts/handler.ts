@@ -97,7 +97,12 @@ export async function handleAccounts(
   const nowIso = d.now().toISOString();
 
   if (req.method === 'GET') {
-    const rows = await store.list(owner);
+    let rows;
+    try {
+      rows = await store.list(owner);
+    } catch {
+      return err(503, 'storage_unavailable', 'Account storage is unavailable. Try again later.', requestId);
+    }
     return reply(200, {
       requestId,
       accounts: rows,
@@ -145,21 +150,37 @@ export async function handleAccounts(
     if (req.method === 'POST') {
       const entry = parseEntry(body);
       if (!entry) return err(400, 'bad_entry', 'Network, address or label is not usable.', requestId);
-      const res = await store.add(owner, entry, nowIso);
-      if (!res.ok)
+      let res;
+      try {
+        res = await store.add(owner, entry, nowIso);
+      } catch {
+        return err(503, 'storage_unavailable', 'Account storage is unavailable. Try again later.', requestId);
+      }
+      if (!res.ok) {
+        if (res.reason === 'storage')
+          return err(503, 'storage_unavailable', 'Account storage is unavailable. Try again later.', requestId);
         return err(409, 'cap_reached', `At most ${MAX_PER_NETWORK} saved addresses per network.`, requestId);
+      }
       return reply(200, { requestId, account: res.entry });
     }
 
     // DELETE {network,address} removes one; DELETE {all:true} clears the owner's saved data.
     const b = body as Record<string, unknown> | null;
     if (b && b.all === true) {
-      await store.clear(owner);
+      try {
+        await store.clear(owner);
+      } catch {
+        return err(503, 'storage_unavailable', 'Account storage is unavailable. Try again later.', requestId);
+      }
       return reply(200, { requestId, cleared: true });
     }
     const entry = parseEntry({ network: b?.network, address: b?.address, label: 'x' });
     if (!entry) return err(400, 'bad_entry', 'Network or address is not usable.', requestId);
-    await store.remove(owner, entry.network, entry.address);
+    try {
+      await store.remove(owner, entry.network, entry.address);
+    } catch {
+      return err(503, 'storage_unavailable', 'Account storage is unavailable. Try again later.', requestId);
+    }
     return reply(200, { requestId, removed: true });
   }
 

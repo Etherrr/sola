@@ -65,35 +65,38 @@ export function createD1Store(db: D1Like): AccountsStore {
     },
     async add(owner, rawEntry, now) {
       const entry = normEntry(rawEntry);
-      // Relabel first: an existing row must update even when the owner is AT the cap
-      // (the capped INSERT below cannot express this; previously a relabel at cap
-      // silently returned the old label — reviewer finding 1).
-      const upd = await db
-        .prepare(
-          'UPDATE tracked_addresses SET label = ?4, updated_at = ?5 WHERE owner_issuer_subject = ?1 AND network = ?2 AND address = ?3',
-        )
-        .bind(owner, entry.network, entry.address, entry.label, now)
-        .run();
-      if (!upd.success) return { ok: false, reason: 'cap' };
-      if (upd.meta?.changes !== 1) {
+      // ONE atomic statement, no count-then-insert or update-then-insert race:
+      //  - new row under the cap: inserted;
+      //  - existing row (any cap state): the OR EXISTS clause admits the attempt and the
+      //    UPSERT relabels it, preserving created_at (reviewer findings 1 and 7 —
+      //    concurrent same-key adds resolve as last-writer-wins, never an unhandled
+      //    UNIQUE error);
+      //  - new row AT the cap: both conditions false, zero rows, reported as 'cap'.
+      // Storage failures are NEVER reported as 'cap' (bounded 503 contract upstream).
+      try {
         const res = await db
           .prepare(
             `INSERT INTO tracked_addresses (owner_issuer_subject, network, address, label, created_at, updated_at)
              SELECT ?1, ?2, ?3, ?4, ?5, ?5
-             WHERE (SELECT COUNT(*) FROM tracked_addresses WHERE owner_issuer_subject = ?1 AND network = ?2) < ${MAX_PER_NETWORK}`,
+             WHERE (SELECT COUNT(*) FROM tracked_addresses WHERE owner_issuer_subject = ?1 AND network = ?2) < ${MAX_PER_NETWORK}
+                OR EXISTS (SELECT 1 FROM tracked_addresses WHERE owner_issuer_subject = ?1 AND network = ?2 AND address = ?3)
+             ON CONFLICT (owner_issuer_subject, network, address) DO UPDATE SET label = excluded.label, updated_at = excluded.updated_at`,
           )
           .bind(owner, entry.network, entry.address, entry.label, now)
           .run();
-        if (!res.success || res.meta?.changes !== 1) return { ok: false, reason: 'cap' };
+        if (!res.success) return { ok: false, reason: 'storage' };
+        if (res.meta?.changes !== 1) return { ok: false, reason: 'cap' };
+        const row = await db
+          .prepare(
+            'SELECT network, address, label, created_at, updated_at FROM tracked_addresses WHERE owner_issuer_subject = ?1 AND network = ?2 AND address = ?3',
+          )
+          .bind(owner, entry.network, entry.address)
+          .first<Row>();
+        if (!row) return { ok: false, reason: 'storage' };
+        return { ok: true, entry: toEntry(row) };
+      } catch {
+        return { ok: false, reason: 'storage' };
       }
-      const row = await db
-        .prepare(
-          'SELECT network, address, label, created_at, updated_at FROM tracked_addresses WHERE owner_issuer_subject = ?1 AND network = ?2 AND address = ?3',
-        )
-        .bind(owner, entry.network, entry.address)
-        .first<Row>();
-      if (!row) return { ok: false, reason: 'cap' };
-      return { ok: true, entry: toEntry(row) };
     },
     async remove(owner, network, address) {
       await db

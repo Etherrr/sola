@@ -96,3 +96,22 @@ Supersedes addendum 1's "backup/Time-Travel uninspected" line.
   above; defer the 90-day inactivity job (requires new last-seen tracking; little value at
   this scale); handle orphaned identities (re-added Access users get a new sub) by manual
   review when Access membership changes.
+
+## Review addendum 4 (2026-10-24, round-2 finding resolved)
+
+Reviewer round 2 confirmed all six round-1 fixes on real workerd D1 and found one new bug
+introduced by the finding-1 fix: concurrent adds of the SAME new address both missed the
+UPDATE-first branch and the loser threw an unhandled UNIQUE-constraint error (500).
+
+Resolution: the add is now ONE atomic statement - a capped INSERT ... SELECT whose WHERE
+admits the attempt when the key already exists (OR EXISTS), with ON CONFLICT ... DO UPDATE
+relabeling and preserving created_at. No update-then-insert window remains; concurrent
+same-key adds resolve as last-writer-wins. A genuinely new address at the cap still gets
+'cap'. Regressions on real SQLite: concurrent same-key adds (all ok, one row, created_at
+from first write, last-writer label), the same at the cap (row count unchanged, new address
+still capped), and a storage-contract suite (closed db, success:false, and missing row all
+return 'storage', never 'cap', never throw).
+
+Error contract: store failures are bounded 503 'storage_unavailable' at the HTTP layer
+(add/list/clear/remove), distinct from 409 'cap_reached'; storage errors never masquerade
+as cap. Regression covers the 'storage' result, a throwing add, and a throwing list.

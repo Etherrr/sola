@@ -41,6 +41,67 @@ describe('D1 adapter on real SQLite (migration + real adapter SQL)', () => {
     expect(over).toEqual({ ok: false, reason: 'cap' });
     expect((await store.list(A)).filter((r) => r.network === 'ethereum')).toHaveLength(MAX_PER_NETWORK);
   });
+
+  it('resolves concurrent adds of the SAME new address as an upsert, never a UNIQUE error (finding 7)', async () => {
+    const { db } = createSqliteD1();
+    const store = createD1Store(db);
+    const addr = `0x${'c'.repeat(40)}`;
+    const results = await Promise.all(
+      Array.from({ length: 6 }, (_, i) =>
+        store.add(A, { network: 'ethereum', address: addr, label: `x${i}` }, `t${i}`),
+      ),
+    );
+    expect(results.every((r) => r.ok)).toBe(true); // no 500-equivalent, no cap, no throw
+    const rows = await store.list(A);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].createdAt).toBe('t0'); // created_at preserved from the first write
+    expect(rows[0].label).toBe('x5'); // last writer wins
+  });
+  it('at the cap, concurrent adds of an EXISTING address upsert without growing rows (finding 7 at cap)', async () => {
+    const { db } = createSqliteD1();
+    const store = createD1Store(db);
+    const addr = `0x${'d'.repeat(40)}`;
+    await store.add(A, { network: 'ethereum', address: addr, label: 'old' }, 't0');
+    for (let i = 1; i < MAX_PER_NETWORK; i += 1) {
+      await store.add(A, { network: 'ethereum', address: `0x${String(i + 1).repeat(40)}`, label: `x${i}` }, 't');
+    }
+    const results = await Promise.all([
+      store.add(A, { network: 'ethereum', address: addr, label: 'z0' }, 'u0'),
+      store.add(A, { network: 'ethereum', address: addr, label: 'z1' }, 'u1'),
+      store.add(A, { network: 'ethereum', address: addr, label: 'z2' }, 'u2'),
+      store.add(A, { network: 'ethereum', address: `0x${'9'.repeat(40)}`, label: 'new' }, 'u3'),
+    ]);
+    expect(results.slice(0, 3).every((r) => r.ok)).toBe(true); // relabels at cap succeed
+    expect(results[3]).toEqual({ ok: false, reason: 'cap' }); // genuinely new address still capped
+    const rows = (await store.list(A)).filter((r) => r.network === 'ethereum');
+    expect(rows).toHaveLength(MAX_PER_NETWORK);
+    expect(rows.find((r) => r.address === addr)).toMatchObject({ label: 'z2', createdAt: 't0' });
+  });
+  it('storage failures never masquerade as cap: bounded storage reason (finding 7 contract)', async () => {
+    const { db } = createSqliteD1();
+    const store = createD1Store(db);
+    const entry = { network: 'ethereum' as const, address: `0x${'e'.repeat(40)}`, label: 'x' };
+    // run() rejects (closed db): storage, not cap, no throw.
+    const { db: dead, raw } = createSqliteD1();
+    raw.close();
+    const deadStore = createD1Store(dead);
+    await expect(deadStore.add(A, entry, 't')).resolves.toEqual({ ok: false, reason: 'storage' });
+    // run() reports success:false: storage, not cap.
+    const failing = {
+      prepare: () => ({
+        bind: () => ({
+          run: async () => ({ success: false }),
+          all: async () => ({ results: [] }),
+          first: async () => null,
+        }),
+      }),
+      batch: async () => [],
+    };
+    const failStore = createD1Store(failing as never);
+    await expect(failStore.add(A, entry, 't')).resolves.toEqual({ ok: false, reason: 'storage' });
+    // Sanity: the real store still works.
+    expect((await store.add(A, entry, 't')).ok).toBe(true);
+  });
   it('isolates owners at the SQL level and normalizes ETH case in the unique key', async () => {
     const { db } = createSqliteD1();
     const store = createD1Store(db);
