@@ -40,6 +40,18 @@ describe('network-specific result copy never names the wrong chain', () => {
   });
 });
 
+describe('the markets top-bar pill never contradicts the live panel', () => {
+  const shell = readFileSync('components/app-shell.tsx', 'utf8');
+  it('defers the mode claim to the panel instead of a global DATA UNAVAILABLE', () => {
+    expect(shell).not.toContain("? '◇ DATA UNAVAILABLE'");
+    expect(shell).toContain("? '◇ MODE SHOWN IN PANEL'");
+  });
+  it('scopes the simulated-demo disclaimer so live panels state their own mode', () => {
+    expect(shell).toContain('Lookups and markets prices show their own mode.');
+    expect(shell).toMatch(/address lookups and markets\s+prices state their own mode/);
+  });
+});
+
 describe('the top-bar network selector never contradicts the track selection', () => {
   const sel = readFileSync('components/chain-selector.tsx', 'utf8');
   const form = readFileSync('features/portfolio/track-form.tsx', 'utf8');

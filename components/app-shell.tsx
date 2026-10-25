@@ -95,7 +95,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <br />
             Demo data is simulated.
             <br />
-            Address lookups show their own mode.
+            Lookups and markets prices show their own mode.
           </p>
         </aside>
         <div className="app-body">
@@ -105,7 +105,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               {path.startsWith('/track')
                 ? '◇ MODE SHOWN WITH RESULT'
                 : path.startsWith('/markets')
-                  ? '◇ DATA UNAVAILABLE'
+                  ? '◇ MODE SHOWN IN PANEL'
                   : path.startsWith('/portfolio')
                     ? '◇ SIMULATED'
                     : '◇ READ-ONLY'}
@@ -125,8 +125,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <footer className="app-foot">
             <p>
               Sola Lens preview · Read-only. No financial advice, custody, or performance
-              guarantees. Demo figures are simulated, not market data; address lookups state their
-              own mode. <Link href="/settings">Privacy &amp; local data</Link>
+              guarantees. Demo figures are simulated, not market data; address lookups and markets
+              prices state their own mode. <Link href="/settings">Privacy &amp; local data</Link>
               {' · '}
               <a href="https://solacapitalpartners.com/" rel="noopener noreferrer">
                 Back to solacapitalpartners.com
