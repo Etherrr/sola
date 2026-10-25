@@ -10,6 +10,18 @@ describe('copy never claims a wallet is empty when the read failed', () => {
   );
 });
 
+describe('education privacy copy matches live Track behavior', () => {
+  it('the security lesson scopes "sends nothing" to the exercise, never to real lookups', () => {
+    const lessons = readFileSync('content/lessons/index.ts', 'utf8');
+    // The old line claimed the app sends no wallet addresses at all; live Track sends a
+    // pasted address to the lookup service and a public node, as its own disclosure says.
+    expect(lessons).not.toMatch(/This preview sends no wallet addresses/);
+    expect(lessons).toContain('A real lookup on Track sends the address you paste');
+    expect(lessons).toContain('nothing is saved unless you explicitly save it there');
+    expect(lessons).toContain('This education exercise sends nothing.');
+  });
+});
+
 describe('network-specific result copy never names the wrong chain', () => {
   const form = readFileSync('features/portfolio/track-form.tsx', 'utf8');
   it('the Solana result privacy line sends the address to a Solana node, never an Ethereum one', () => {

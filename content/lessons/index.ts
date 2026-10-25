@@ -87,7 +87,7 @@ export const lessons: Lesson[] = [
       },
       {
         title: 'Public does not mean private',
-        body: 'Addresses and activity can be linked to an identity. Future lookups may disclose addresses to providers. This preview sends no wallet addresses.',
+        body: 'Addresses and activity can be linked to an identity. A real lookup on Track sends the address you paste to the lookup service and a public node, as Track discloses before you run it; nothing is saved unless you explicitly save it there. This education exercise sends nothing.',
       },
     ],
     question: 'A support message asks you to enter your recovery phrase. What should you do?',
