@@ -90,17 +90,17 @@ export function HoldingsTable() {
 
   return (
     <>
-      <table>
+      <table className="ov2-holdings-table">
         <thead>
           <tr><th>Asset</th><th>Network</th><th>Amount</th><th>Address</th></tr>
         </thead>
         <tbody>
           {load.rows.map((r) => (
             <tr key={`${r.network}:${r.address}:${r.assetId}:${r.kind}`}>
-              <td title={r.assetId}>{assetLabel(r.assetId)}</td>
-              <td>{r.network === 'ethereum' ? 'EVM' : 'Solana'}</td>
-              <td>{r.amount}</td>
-              <td><code>{short(r.address)}</code></td>
+              <td data-label="Asset" title={r.assetId}>{assetLabel(r.assetId)}</td>
+              <td data-label="Network">{r.network === 'ethereum' ? 'EVM' : 'Solana'}</td>
+              <td data-label="Amount">{r.amount}</td>
+              <td data-label="Address"><code>{short(r.address)}</code></td>
             </tr>
           ))}
         </tbody>

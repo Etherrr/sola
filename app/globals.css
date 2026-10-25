@@ -3211,6 +3211,47 @@ html {
     opacity: 0.65;
     margin-bottom: 0.1rem;
   }
+  /* Holdings rows become labeled cards too - the 4-column table was cut off
+     horizontally at phone widths (reviewer/main). No actions live here, so
+     nothing primary is hidden. */
+  .ov2 .ov2-holdings-table,
+  .ov2 .ov2-holdings-table thead,
+  .ov2 .ov2-holdings-table tbody,
+  .ov2 .ov2-holdings-table tr,
+  .ov2 .ov2-holdings-table td {
+    display: block;
+    width: 100%;
+  }
+  .ov2 .ov2-holdings-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+  .ov2 .ov2-holdings-table tbody > tr {
+    border: 1px solid var(--line, rgba(127, 127, 127, 0.25));
+    border-radius: 8px;
+    padding: 0.6rem 0.75rem;
+    margin: 0 0 0.75rem;
+  }
+  .ov2 .ov2-holdings-table td {
+    display: flex;
+    gap: 0.5rem;
+    align-items: baseline;
+    padding: 0.12rem 0;
+    border: 0;
+  }
+  .ov2 .ov2-holdings-table td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    min-width: 3.8rem;
+    flex-shrink: 0;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    opacity: 0.65;
+  }
   .accounts .ab-scroll td[data-label] {
     display: flex;
     gap: 0.5rem;

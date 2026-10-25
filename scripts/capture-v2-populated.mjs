@@ -100,14 +100,29 @@ for (const vp of [
     document.querySelectorAll('.ab-scroll').forEach((el) => { el.scrollLeft = 0; });
   });
   await page.screenshot({ path: `/downloads/v2-populated-${vp.label}-dark.png` });
-  // Close-up crops at a normal viewport: the manager and the lookup tool.
+  // Section captures at a normal viewport, ordinary full-viewport shots
+  // scrolled so each section starts near the top: no line is cut mid-glyph
+  // by an element boundary (main 2026-10-25).
   await page.setViewportSize({ width: vp.width, height: vp.label === 'mobile' ? 844 : 720 });
   await page.evaluate(() => {
     window.scrollTo(0, 0);
     document.querySelectorAll('.ab-scroll').forEach((el) => { el.scrollLeft = 0; });
   });
-  await page.locator('.ov2-block', { has: page.locator('.ab-scroll') })
-    .screenshot({ path: `/downloads/v2-crop-manager-${vp.label}.png` });
+  const scrollTo = async (sel, offset = -8) => {
+    await page.locator(sel).first().evaluate((el, o) => {
+      el.scrollIntoView({ block: 'start' });
+      window.scrollBy(0, o);
+    }, offset);
+  };
+  await scrollTo('section.panel h2');
+  await page.screenshot({ path: `/downloads/v2-section-holdings-${vp.label}.png` });
+  await scrollTo('h3.ov2-h3');
+  await page.screenshot({ path: `/downloads/v2-section-manager-top-${vp.label}.png` });
+  await page.getByRole('button', { name: 'Add address' }).evaluate((el) => {
+    el.scrollIntoView({ block: 'end' });
+    window.scrollBy(0, 8);
+  });
+  await page.screenshot({ path: `/downloads/v2-section-manager-bottom-${vp.label}.png` });
   await page.locator('.ab-lookup').screenshot({ path: `/downloads/v2-crop-lookup-${vp.label}.png` });
   await ctx.close();
   console.log(`captured ${vp.label}`);
