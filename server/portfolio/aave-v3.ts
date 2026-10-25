@@ -5,7 +5,8 @@
  * Two dynamic-shape rules mirror abi.ts: never trust an offset or length that has not been
  * bounds-checked, and reject anything but canonical, sequential, non-overlapping layout.
  * All math is bigint; balances derive as scaled x index with Aave's own rayMul rounding,
- * observed as of each reserve's stored lastUpdateTimestamp (the index is not projected).
+ * observed as of each reserve's stored lastUpdateTimestamp (the index is not projected);
+ * consumers must render that as the stored-index observation time, never as 'current now'.
  */
 import { addressWord } from './abi';
 
@@ -63,6 +64,12 @@ class Reader {
     if (!Number.isInteger(byteOff) || byteOff < 0 || byteOff + 32 > this.size) return null;
     return BigInt('0x' + this.body.slice(byteOff * 2, (byteOff + 32) * 2));
   }
+  /** int256 two's-complement decode for signed fields. */
+  signedWord(byteOff: number): bigint | null {
+    const v = this.word(byteOff);
+    if (v === null) return null;
+    return v >= 1n << 255n ? v - (1n << 256n) : v;
+  }
   addr(byteOff: number): string | null {
     const v = this.word(byteOff);
     if (v === null || v >= 1n << 160n) return null;
@@ -91,13 +98,25 @@ export function decodeGetReservesData(
   const r = new Reader(hex);
   const arrOff = r.word(0);
   if (arrOff === null || arrOff !== 0xa0n) return null; // 1 offset word + 4 static BaseCurrencyInfo words
+  // The two price fields are int256 in the interface: decode them signed, and reject
+  // nonpositive or absurd values rather than letting a negative become a huge unsigned.
+  const unit = r.word(0x20);
+  const refPrice = r.signedWord(0x40);
+  const netPrice = r.signedWord(0x60);
+  const netDecimals = r.word(0x80);
+  const PRICE_BOUND = 10n ** 8n * 10n ** 15n; // 8 decimals x $10^15: far above any real feed
+  if (
+    unit === null || unit <= 0n || unit > 10n ** 36n ||
+    refPrice === null || refPrice <= 0n || refPrice > PRICE_BOUND ||
+    netPrice === null || netPrice <= 0n || netPrice > PRICE_BOUND ||
+    netDecimals === null || netDecimals > 77n
+  ) return null;
   const base: BaseCurrencyInfo = {
-    marketReferenceCurrencyUnit: r.word(0x20) ?? -1n,
-    marketReferenceCurrencyPriceInUsd: r.word(0x40) ?? -1n,
-    networkBaseTokenPriceInUsd: r.word(0x60) ?? -1n,
-    networkBaseTokenPriceDecimals: Number(r.word(0x80) ?? -1n),
+    marketReferenceCurrencyUnit: unit,
+    marketReferenceCurrencyPriceInUsd: refPrice,
+    networkBaseTokenPriceInUsd: netPrice,
+    networkBaseTokenPriceDecimals: Number(netDecimals),
   };
-  if (base.marketReferenceCurrencyUnit < 0n || base.networkBaseTokenPriceDecimals < 0) return null;
   const n = r.word(Number(arrOff));
   if (n === null || n > 512n) return null;
   const count = Number(n);
@@ -196,6 +215,17 @@ export function decodeGetUserReservesData(
     });
   }
   return { userReserves, eMode: Number(em) };
+}
+
+/** Receipt (aToken) and variable-debt token addresses per reserve. Aggregation must exclude
+ *  every one of these from any asset list: a receipt token is the position, not a second asset. */
+export function positionTokenAddresses(reserves: ReserveData[]): Set<string> {
+  const out = new Set<string>();
+  for (const r of reserves) {
+    out.add(r.aTokenAddress);
+    out.add(r.variableDebtTokenAddress);
+  }
+  return out;
 }
 
 /** Aave WadRayMath.rayMul: (a * b + RAY / 2) / RAY, bigint only. */

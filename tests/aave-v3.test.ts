@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { keccak256 } from './helpers/keccak';
 import {
   SEL_GET_RESERVES_DATA,
+  positionTokenAddresses,
   SEL_GET_USER_RESERVES_DATA,
   RAY,
   encodeGetReservesData,
@@ -114,6 +115,32 @@ describe('decodeGetReservesData', () => {
     const nameOffPos = (0xa0 + 32 + 32 + off) * 2 + 64; // element start + word 1
     const corrupt = body.slice(0, nameOffPos) + w(41 * 32) + body.slice(nameOffPos + 64);
     expect(decodeGetReservesData('0x' + corrupt)).toBeNull();
+  });
+});
+
+describe('signed BaseCurrencyInfo handling', () => {
+  const withBase = (unit: bigint, refPrice: bigint, netPrice: bigint, netDec: bigint) =>
+    '0x' + w(0xa0) + w(unit) + w(refPrice) + w(netPrice) + w(netDec) + encReserves(RESERVES).slice(2 + 64 + 4 * 64);
+  it('rejects a negative reference price (int256) instead of reading it as huge unsigned', () => {
+    // -1 as int256 is 0xff..ff; an unsigned read would be ~1.15e77.
+    const neg1 = (1n << 256n) - 1n;
+    expect(decodeGetReservesData(withBase(10n ** 8n, neg1, 3000n * 10n ** 8n, 8n))).toBeNull();
+    expect(decodeGetReservesData(withBase(10n ** 8n, 10n ** 8n, neg1, 8n))).toBeNull();
+  });
+  it('rejects zero and absurd positive prices and a zero currency unit', () => {
+    expect(decodeGetReservesData(withBase(10n ** 8n, 0n, 3000n * 10n ** 8n, 8n))).toBeNull();
+    expect(decodeGetReservesData(withBase(10n ** 8n, 10n ** 8n * 10n ** 16n, 3000n * 10n ** 8n, 8n))).toBeNull();
+    expect(decodeGetReservesData(withBase(0n, 10n ** 8n, 3000n * 10n ** 8n, 8n))).toBeNull();
+  });
+});
+
+describe('receipt and debt token exclusion', () => {
+  it('exposes every aToken and variable-debt token, never the underlying assets', () => {
+    const out = decodeGetReservesData(encReserves(RESERVES));
+    const excluded = positionTokenAddresses(out!.reserves);
+    expect(excluded).toEqual(new Set([AUSDC, VDUSDC, AWETH, VDWETH]));
+    expect(excluded.has(USDC)).toBe(false);
+    expect(excluded.has(WETH)).toBe(false);
   });
 });
 
