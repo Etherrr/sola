@@ -31,7 +31,7 @@ export function Entrance() {
         Skip to content
       </a>
       {curtain && (
-        <div className="entrance-curtain" aria-hidden="true">
+        <div className="entrance-curtain" aria-hidden="true" data-sensitive>
           <span className="curtain-half left" />
           <span className="curtain-half right" />
           <span className="curtain-mark">
@@ -63,7 +63,11 @@ export function Entrance() {
           Open the app, or learn first. Address lookups read live public balances; sample pages
           stay clearly simulated. Everything is read-only.
         </p>
-        {email && <p className="entrance-account">Signed in as {email} · read-only access</p>}
+        {email && (
+          <p className="entrance-account" data-sensitive>
+            Signed in as {email} · read-only access
+          </p>
+        )}
         <div className="entrance-split">
           <Link href="/education" className="entrance-card edu">
             <span className="entrance-h">Education</span>

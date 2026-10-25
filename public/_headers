@@ -52,3 +52,5 @@
   Cache-Control: no-store
 /404.html
   Cache-Control: no-store
+/_not-found/
+  Cache-Control: no-store
