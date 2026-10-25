@@ -18,6 +18,8 @@ import {
  * not repeated on every screen.
  */
 
+const shortAddr = (a: string) => (a.length > 12 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a);
+
 const EVM_ADDR = /^0x[0-9a-fA-F]{40}$/;
 const SOL_ADDR = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
@@ -44,6 +46,13 @@ export function AddressLookup() {
   }, []);
 
   const detected = detectNetwork(value);
+
+  const onChange = (next: string) => {
+    setValue(next);
+    // A shown result belongs to the address it was fetched for; editing the
+    // input clears it so stale balances never sit beside a different address.
+    setState((s) => (s.kind === 'ok' || s.kind === 'error' ? { kind: 'idle' } : s));
+  };
 
   const run = async () => {
     const network = detectNetwork(value);
@@ -76,7 +85,7 @@ export function AddressLookup() {
         <input
           type="text"
           value={value}
-          onChange={(e) => setValue(e.target.value)}
+          onChange={(e) => onChange(e.target.value)}
           placeholder="0x… or Solana address"
           aria-label="Address to look up"
           disabled={state.kind === 'busy'}
@@ -102,6 +111,10 @@ export function AddressLookup() {
       )}
       {state.kind === 'ok' && wallet && (
         <>
+          <p>
+            Balances for <code>{shortAddr(wallet.address)}</code> on{' '}
+            {state.network === 'ethereum' ? 'EVM' : 'Solana'}:
+          </p>
           <table>
             <thead>
               <tr><th>Asset</th><th>Network</th><th>Amount</th></tr>
@@ -115,13 +128,18 @@ export function AddressLookup() {
                 </tr>
               ))}
               {wallet.assets.length === 0 && (
-                <tr><td colSpan={3}><em>No balances found for this address.</em></td></tr>
+                <tr><td colSpan={3}><em>
+                  {state.data.partial || state.data.warnings.length > 0
+                    ? 'No balances returned - the answer is incomplete, so balances are unknown.'
+                    : 'No balances returned for this address.'}
+                </em></td></tr>
               )}
             </tbody>
           </table>
           <p><em>
             On-demand lookup{state.data.simulated ? ' (simulated)' : ''} as of{' '}
             {new Date(state.data.observedAt).toLocaleString()}. Not a recorded observation.
+            {state.network === 'solana' ? ' Solana lookups show the SOL balance only.' : ''}
             {state.data.partial ? ' Some sources did not answer - figures may be incomplete.' : ''}
             {state.data.warnings.length > 0 ? ` ${state.data.warnings.join('; ')}.` : ''}
           </em></p>

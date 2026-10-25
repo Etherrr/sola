@@ -1169,8 +1169,15 @@ test('v2 address lookup: on-demand lookup uses the shared rows, disclosure near 
   await go.click();
   await expect(tool.getByRole('cell', { name: 'eth/native' })).toBeVisible();
   await expect(tool.getByRole('cell', { name: '1.5' })).toBeVisible();
+  // The result names the address and network it belongs to.
+  await expect(tool.getByText('Balances for')).toBeVisible();
+  await expect(tool.getByText('on EVM:')).toBeVisible();
   await expect(tool.getByText(/On-demand lookup \(simulated\)/)).toBeVisible();
   await expect(tool.getByText(/Not a recorded observation/)).toBeVisible();
+  // Editing the input clears the result: A's balances never sit beside B.
+  await input.fill('0xAbC1230000000000000000000000000000000001');
+  await expect(tool.getByRole('cell', { name: 'eth/native' })).toHaveCount(0);
+  await expect(tool.getByText('Balances for')).toHaveCount(0);
 });
 
 test('v2 address lookup: rate limit shows the retry wording, nothing substituted', async ({
@@ -1212,6 +1219,89 @@ test('v2 address lookup: rate limit shows the retry wording, nothing substituted
   await tool.getByRole('button', { name: 'Look up' }).click();
   await expect(tool.getByText(/Retry in about 42s/)).toBeVisible();
   await expect(tool.getByRole('cell', { name: 'eth/native' })).toHaveCount(0);
+});
+
+test('v2 address lookup: Solana SOL-only footer; empty incomplete answer says unknown', async ({
+  page,
+}) => {
+  await page.route('**/api/v1/auth/email/session', (r) =>
+    r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'ok', email: 'owner@example.com', fresh: true }),
+    }),
+  );
+  await page.route('**/api/v1/portfolio/addresses**', (r) => {
+    if (r.request().method() !== 'GET') return r.continue();
+    return r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'ok', addresses: [] }),
+    });
+  });
+  await page.route('**/api/v1/portfolio/overview**', (r) =>
+    r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'empty', newerPartial: false }),
+    }),
+  );
+  const base = {
+    schemaVersion: 1,
+    mode: 'mock',
+    simulated: true,
+    provider: 'fixture',
+    generatedAt: '2026-10-25T01:00:00Z',
+    observedAt: '2026-10-25T01:00:00Z',
+    totals: { recognizedPricedSubtotalUsd: null, unpricedAssetCount: 0, note: 'fixture' },
+    partial: false,
+    warnings: [] as string[],
+  };
+  let body: unknown = {
+    ...base,
+    wallets: [
+      {
+        address: 'So11111111111111111111111111111111111111112',
+        partial: false,
+        warnings: [],
+        assets: [
+          { assetId: 'sol/native', symbol: 'SOL', decimals: 9, amount: '12.3', price: null, value: null },
+        ],
+      },
+    ],
+  };
+  await page.route('**/api/v1/portfolio/resolve**', (r) =>
+    r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) }),
+  );
+  await page.goto('/dev/overview-v2');
+  const tool = page.locator('#main .ab-lookup');
+  const input = tool.getByLabel('Address to look up');
+  // Solana: identity names the network, footer limits scope to the SOL balance.
+  await input.fill('So11111111111111111111111111111111111111112');
+  await tool.getByRole('button', { name: 'Look up' }).click();
+  await expect(tool.getByText('on Solana:')).toBeVisible();
+  await expect(tool.getByRole('cell', { name: '12.3' })).toBeVisible();
+  await expect(tool.getByText('Solana lookups show the SOL balance only.')).toBeVisible();
+  // Empty + incomplete answer: unknown, never "no balances found".
+  body = {
+    ...base,
+    partial: true,
+    warnings: ['A source did not answer'],
+    wallets: [
+      {
+        address: '0xabc1230000000000000000000000000000000000',
+        partial: true,
+        warnings: ['A source did not answer'],
+        assets: [],
+      },
+    ],
+  };
+  await input.fill('0xAbC1230000000000000000000000000000000000');
+  await tool.getByRole('button', { name: 'Look up' }).click();
+  await expect(
+    tool.getByText('No balances returned - the answer is incomplete, so balances are unknown.'),
+  ).toBeVisible();
+  await expect(tool.getByText(/No balances found/)).toHaveCount(0);
 });
 
 test('shell nav is keyboard-reachable in DOM order', async ({ page }) => {
