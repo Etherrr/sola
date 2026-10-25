@@ -913,6 +913,12 @@ legend {
   border-color: var(--gold);
   background: #28283a;
 }
+/* Same label-level focus ring as the decision lab: keyboard focus on a quiz option
+   outlines the whole answer row, not only the small radio circle. */
+.answer:has(input:focus-visible) {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
 input[type='radio'],
 input[type='checkbox'] {
   accent-color: var(--gold);

@@ -114,6 +114,56 @@ test('swap exercise is educational and never exposes a signing action', async ({
   ).toHaveCount(0);
   expect(external).toEqual([]);
 });
+test('security quiz and swap exercise are fully keyboard operable', async ({ page }) => {
+  await page.goto('/start/security');
+  const quiz = page.locator('section.quiz');
+  const radios = quiz.getByRole('radio');
+  await expect(radios).toHaveCount(3);
+  // A radio group is one Tab stop; arrow keys move between options.
+  await radios.first().focus();
+  await page.keyboard.press('ArrowDown');
+  await expect(radios.nth(1)).toBeFocused();
+  await expect(radios.nth(1)).toBeChecked();
+  await page.keyboard.press('ArrowDown');
+  await expect(radios.nth(2)).toBeFocused();
+  await expect(radios.nth(2)).toBeChecked();
+  await page.keyboard.press('ArrowUp');
+  await expect(radios.nth(1)).toBeChecked();
+  await page.keyboard.press('Tab');
+  const check = quiz.getByRole('button', { name: 'Check answer' });
+  await expect(check).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#main').getByText(/Try again\./)).toBeVisible();
+  await page.keyboard.press('Shift+Tab');
+  await expect(radios.nth(1)).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(radios.nth(2)).toBeChecked();
+  await page.keyboard.press('Tab');
+  await expect(check).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#main').getByText(/That\u2019s right\./)).toBeVisible();
+
+  await page.goto('/start/defi');
+  const swap = page.locator('section.swap');
+  const prev = swap.getByRole('button', { name: 'Previous step' });
+  const next = swap.getByRole('button', { name: 'Next step' });
+  await expect(prev).toBeDisabled();
+  await next.focus();
+  await page.keyboard.press('Enter');
+  await expect(swap.getByText('STEP 2 OF 3')).toBeVisible();
+  await expect(prev).toBeEnabled();
+  await prev.focus();
+  await page.keyboard.press('Enter');
+  await expect(swap.getByText('STEP 1 OF 3')).toBeVisible();
+  await expect(prev).toBeDisabled();
+  await next.focus();
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Enter');
+  const restart = swap.getByRole('button', { name: 'Restart exercise' });
+  await expect(restart).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(swap.getByText('STEP 1 OF 3')).toBeVisible();
+});
 test('keyboard navigation, mobile menu, reduced motion, and missing page', async ({
   page,
   isMobile,
