@@ -118,7 +118,7 @@ test('verified user sees saved addresses grouped and can add, rename, remove and
   await expect(panel.getByText('Clear every saved address?')).toBeVisible();
   await panel.getByText('Clear every saved address?').scrollIntoViewIfNeeded();
   await page.screenshot({ path: `test-results/accounts-${info.project.name}-clear-confirm.png` });
-  await panel.getByRole('button', { name: 'Clear everything' }).click();
+  await panel.getByRole('button', { name: 'Clear saved list' }).click();
   await expect(panel.getByText('None saved.').first()).toBeVisible();
   await expect(panel.locator('h2#accounts-h')).toBeFocused(); // same after clearing the list
   await expect(panel.getByText('Solar')).toHaveCount(0);

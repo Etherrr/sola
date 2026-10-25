@@ -3168,13 +3168,44 @@ html {
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
-.combined .badge-ok {
-  border-color: #2f6b4f;
-  background: #12251c;
-  color: #7fd6a8;
-}
 .combined .badge-warn {
   border-color: #8a6d2f;
   background: #2b210f;
   color: #f0c36d;
+}
+.combined .badge-loaded {
+  border-color: #3a3a44;
+  background: #17171d;
+  color: #b9b7c3;
+}
+.combined .combined-notes {
+  margin: 12px 0 0;
+  padding-left: 18px;
+}
+.combined .combined-notes li {
+  margin-top: 4px;
+}
+.combined .warn-text {
+  color: #f0c36d;
+}
+.combined .addr summary {
+  cursor: pointer;
+  list-style: none;
+}
+.combined .addr summary::after {
+  content: ' · show';
+  color: var(--muted, #9a97a3);
+  font-size: 11px;
+}
+.combined .addr[open] summary::after {
+  content: ' · hide';
+}
+.combined .addr code {
+  display: block;
+  word-break: break-all;
+  margin-top: 4px;
+}
+.combined .metric strong.obs-value {
+  white-space: normal;
+  font-size: 15px;
 }

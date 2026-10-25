@@ -103,7 +103,7 @@ test('contract: full CRUD against the real handler and real D1', async ({ page }
   await row2.getByRole('button', { name: 'Remove it' }).click();
   await expect(panel.getByText('w2')).toHaveCount(0);
   await panel.getByRole('button', { name: 'Clear all saved addresses' }).click();
-  await panel.getByRole('button', { name: 'Clear everything' }).click();
+  await panel.getByRole('button', { name: 'Clear saved list' }).click();
   await expect(panel.getByText('None saved.').first()).toBeVisible();
 });
 
