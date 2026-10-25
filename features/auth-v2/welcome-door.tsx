@@ -26,9 +26,9 @@ export function WelcomeDoor() {
   return (
     <>
       <div className="panel">
-        <p>
-          <a className="btn primary" href="/dev/sign-in">Sign in</a>{' '}
-          <a className="btn" href="/dev/create-account">Create account</a>
+        <p className="actions">
+          <a className="button primary" href="/dev/sign-in">Sign in</a>{' '}
+          <a className="button secondary" href="/dev/create-account">Create account</a>
         </p>
         <p>
           <em>Invite-only preview. One email code, no password.</em>
@@ -37,7 +37,8 @@ export function WelcomeDoor() {
       <div className="panel">
         <h2>Education</h2>
         <p>
-          <em>Lessons and exercises, open without an account.</em>{' '}
+          <em>Lessons and exercises - no Sola account needed in the native journey
+          (this staging host still has its own access gate).</em>{' '}
           <a href="/education">Open Education</a>
         </p>
       </div>
