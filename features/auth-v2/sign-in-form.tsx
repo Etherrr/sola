@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { authEmailChallenge, authEmailVerify } from '../portfolio/api-client';
 import { loginWithPasskey, passkeysSupported } from './passkey-client';
+import { safeNextPath, DEFAULT_NEXT } from './next-path';
 
 /**
  * Functional native sign-in form (preview): email code challenge -> verify ->
@@ -21,6 +22,12 @@ export function SignInForm() {
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Resume destination: validated once on mount; never trust the raw query value.
+  const [next] = useState(() =>
+    typeof window === 'undefined'
+      ? DEFAULT_NEXT
+      : safeNextPath(new URLSearchParams(window.location.search).get('next')),
+  );
 
   const explain = (status: number, body: { error?: string; retryAfterSec?: number } | null): string => {
     const e = body?.error;
@@ -77,7 +84,7 @@ export function SignInForm() {
         <p>
           <strong>{step.email ? `Signed in as ${step.email}.` : 'Signed in.'}</strong>
         </p>
-        <p><a href="/dev/overview-v2">Continue</a></p>
+        <p><a className="button primary" href={next}>Continue</a></p>
       </div>
     );
 
