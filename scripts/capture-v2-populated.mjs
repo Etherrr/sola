@@ -86,7 +86,7 @@ for (const vp of [
         partial: false, warnings: [],
       }) }));
   await page.goto('http://127.0.0.1:3000/dev/overview-v2/');
-  await page.getByRole('cell', { name: 'eth/native' }).first().waitFor();
+  await page.getByRole('cell', { name: 'ETH' }).first().waitFor();
   // Expand the first address's Details and run a lookup, so one frame shows both.
   await page.getByRole('button', { name: /Details for Main/ }).click();
   await page.locator('.ab-details').getByRole('cell', { name: 'USDC' }).waitFor();

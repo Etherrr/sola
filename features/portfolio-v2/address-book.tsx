@@ -371,7 +371,11 @@ export function AddressBook() {
             disabled={busy}
             aria-label="Label"
           />
-          <button type="submit" disabled={busy || !address.trim() || !label.trim()}>
+          <button
+            type="submit"
+            className="button primary"
+            disabled={busy || !address.trim() || !label.trim()}
+          >
             Add address
           </button>
         </form>
