@@ -80,7 +80,7 @@ const err = (
   );
 
 /** Reads at most `limit` bytes of the body; returns null as soon as it is exceeded (never buffers more). */
-async function readBounded(
+export async function readBounded(
   req: Request,
   limit: number,
   deadlineMs: number,
@@ -127,7 +127,7 @@ const d1Limiters = new WeakMap<object, ReturnType<typeof createD1Limiter>>();
 function d1LimiterFor(db: D1Like) {
   let l = d1Limiters.get(db as object);
   if (!l) {
-    l = createD1Limiter(db, LOOKUP_WINDOWS);
+    l = createD1Limiter(db, LOOKUP_WINDOWS, 'lookup');
     d1Limiters.set(db as object, l);
   }
   return l;
@@ -176,7 +176,11 @@ export async function handleResolve(
   // already honors 429 Retry-After. The key is the verified iss#sub, never an email or token.
   if (env.PORTFOLIO_LOOKUP_LIMIT === '1') {
     const key = readOwnerKey(req.headers.get('cf-access-jwt-assertion'));
-    if (key) {
+    // Fail closed: with the limiter enabled, an authenticated token WITHOUT a user subject
+    // (e.g. a service token) cannot be accounted for, so it is denied rather than throttled
+    // into an unbounded identity class (reviewer safety finding).
+    if (!key) return err(401, 'unauthorized', 'Authentication required.', requestId);
+    {
       // Layer 1: per-isolate memory. Alone it is NOT a global guardrail: distributed Pages
       // instances each hold their own counters. Layer 2 (only with the approved D1 binding):
       // one atomic UPSERT per window, UTC-aligned, failing CLOSED on any storage error.
@@ -188,7 +192,9 @@ export async function handleResolve(
         const t = d.now().getTime();
         if (t - lastSweepAt > 3_600_000) {
           lastSweepAt = t;
-          void d1LimiterFor(env.PORTFOLIO_ACCOUNTS_DB).sweep(2 * 86_400_000);
+          // Awaited, not fire-and-forget: a returned response can terminate the isolate
+          // before a detached cleanup completes (reviewer finding 3). One indexed DELETE.
+          await d1LimiterFor(env.PORTFOLIO_ACCOUNTS_DB).sweep(2 * 86_400_000);
         }
       }
       if (blocked)

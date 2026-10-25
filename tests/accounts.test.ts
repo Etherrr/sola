@@ -144,6 +144,18 @@ describe('memory store semantics (reference for the D1 adapter)', () => {
     await s.clear(a);
     expect(await s.list('https://t.cloudflareaccess.com#b')).toHaveLength(1);
   });
+  it('relabels an existing address at the cap, matching the D1 adapter (finding 1 parity)', async () => {
+    const s = createMemoryStore();
+    const a = 'https://t.cloudflareaccess.com#a';
+    await s.add(a, { network: 'ethereum', address: ETH_A, label: 'old' }, 't1');
+    for (let i = 0; i < MAX_PER_NETWORK - 1; i += 1) {
+      await s.add(a, { network: 'ethereum', address: `0x${String(i + 2).repeat(40)}`, label: `x${i}` }, 't');
+    }
+    expect((await s.list(a)).filter((r) => r.network === 'ethereum')).toHaveLength(MAX_PER_NETWORK);
+    const relabel = await s.add(a, { network: 'ethereum', address: ETH_A, label: 'new' }, 't2');
+    expect(relabel.ok && relabel.entry.label).toBe('new');
+    expect(relabel.ok && relabel.entry.createdAt).toBe('t1');
+  });
 });
 
 describe('fixed-window limiter', () => {
@@ -269,6 +281,42 @@ describe('accounts HTTP handler', () => {
     expect(limited.status).toBe(429);
     expect(Number(limited.headers.get('retry-after'))).toBeGreaterThan(0);
   });
+  it('rejects an over-cap declared content-length without reading the body (finding 5)', async () => {
+    const { sign, keys } = await signer();
+    const jwt = await sign(claims('user-a'));
+    const req = new Request('https://app.example/api/v1/portfolio/accounts', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'content-length': '5000',
+        'cf-access-jwt-assertion': jwt,
+      },
+      body: '{}',
+    });
+    const r = await handleAccounts(req, aEnv(), aDeps(keys, { storeOverride: createMemoryStore() }));
+    expect(r.status).toBe(413);
+  });
+  it('rejects a streamed body over the cap without draining it (finding 5)', async () => {
+    const { sign, keys } = await signer();
+    const jwt = await sign(claims('user-a'));
+    let pulls = 0;
+    const body = new ReadableStream<Uint8Array>({
+      pull(c) {
+        pulls += 1;
+        c.enqueue(new Uint8Array(1024).fill(97)); // 1KB chunks, 10KB total >> 2KB cap
+      },
+    });
+    const req = new Request('https://app.example/api/v1/portfolio/accounts', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'cf-access-jwt-assertion': jwt },
+      body,
+      // @ts-expect-error Node requires duplex for streaming request bodies
+      duplex: 'half',
+    });
+    const r = await handleAccounts(req, aEnv(), aDeps(keys, { storeOverride: createMemoryStore() }));
+    expect(r.status).toBe(413);
+    expect(pulls).toBeLessThan(10); // stopped at the cap, did not drain the whole stream
+  });
 });
 
 describe('resolve lookup limiter (flag-gated, default off)', () => {
@@ -306,5 +354,15 @@ describe('resolve lookup limiter (flag-gated, default off)', () => {
     expect(readOwnerKey(await sign({ iss: `https://${TEAM}`, aud: [AUD] }))).toBeNull();
     expect(readOwnerKey('not-a-jwt')).toBeNull();
     expect(readOwnerKey(null)).toBeNull();
+  });
+  it('fails closed (401) for a subject-less token when the lookup limiter is enabled (finding 4)', async () => {
+    const { sign, keys } = await signer();
+    const noSub = await sign({
+      iss: `https://${TEAM}`,
+      aud: [AUD],
+      exp: Math.floor(NOW.getTime() / 1000) + 600,
+    });
+    const r = await handleResolve(rPost(noSub), rEnv({ PORTFOLIO_LOOKUP_LIMIT: '1' }), rDeps(keys));
+    expect(r.status).toBe(401);
   });
 });

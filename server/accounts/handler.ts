@@ -1,3 +1,4 @@
+import { readBounded } from '../portfolio/handler';
 import { decodeJwt } from 'jose';
 import { checkAccessJwt, isValidTeamHost, type KeyFetcher } from '../portfolio/access';
 import { createD1Store, type D1Like } from './d1';
@@ -60,7 +61,9 @@ export function readOwnerKey(token: string | null): string | null {
 }
 
 const MAX_BODY = 2048;
+
 const mutationLimiter = createLimiter(MUTATION_WINDOWS);
+let lastMutSweepAt = 0;
 
 export async function handleAccounts(
   req: Request,
@@ -68,6 +71,10 @@ export async function handleAccounts(
   d: AccountsDeps,
 ): Promise<Response> {
   const requestId = d.id();
+  // Pre-auth 503 matches the existing resolve handler's contract (its gate also returns
+  // 'disabled'/'not_configured' before authentication). Both endpoints sit behind Cloudflare
+  // Access at the edge, so these categories reach only Access-admitted callers; they reveal
+  // feature existence/configuration state by design, same as the production resolve API.
   if (env.PORTFOLIO_ACCOUNTS !== '1' || (!env.PORTFOLIO_ACCOUNTS_DB && !d.storeOverride))
     return err(503, 'disabled', 'This feature is switched off.', requestId);
   if (!env.ACCESS_TEAM_DOMAIN || !env.ACCESS_AUD || !isValidTeamHost(env.ACCESS_TEAM_DOMAIN))
@@ -104,8 +111,12 @@ export async function handleAccounts(
     // Durable global layer when the real binding serves this request (never in storeOverride tests
     // unless the test injects an asyncLimiter): atomic UPSERT, UTC windows, fails closed.
     if (!blocked && !d.storeOverride && env.PORTFOLIO_ACCOUNTS_DB) {
-      const global = await createD1Limiter(env.PORTFOLIO_ACCOUNTS_DB, MUTATION_WINDOWS).check(owner);
+      const global = await createD1Limiter(env.PORTFOLIO_ACCOUNTS_DB, MUTATION_WINDOWS, 'mutation').check(owner);
       if (!global.allowed) blocked = global;
+      else if (Date.now() - lastMutSweepAt > 3_600_000) {
+        lastMutSweepAt = Date.now();
+        await createD1Limiter(env.PORTFOLIO_ACCOUNTS_DB, MUTATION_WINDOWS, 'mutation').sweep(2 * 86_400_000);
+      }
     }
     if (!blocked && d.asyncLimiter) {
       const injected = await d.asyncLimiter.check(owner);
@@ -117,12 +128,17 @@ export async function handleAccounts(
       });
     if (!/^application\/json\s*(;.*)?$/i.test(req.headers.get('content-type') ?? ''))
       return err(415, 'unsupported_media_type', 'Send application/json.', requestId);
+    const declared = Number(req.headers.get('content-length'));
+    if (Number.isFinite(declared) && declared > MAX_BODY)
+      return err(413, 'body_too_large', 'Request body is too large.', requestId);
     let body: unknown;
     try {
-      const text = await req.text();
-      if (text.length > MAX_BODY) return err(413, 'body_too_large', 'Request body is too large.', requestId);
+      const text = await readBounded(req, MAX_BODY, d.bodyDeadlineMs);
+      if (text === null) return err(413, 'body_too_large', 'Request body is too large.', requestId);
       body = JSON.parse(text);
-    } catch {
+    } catch (e) {
+      if (e instanceof Error && e.message === 'body deadline')
+        return err(408, 'body_timeout_or_error', 'Could not read the request body in time.', requestId);
       return err(400, 'bad_json', 'Body must be valid JSON.', requestId);
     }
 

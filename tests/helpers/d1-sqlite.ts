@@ -21,8 +21,8 @@ export function createSqliteD1(): { db: D1Like; raw: DatabaseSync } {
           const norm = args.map((a) => (typeof a === 'boolean' ? (a ? 1 : 0) : (a as never)));
           return {
             async run() {
-              stmt.run(...norm);
-              return { success: true };
+              const info = stmt.run(...norm);
+              return { success: true, meta: { changes: Number(info.changes) } };
             },
             async all<T>() {
               return { results: stmt.all(...norm) as T[] };

@@ -15,7 +15,7 @@ import {
 export type D1Like = {
   prepare(sql: string): {
     bind(...args: unknown[]): {
-      run(): Promise<{ success: boolean }>;
+      run(): Promise<{ success: boolean; meta?: { changes?: number } }>;
       all<T>(): Promise<{ results: T[] }>;
       first<T>(): Promise<T | null>;
     };
@@ -65,17 +65,27 @@ export function createD1Store(db: D1Like): AccountsStore {
     },
     async add(owner, rawEntry, now) {
       const entry = normEntry(rawEntry);
-      const res = await db
+      // Relabel first: an existing row must update even when the owner is AT the cap
+      // (the capped INSERT below cannot express this; previously a relabel at cap
+      // silently returned the old label — reviewer finding 1).
+      const upd = await db
         .prepare(
-          `INSERT INTO tracked_addresses (owner_issuer_subject, network, address, label, created_at, updated_at)
-           SELECT ?1, ?2, ?3, ?4, ?5, ?5
-           WHERE (SELECT COUNT(*) FROM tracked_addresses WHERE owner_issuer_subject = ?1 AND network = ?2) < ${MAX_PER_NETWORK}
-           ON CONFLICT (owner_issuer_subject, network, address)
-           DO UPDATE SET label = excluded.label, updated_at = excluded.updated_at`,
+          'UPDATE tracked_addresses SET label = ?4, updated_at = ?5 WHERE owner_issuer_subject = ?1 AND network = ?2 AND address = ?3',
         )
         .bind(owner, entry.network, entry.address, entry.label, now)
         .run();
-      if (!res.success) return { ok: false, reason: 'cap' };
+      if (!upd.success) return { ok: false, reason: 'cap' };
+      if (upd.meta?.changes !== 1) {
+        const res = await db
+          .prepare(
+            `INSERT INTO tracked_addresses (owner_issuer_subject, network, address, label, created_at, updated_at)
+             SELECT ?1, ?2, ?3, ?4, ?5, ?5
+             WHERE (SELECT COUNT(*) FROM tracked_addresses WHERE owner_issuer_subject = ?1 AND network = ?2) < ${MAX_PER_NETWORK}`,
+          )
+          .bind(owner, entry.network, entry.address, entry.label, now)
+          .run();
+        if (!res.success || res.meta?.changes !== 1) return { ok: false, reason: 'cap' };
+      }
       const row = await db
         .prepare(
           'SELECT network, address, label, created_at, updated_at FROM tracked_addresses WHERE owner_issuer_subject = ?1 AND network = ?2 AND address = ?3',
@@ -115,9 +125,10 @@ export const SCHEMA_SQL = `CREATE TABLE IF NOT EXISTS tracked_addresses (
 
 /** Counters for the durable global limiter layer (same binding decision as account storage). */
 export const COUNTERS_SQL = `CREATE TABLE IF NOT EXISTS rate_counters (
+  scope TEXT NOT NULL,
   owner TEXT NOT NULL,
   window_start INTEGER NOT NULL,
   window_ms INTEGER NOT NULL,
   count INTEGER NOT NULL CHECK (count >= 0),
-  PRIMARY KEY (owner, window_start, window_ms)
+  PRIMARY KEY (scope, owner, window_start, window_ms)
 );`;

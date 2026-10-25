@@ -10,9 +10,10 @@ CREATE TABLE IF NOT EXISTS tracked_addresses (
   PRIMARY KEY (owner_issuer_subject, network, address)
 );
 CREATE TABLE IF NOT EXISTS rate_counters (
+  scope TEXT NOT NULL,
   owner TEXT NOT NULL,
   window_start INTEGER NOT NULL,
   window_ms INTEGER NOT NULL,
   count INTEGER NOT NULL CHECK (count >= 0),
-  PRIMARY KEY (owner, window_start, window_ms)
+  PRIMARY KEY (scope, owner, window_start, window_ms)
 );

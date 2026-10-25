@@ -8,7 +8,12 @@ import type { LimitCheck, LimitWindow } from './limiter';
  * window is a UTC calendar day. Fail CLOSED: any storage error denies the request with a
  * bounded retry delay; a missing/failed guardrail must never silently allow.
  */
-export function createD1Limiter(db: D1Like, windows: LimitWindow[], now: () => number = Date.now) {
+export function createD1Limiter(
+  db: D1Like,
+  windows: LimitWindow[],
+  scope: string,
+  now: () => number = Date.now,
+) {
   async function check(key: string): Promise<LimitCheck> {
     const t = now();
     try {
@@ -17,12 +22,12 @@ export function createD1Limiter(db: D1Like, windows: LimitWindow[], now: () => n
         const windowStart = Math.floor(t / w.windowMs) * w.windowMs; // UTC-aligned fixed window
         const row = await db
           .prepare(
-            `INSERT INTO rate_counters (owner, window_start, window_ms, count)
-             VALUES (?1, ?2, ?3, 1)
-             ON CONFLICT (owner, window_start, window_ms) DO UPDATE SET count = count + 1
+            `INSERT INTO rate_counters (scope, owner, window_start, window_ms, count)
+             VALUES (?1, ?2, ?3, ?4, 1)
+             ON CONFLICT (scope, owner, window_start, window_ms) DO UPDATE SET count = count + 1
              RETURNING count`,
           )
-          .bind(key, windowStart, w.windowMs)
+          .bind(scope, key, windowStart, w.windowMs)
           .first<{ count: number }>();
         const count = row && typeof row.count === 'number' ? row.count : w.limit + 1; // missing row: fail closed
         if (count > w.limit) {
@@ -36,7 +41,7 @@ export function createD1Limiter(db: D1Like, windows: LimitWindow[], now: () => n
     }
   }
 
-  /** Lazy bound on table growth: drop windows that closed more than `keepMs` ago. */
+  /** Lazy bound on table growth: drop windows that closed more than `keepMs` ago, ALL scopes. */
   async function sweep(keepMs: number): Promise<void> {
     try {
       await db

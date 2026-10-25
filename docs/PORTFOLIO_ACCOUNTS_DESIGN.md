@@ -35,3 +35,33 @@ Sources checked 2026-10-24: https://developers.cloudflare.com/d1/platform/pricin
 - Purge and backups are NOT implemented. The 90-day inactivity purge is a proposal without a scheduled job; D1 backup/Time-Travel recovery windows are uninspected and must be disclosed before any real user data is saved. Deletion today means deletion from the live table only.
 - Rate limiting has two honest layers. Layer 1 is per-isolate process memory: distributed Pages instances each hold their own counters, so it is NOT a durable global guardrail by itself. Layer 2 (requires the approved D1 binding) is one atomic UPSERT ... RETURNING count per UTC-aligned fixed window, failing CLOSED (deny with bounded retry delay) on any storage error. The account cap and unique-key isolation are verified on real SQLite executing the actual migration and adapter SQL (tests/d1-adapter.test.ts over node:sqlite); that is D1-compatible statement execution, still not a workerd D1 binding.
 - Migration: migrations/0001_accounts_and_counters.sql is applied once, only after binding approval, through the owner-approved path.
+
+## Review addendum 2 (2026-10-24, independent-review findings resolved)
+
+Six findings from the independent reviewer, all resolved in this branch; regressions in
+tests/d1-adapter.test.ts and tests/accounts.test.ts (265 tests total):
+
+1. At-cap relabel returned the old label with ok:true on D1 (memory adapter updated it).
+   The D1 add is now UPDATE-first, then a capped INSERT for genuinely new rows; verified on
+   real SQLite at exactly the cap, with a memory-adapter parity test.
+2. Counter rows collided across features: the lookup window (10/min) and mutation window
+   (30/min) shared the (owner, window_start, window_ms) primary key, so one feature's
+   traffic could consume the other's budget. rate_counters now has an explicit scope
+   column; the primary key is (scope, owner, window_start, window_ms); the migration,
+   adapter and both call sites ('lookup' in the resolve handler, 'mutation' in the accounts
+   handler) are updated, with a scope-independence regression.
+3. Counter sweep was lookup-only and fire-and-forget (a returned response could terminate
+   cleanup, so accounts-only traffic would grow the table forever). The sweep is now a
+   single awaited indexed DELETE over closed windows in ALL scopes, invoked hourly per
+   isolate from both enabled features, with a both-scopes regression.
+4. Subject-less identities (e.g. service tokens) skipped the lookup throttle (fail open).
+   With PORTFOLIO_LOOKUP_LIMIT=1 the resolve hook now fails CLOSED: a verified token
+   without a user subject gets 401, same as the accounts handler.
+5. The accounts handler read the full body before enforcing the 2KB cap and never used
+   bodyDeadlineMs. It now rejects an over-cap declared content-length up front and reads
+   the body through the same bounded/deadlined reader as the resolve handler (413 over cap,
+   408 on deadline), with declared-length and streamed-body regressions.
+6. Disabled-before-auth disclosure: no behavior change. The pre-auth 503
+   ('disabled'/'not_configured') matches the existing resolve handler's published contract;
+   both endpoints sit behind Cloudflare Access, so these categories reach only
+   Access-admitted callers. Clarified in a code comment.
