@@ -10,30 +10,36 @@ export const metadata = { title: 'Overview (preview build)' };
  *  reads the wired history route for the signed-in user. */
 export default function OverviewV2() {
   return (
-    <div className="page-container">
+    <div className="page-container ov2">
       <p className="eyebrow">PORTFOLIO V2 · PREVIEW BUILD</p>
       <h1>Overview.</h1>
 
       <section className="panel">
         <h2>Holdings</h2>
-        <HoldingsTable />
-        <AddressBook />
-        <SnapshotConsent />
-        <WhatChanged />
+        <div className="ov2-block">
+          <HoldingsTable />
+        </div>
+        <div className="ov2-block">
+          <AddressBook />
+        </div>
+        <div className="ov2-block">
+          <SnapshotConsent />
+        </div>
+        <div className="ov2-block">
+          <WhatChanged />
+        </div>
       </section>
 
       <section className="panel">
         <h2>Debt</h2>
-        <p>
-          <em>No debt loaded. Debt is always shown separately, never netted into balances.</em>
+        <p className="ov2-quiet">
+          No debt loaded. Debt is always shown separately, never netted into balances.
         </p>
       </section>
 
       <section className="panel">
         <h2>Allocation</h2>
-        <p>
-          <em>Allocation appears once holdings load.</em>
-        </p>
+        <p className="ov2-quiet">Allocation appears once holdings load.</p>
       </section>
     </div>
   );

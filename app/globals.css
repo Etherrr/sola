@@ -3360,3 +3360,45 @@ html {
 .app .track-output .aave-scroll {
   overflow-x: auto;
 }
+
+/* v0.2 Overview polish (user steering 2026-10-25: v0.2 should be beautiful).
+   Scoped to .ov2 so the rest of the app is untouched; uses existing tokens. */
+.ov2 h1 {
+  margin: 6px 0 34px;
+}
+.ov2 .panel {
+  padding: 30px 30px 26px;
+}
+@media (max-width: 640px) {
+  .ov2 .panel {
+    padding: 22px 20px 20px;
+  }
+}
+.ov2-block + .ov2-block {
+  margin-top: 26px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+}
+.ov2-quiet {
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-style: italic;
+}
+.ov2-net + .ov2-net {
+  margin-top: 22px;
+  padding-top: 20px;
+  border-top: 1px dashed var(--line);
+}
+.ov2-net-label {
+  color: var(--gold);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.ov2-net-time {
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin-bottom: 12px;
+}

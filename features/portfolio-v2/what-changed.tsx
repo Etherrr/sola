@@ -84,13 +84,11 @@ export function WhatChanged() {
       {sections.map((sec) => {
         const { rows, removed } = diffNetwork(sec);
         return (
-          <section key={sec.network}>
-            <p>
-              <em>
-                {sec.network === 'solana' ? 'Solana (SOL balance only)' : 'Ethereum'} - latest
-                complete observation: {sec.at}. Spot balances only.
-              </em>
+          <section key={sec.network} className="ov2-net">
+            <p className="ov2-net-label">
+              {sec.network === 'solana' ? 'Solana (SOL balance only)' : 'Ethereum'}
             </p>
+            <p className="ov2-net-time">Latest complete observation: {sec.at}. Spot balances only.</p>
             {sec.prior === null && (
               <p>First recorded observation - there is no earlier complete observation to compare yet.</p>
             )}
