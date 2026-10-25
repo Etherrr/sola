@@ -6,7 +6,8 @@ import {
   type LookupOutcome,
   type TrackNetwork,
 } from '../portfolio/api-client';
-import { fmtTimestamp } from './format-time';
+import { fmtTimestamp, feedTimeUTC } from './format-time';
+import { differsWhenRounded, fmtPrice, fmtUsd } from '../portfolio/format';
 
 /**
  * v0.2 "Look up an address" - the on-demand single-address lookup the plan
@@ -74,6 +75,15 @@ export function AddressLookup() {
   };
 
   const wallet = state.kind === 'ok' ? state.data.wallets[0] : null;
+  // Show full precision whenever rounding would change a shown digit (Track rule).
+  const exact =
+    state.kind === 'ok' &&
+    (state.data.wallets.some((w) =>
+      w.assets.some((a) => differsWhenRounded(a.amount, a.price, a.value)),
+    ) ||
+      (state.data.totals.recognizedPricedSubtotalUsd !== null &&
+        fmtUsd(state.data.totals.recognizedPricedSubtotalUsd, true) !==
+          fmtUsd(state.data.totals.recognizedPricedSubtotalUsd, false)));
 
   return (
     <div className="accounts ab-lookup">
@@ -119,18 +129,32 @@ export function AddressLookup() {
           </p>
           <table>
             <thead>
-              <tr><th>Asset</th><th>Network</th><th>Amount</th></tr>
+              <tr><th>Asset</th><th>Network</th><th>Amount</th><th>Price (USD)</th><th>Value (USD)</th></tr>
             </thead>
             <tbody>
               {wallet.assets.map((a) => (
                 <tr key={a.assetId}>
-                  <td title={a.assetId}>{a.symbol}</td>
-                  <td>{state.network === 'ethereum' ? 'EVM' : 'Solana'}</td>
-                  <td>{a.amount}</td>
+                  <td data-label="Asset" title={a.assetId}>{a.symbol}</td>
+                  <td data-label="Network">{state.network === 'ethereum' ? 'EVM' : 'Solana'}</td>
+                  <td data-label="Amount">{a.amount}</td>
+                  <td data-label="Price (USD)">
+                    {a.price === null ? 'Unknown' : fmtPrice(a.price, exact)}
+                    {a.price !== null && !state.data.simulated && a.priceObservedAt && (
+                      <small className="muted">
+                        {' '}
+                        {(a.priceSource ?? 'price feed').replace('chainlink:', 'Chainlink ')}
+                        {' · feed updated '}
+                        <span title={a.priceObservedAt}>{feedTimeUTC(a.priceObservedAt)}</span>
+                      </small>
+                    )}
+                  </td>
+                  <td data-label="Value (USD)">
+                    {a.value === null ? 'Unknown' : fmtUsd(a.value, exact)}
+                  </td>
                 </tr>
               ))}
               {wallet.assets.length === 0 && (
-                <tr><td colSpan={3}><em>
+                <tr><td colSpan={5}><em>
                   {state.data.partial || state.data.warnings.length > 0
                     ? 'No balances returned - the answer is incomplete, so balances are unknown.'
                     : 'No balances returned for this address.'}
@@ -138,6 +162,20 @@ export function AddressLookup() {
               )}
             </tbody>
           </table>
+          <p className="ov2-quiet">
+            Recognized priced subtotal:{' '}
+            {state.data.totals.recognizedPricedSubtotalUsd === null
+              ? 'Unknown'
+              : fmtUsd(state.data.totals.recognizedPricedSubtotalUsd, exact)}
+            {state.data.totals.unpricedAssetCount > 0
+              ? ` · ${state.data.totals.unpricedAssetCount} ${
+                  state.data.totals.unpricedAssetCount === 1 ? 'asset' : 'assets'
+                } without a price`
+              : ''}
+          </p>
+          {state.data.totals.note ? (
+            <p className="ov2-quiet">{state.data.totals.note}</p>
+          ) : null}
           <p><em>
             On-demand lookup{state.data.simulated ? ' (simulated)' : ''} as of{' '}
             <span title={state.data.observedAt}>{fmtTimestamp(state.data.observedAt)}</span>. Not a recorded observation.

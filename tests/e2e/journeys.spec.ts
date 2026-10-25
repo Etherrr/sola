@@ -890,7 +890,11 @@ test('v2 address book: Details expands recorded rows from the shared payload', a
   const region = main.locator('.ab-details');
   await expect(region.getByRole('cell', { name: 'ETH' })).toBeVisible();
   await expect(region.getByRole('cell', { name: '1.5' })).toBeVisible();
-  await expect(region).toContainText('Latest complete observation: 2026-10-25T01:00:00Z');
+  await expect(region).toContainText('Latest complete observation');
+  // The exact instant stays in the title attribute; visible text is the human
+  // locale time with timezone - never the raw ISO (visual review 2026-10-25).
+  await expect(region.locator('span[title="2026-10-25T01:00:00Z"]')).toBeVisible();
+  await expect(region).not.toContainText('T01:00:00Z');
   // Collapse hides the recorded rows again.
   await details.click();
   await expect(details).toHaveAttribute('aria-expanded', 'false');
@@ -1150,7 +1154,7 @@ test('v2 address lookup: on-demand lookup uses the shared rows, disclosure near 
         ],
       },
     ],
-    totals: { recognizedPricedSubtotalUsd: '4500', unpricedAssetCount: 0, note: 'test' },
+    totals: { recognizedPricedSubtotalUsd: '4500', unpricedAssetCount: 0, note: 'Subtotal covers only assets priced by verified feeds.' },
     partial: false,
     warnings: [],
   };
@@ -1180,6 +1184,14 @@ test('v2 address lookup: on-demand lookup uses the shared rows, disclosure near 
   await go.click();
   await expect(tool.getByRole('cell', { name: 'ETH' })).toBeVisible();
   await expect(tool.getByRole('cell', { name: '1.5' })).toBeVisible();
+  // Track parity: USD price, value, recognized priced subtotal + note.
+  // exact mode: rounding would change digits, so full precision shows (Track rule).
+  await expect(tool.getByRole('cell', { name: '$3,000' })).toBeVisible();
+  await expect(tool.getByRole('cell', { name: '$4,500' })).toBeVisible();
+  await expect(tool.getByText('Recognized priced subtotal: $4,500')).toBeVisible();
+  await expect(
+    tool.getByText('Subtotal covers only assets priced by verified feeds.'),
+  ).toBeVisible();
   // The result names the address and network it belongs to.
   await expect(tool.getByText('Balances for')).toBeVisible();
   await expect(tool.getByText('on EVM:')).toBeVisible();
@@ -1264,7 +1276,7 @@ test('v2 address lookup: Solana SOL-only footer; empty incomplete answer says un
     provider: 'fixture',
     generatedAt: '2026-10-25T01:00:00Z',
     observedAt: '2026-10-25T01:00:00Z',
-    totals: { recognizedPricedSubtotalUsd: null, unpricedAssetCount: 0, note: 'fixture' },
+    totals: { recognizedPricedSubtotalUsd: null, unpricedAssetCount: 0, note: 'Subtotal covers only assets priced by verified feeds.' },
     partial: false,
     warnings: [] as string[],
   };
@@ -1292,6 +1304,9 @@ test('v2 address lookup: Solana SOL-only footer; empty incomplete answer says un
   await tool.getByRole('button', { name: 'Look up' }).click();
   await expect(tool.getByText('on Solana:')).toBeVisible();
   await expect(tool.getByRole('cell', { name: '12.3' })).toBeVisible();
+  // Unpriced asset: price and value say Unknown, never a $0 or invented figure.
+  await expect(tool.getByRole('cell', { name: 'Unknown' })).toHaveCount(2);
+  await expect(tool.getByText('Recognized priced subtotal: Unknown')).toBeVisible();
   await expect(tool.getByText('Solana lookups show the SOL balance only.')).toBeVisible();
   // Empty + incomplete answer: unknown, never "no balances found".
   body = {

@@ -305,6 +305,9 @@ export function AddressBook() {
                             )}
                             {hist?.kind === 'ok' && rows.length > 0 && (
                               <>
+                                <p className="ab-details-subject">
+                                  Recorded balances for {e.label} (<code>{short(e.address)}</code>)
+                                </p>
                                 <table className="ab-details-table">
                                   <thead>
                                     <tr><th>Asset</th><th>Amount</th></tr>

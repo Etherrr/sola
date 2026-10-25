@@ -3252,6 +3252,47 @@ html {
     letter-spacing: 0.06em;
     opacity: 0.65;
   }
+  /* The 5-column lookup result table cards up the same way (main: no
+     horizontal cutoff at phone widths). */
+  .ab-lookup table,
+  .ab-lookup table thead,
+  .ab-lookup table tbody,
+  .ab-lookup table tr,
+  .ab-lookup table td {
+    display: block;
+    width: 100%;
+  }
+  .ab-lookup table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+  .ab-lookup table tbody > tr {
+    border: 1px solid var(--line, rgba(127, 127, 127, 0.25));
+    border-radius: 8px;
+    padding: 0.6rem 0.75rem;
+    margin: 0 0 0.75rem;
+  }
+  .ab-lookup table td {
+    display: flex;
+    gap: 0.5rem;
+    align-items: baseline;
+    padding: 0.12rem 0;
+    border: 0;
+  }
+  .ab-lookup table td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    min-width: 4.6rem;
+    flex-shrink: 0;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    opacity: 0.65;
+  }
+  .ab-lookup table td small { display: block; flex-basis: 100%; }
   .accounts .ab-scroll td[data-label] {
     display: flex;
     gap: 0.5rem;
@@ -3263,7 +3304,14 @@ html {
     min-width: 3.8rem;
     flex-shrink: 0;
   }
-  /* The expanded Details table stays a real table on mobile: the card
+  .ab-details-subject {
+  margin: 0 0 0.4rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+/* The expanded Details table stays a real table on mobile: the card
      treatment above is for the address rows only (reviewer: header gap +
      cramped rows came from card-ifying the nested table). */
   .accounts .ab-scroll .ab-details-table { display: table; width: 100%; }

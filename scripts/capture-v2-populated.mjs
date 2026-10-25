@@ -82,7 +82,7 @@ for (const vp of [
           { assetId: 'eip155:1/native', symbol: 'ETH', decimals: 18, amount: '1.5', price: '3000', value: '4500' },
           { assetId: 'eip155:1/erc20:0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', symbol: 'USDC', decimals: 6, amount: '250', price: '1', value: '250' },
         ] }],
-        totals: { recognizedPricedSubtotalUsd: '4750', unpricedAssetCount: 0, note: 'fixture' },
+        totals: { recognizedPricedSubtotalUsd: '4750', unpricedAssetCount: 0, note: 'Subtotal covers only assets priced by verified feeds.' },
         partial: false, warnings: [],
       }) }));
   await page.goto('http://127.0.0.1:3000/dev/overview-v2/');
@@ -123,7 +123,12 @@ for (const vp of [
     window.scrollBy(0, 8);
   });
   await page.screenshot({ path: `/downloads/v2-section-manager-bottom-${vp.label}.png` });
-  await page.locator('.ab-lookup').screenshot({ path: `/downloads/v2-crop-lookup-${vp.label}.png` });
+  await scrollTo('.ab-lookup');
+  await page.screenshot({ path: `/downloads/v2-section-lookup-${vp.label}.png` });
+  await page.getByText('Recognized priced subtotal:').evaluate((el) => {
+    el.scrollIntoView({ block: 'center' });
+  });
+  await page.screenshot({ path: `/downloads/v2-section-lookup-result-${vp.label}.png` });
   await ctx.close();
   console.log(`captured ${vp.label}`);
 }
