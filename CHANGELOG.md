@@ -8,7 +8,7 @@ Document **material, user-visible, architecture, security, or process changes**.
 - Track honors API Retry-After with visible minimum wait and explicit manual retry, blocks premature resubmission, and discards cancelled/old-network responses. No automatic provider retry or polling.
 - Distinguish balance observation time, response completion and price-feed updates; correct Solana observation to use balance-response receipt instead of Ethereum pricing block time; correct stale Settings/privacy claims about provider reads and verified Access identity.
 - Add source-pending Markets UI and disabled typed server adapter without fabricated values, new vendors, credentials or dependencies.
-- Document account storage alternatives, isolation/deletion gates and market terms/coverage/cost research. Owner deferred account persistence; real account lists and account-derived Overview remain pending. No deployment or production configuration changes.
+- Document account storage alternatives, isolation/deletion gates and market terms/coverage/cost research. The handoff documents described account persistence as owner-deferred (no owner-channel confirmation found); real account lists and account-derived Overview remain pending. No deployment or production configuration changes.
 
 ## Unreleased
 

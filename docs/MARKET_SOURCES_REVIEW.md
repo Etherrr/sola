@@ -1,6 +1,6 @@
 # Market indicators — source preparation, 2026-10-24
 
-Status: no source approved or integrated. Owner: web-app agent. `/markets` is an unavailable-state UI, not a live market product. The server adapter seam returns no observations and performs no IO. There are no new dependencies, credentials or vendor requests. Account persistence is deferred by the owner; the simulated Overview remains explicit until approved account storage and account-scoped observations exist.
+Status: no source approved or integrated. Owner: web-app agent. `/markets` is an unavailable-state UI, not a live market product. The server adapter seam returns no observations and performs no IO. There are no new dependencies, credentials or vendor requests. Account persistence was described as deferred in the 2026-10-24 handoff documents (no owner-channel confirmation found); the simulated Overview remains explicit until approved account storage and account-scoped observations exist.
 
 ## Candidate review
 

@@ -1,6 +1,6 @@
 # Portfolio accounts — storage decision (2026-10-24)
 
-Status: owner explicitly deferred persistence on 2026-10-24; finish reliability and source preparation only. Storage alternatives below remain proposals. No persistence, binding, migration or credentials are authorized by this document.
+Status: the 2026-10-24 handoff text stated the owner explicitly deferred persistence; independent review found no owner-channel confirmation of that choice, so it is preserved here as reported state, not established fact. Storage alternatives below remain proposals. No persistence, binding, migration or credentials are authorized by this document.
 Owner: web-app agent. Baseline: production release branch a63b465. This branch owns retry UX, request-race protection and approval-ready account/market preparation; other developers should coordinate overlapping work before review.
 
 ## Decision to approve

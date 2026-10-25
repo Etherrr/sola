@@ -9,6 +9,8 @@ import {
   type KeyFetcher,
 } from './access';
 import { mockProvider, solanaMockProvider, type Diag, type PortfolioProvider } from './provider';
+import { createLimiter, LOOKUP_WINDOWS } from '../accounts/limiter';
+import { readOwnerKey } from '../accounts/handler';
 import { createLiveProvider } from './live-provider';
 import { createSolanaLiveProvider } from './live-provider-solana';
 
@@ -18,6 +20,8 @@ export type Env = {
   PORTFOLIO_LIVE_DATA?: string;
   ACCESS_TEAM_DOMAIN?: string;
   ACCESS_AUD?: string;
+  /** Optional per-identity lookup limiter. Only the exact string '1' turns it on. */
+  PORTFOLIO_LOOKUP_LIMIT?: string;
 };
 export type Deps = {
   provider: PortfolioProvider;
@@ -113,6 +117,7 @@ async function readAll(
 }
 
 /** Gate every request: kill switch, then Access JWT (never trust an email header). Fails closed. */
+const lookupLimiter = createLimiter(LOOKUP_WINDOWS);
 const lastLogged = new Map<string, number>();
 /** At most one log line per category per minute per isolate, so rejections cannot amplify log volume. */
 function logOnce(category: string, nowMs: number) {
@@ -152,6 +157,19 @@ export async function handleResolve(
     return err(405, 'method_not_allowed', 'Use POST.', requestId, { allow: 'POST' });
   const blocked = await gate(req, env, d, requestId);
   if (blocked) return blocked;
+  // Optional first-layer per-identity limit (per-isolate, best-effort; the durable global
+  // counter reuses the approved D1 binding). Off unless the flag is exactly '1'. The client
+  // already honors 429 Retry-After. The key is the verified iss#sub, never an email or token.
+  if (env.PORTFOLIO_LOOKUP_LIMIT === '1') {
+    const key = readOwnerKey(req.headers.get('cf-access-jwt-assertion'));
+    if (key) {
+      const lim = lookupLimiter.check(key);
+      if (!lim.allowed)
+        return err(429, 'rate_limited', 'Too many lookups. Try again later.', requestId, {
+          'retry-after': String(lim.retryAfterSec),
+        });
+    }
+  }
   if (!/^application\/json\s*(;.*)?$/i.test(req.headers.get('content-type') ?? ''))
     return err(415, 'unsupported_media_type', 'Send application/json.', requestId);
   const origin = req.headers.get('origin');

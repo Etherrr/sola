@@ -2,7 +2,7 @@
 
 This repository is the shared **engineering handoff and source-code home** for Sola Lens, the proposed read-only DeFi portfolio and learning web application.
 
-**Source status (2026-10-24):** static-export Next.js app with Cloudflare Pages Functions, Access-verified identity, and read-only Ethereum/Solana lookup adapters. Overview remains simulated. Live lookup mode requires the exact server flag `PORTFOLIO_LIVE_DATA=1`; this does not confirm current production settings. Account persistence is deferred by the owner. Markets is source-pending with no figures. See the [live runbook](docs/LIVE_DATA_RUNBOOK.md), [account proposal](docs/PORTFOLIO_ACCOUNTS_DESIGN.md) and [market review](docs/MARKET_SOURCES_REVIEW.md).
+**Source status (2026-10-24):** static-export Next.js app with Cloudflare Pages Functions, Access-verified identity, and read-only Ethereum/Solana lookup adapters. Overview remains simulated. Live lookup mode requires the exact server flag `PORTFOLIO_LIVE_DATA=1`; this does not confirm current production settings. Account persistence was described as deferred in the 2026-10-24 handoff documents; no owner-channel confirmation of that deferral has been found, and the roadmap request for account tracking stands. Markets is source-pending with no figures. See the [live runbook](docs/LIVE_DATA_RUNBOOK.md), [account proposal](docs/PORTFOLIO_ACCOUNTS_DESIGN.md) and [market review](docs/MARKET_SOURCES_REVIEW.md).
 
 ## Two separate products
 
