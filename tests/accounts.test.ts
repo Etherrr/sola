@@ -78,7 +78,7 @@ const aReq = (method: string, body: unknown, jwt: string | null) =>
   });
 const ETH_A = '0x' + 'a'.repeat(40);
 const ETH_B = '0x' + 'b'.repeat(40);
-const SOL_A = 'AhjGN2JXEn2HSLeBWCE8ccGFnaVao6znDnF7edK56Na';
+const SOL_A = 'So1DemoAddr9zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz';
 
 describe('account identity and entry validation', () => {
   it('builds owner keys only from bounded verified iss+sub', () => {

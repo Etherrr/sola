@@ -6,7 +6,7 @@ import { createSqliteD1 } from './helpers/d1-sqlite';
 
 const A = 'https://team.cloudflareaccess.com#user-a';
 const B = 'https://team.cloudflareaccess.com#user-b';
-const SOL = 'AhjGN2JXEn2HSLeBWCE8ccGFnaVao6znDnF7edK56Na';
+const SOL = 'So1DemoAddr9zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz';
 
 describe('D1 adapter on real SQLite (migration + real adapter SQL)', () => {
   it('enforces the per-network cap atomically under concurrent adds', async () => {
