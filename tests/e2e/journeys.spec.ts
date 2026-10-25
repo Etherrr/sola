@@ -873,7 +873,7 @@ test('v2 address book: Details expands recorded rows from the shared payload', a
   await page.goto('/dev/overview-v2');
   const main = page.locator('#main');
   // EVM case-insensitive match: the saved 0xAbC123 row expands to its recorded 1.5 ETH.
-  const details = main.getByRole('button', { name: 'Details' });
+  const details = main.getByRole('button', { name: /Details for Main/ });
   await details.click();
   await expect(details).toHaveAttribute('aria-expanded', 'true');
   const region = main.locator('.ab-details');
@@ -884,6 +884,29 @@ test('v2 address book: Details expands recorded rows from the shared payload', a
   await details.click();
   await expect(details).toHaveAttribute('aria-expanded', 'false');
   await expect(main.locator('.ab-details')).toHaveCount(0);
+
+  // A sync/refresh/withdraw event drops the cached payload and collapses the
+  // open row; the next expand refetches. After a withdrawal (empty status) the
+  // region shows the honest empty state - deleted balances never linger.
+  await details.click();
+  await expect(details).toHaveAttribute('aria-expanded', 'true');
+  await expect(main.locator('.ab-details')).toHaveCount(1);
+  await page.evaluate(() =>
+    window.dispatchEvent(new CustomEvent('sola:observation-synced')),
+  );
+  await expect(main.locator('.ab-details')).toHaveCount(0);
+  await page.unroute('**/api/v1/portfolio/overview**');
+  await page.route('**/api/v1/portfolio/overview**', (r) =>
+    r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'empty', newerPartial: false }),
+    }),
+  );
+  await details.click();
+  await expect(main.locator('.ab-details')).toContainText(
+    'No recorded observations yet - turn on recording and refresh.',
+  );
 });
 
 test('shell nav is keyboard-reachable in DOM order', async ({ page }) => {

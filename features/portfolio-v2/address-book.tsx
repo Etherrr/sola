@@ -6,6 +6,7 @@ import {
   addressRemoveRequest,
 } from '../portfolio/api-client';
 import { fetchOverview, rowsForAddress, type OverviewResult } from './overview-history';
+import { SYNCED_EVENT } from './snapshot-consent';
 
 /**
  * Native address book (v0.2): the only actions the signed-in user has on the
@@ -74,6 +75,18 @@ export function AddressBook() {
     const ctl = new AbortController();
     refresh(ctl.signal);
     return () => ctl.abort();
+  }, []);
+
+  // A sync, refresh, or recording withdrawal can change or delete recorded
+  // balances. Drop the cached overview and collapse the open row so stale or
+  // deleted figures never stay visible; the next expand refetches fresh.
+  useEffect(() => {
+    const onSynced = () => {
+      setHist(null);
+      setOpen(null);
+    };
+    window.addEventListener(SYNCED_EVENT, onSynced);
+    return () => window.removeEventListener(SYNCED_EVENT, onSynced);
   }, []);
 
   const failNote = (res: Response, action: string): Promise<string> =>
@@ -213,7 +226,12 @@ export function AddressBook() {
                         <td>{e.network === 'ethereum' ? 'EVM' : 'Solana'}</td>
                         <td>
                           <code title={e.address}>{short(e.address)}</code>{' '}
-                          <button type="button" onClick={() => void copyAddress(e)} disabled={busy}>
+                          <button
+                            type="button"
+                            onClick={() => void copyAddress(e)}
+                            disabled={busy}
+                            aria-label={`Copy address for ${e.label} (${short(e.address)})`}
+                          >
                             Copy
                           </button>
                         </td>
@@ -224,11 +242,26 @@ export function AddressBook() {
                             onClick={() => toggleDetails(e)}
                             disabled={busy}
                             aria-expanded={expanded}
+                            aria-label={`Details for ${e.label} (${short(e.address)})`}
                           >
                             Details
                           </button>{' '}
-                          <button type="button" onClick={() => rename(e)} disabled={busy}>Rename</button>{' '}
-                          <button type="button" onClick={() => remove(e)} disabled={busy}>Remove</button>
+                          <button
+                            type="button"
+                            onClick={() => rename(e)}
+                            disabled={busy}
+                            aria-label={`Rename ${e.label} (${short(e.address)})`}
+                          >
+                            Rename
+                          </button>{' '}
+                          <button
+                            type="button"
+                            onClick={() => remove(e)}
+                            disabled={busy}
+                            aria-label={`Remove ${e.label} (${short(e.address)})`}
+                          >
+                            Remove
+                          </button>
                         </td>
                       </tr>
                       {expanded && (
@@ -244,7 +277,7 @@ export function AddressBook() {
                               <em>Recorded observations unavailable right now.</em>
                             )}
                             {hist?.kind === 'ok' && rows.length === 0 && (
-                              <em>No recorded observations for this address yet.</em>
+                              <em>No recorded balances for this address in the latest observation.</em>
                             )}
                             {hist?.kind === 'ok' && rows.length > 0 && (
                               <>
