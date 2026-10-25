@@ -11,6 +11,9 @@ export default defineConfig([
     'playwright-report/**',
     'test-results/**',
     'next-env.d.ts',
+    // Generated esbuild bundles, never source (regenerated per run, gitignored).
+    'harness/fixture-worker.mjs',
+    'harness/fixture-native-worker.mjs',
   ]),
   {
     // Sandbox harness scripts run on plain Node, not in the app/browser environment.
