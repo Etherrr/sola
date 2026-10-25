@@ -2779,6 +2779,8 @@ html {
   display: grid;
   gap: 8px;
   font-variant-numeric: tabular-nums;
+  width: 100%;
+  max-width: 460px;
 }
 .alloc-list li {
   display: grid;
@@ -2798,6 +2800,11 @@ html {
 .alloc-val,
 .alloc-pct {
   text-align: right;
+}
+.alloc-val {
+  color: var(--text, #f4efe3);
+}
+.alloc-pct {
   color: var(--muted, #9aa3b5);
 }
 .asset-icon {
