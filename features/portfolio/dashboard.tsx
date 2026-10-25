@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { Allocation } from './allocation';
 import { PositionTable } from './position-table';
 import { PageIntro, SimulatedNotice } from '@/components/ui';
+import { CombinedWallets } from './combined-wallets';
 import { fixture } from './fixture';
 import { money, summarize, uniqueExposures } from './model';
 type View = 'overview' | 'assets' | 'positions' | 'risk';
@@ -40,6 +41,14 @@ export function Dashboard({ view = 'overview' }: { view?: View }) {
           </Link>
         ))}
       </nav>
+      {view === 'overview' ? <CombinedWallets /> : null}
+      {view === 'overview' ? (
+        <p className="notice demo-divider">
+          Below is the original standalone demo fixture (basis $12,000). It is a separate
+          invented example: it is not an input to, and does not reconcile with, the combined
+          view above.
+        </p>
+      ) : null}
       <div className="metric-grid">
         <div className="metric main-metric">
           <p>Priced net sample value</p>

@@ -3169,4 +3169,133 @@ html {
    because it carries the instrument class and issuer disclosure. */
 .app .panel.price-card > .eyebrow {
   display: block;
+/* Combined-view proof section (simulated aggregation) */
+.combined {
+  max-width: 100%;
+  min-width: 0;
+}
+.combined .metric-grid {
+  margin: 14px 0;
+}
+.combined .metric {
+  min-width: 0;
+}
+.combined .metric strong {
+  white-space: nowrap;
+}
+@media (max-width: 720px) {
+  .combined .metric-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.combined-table-wrap {
+  overflow-x: auto;
+  max-width: 100%;
+}
+.combined-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+  font-size: 14px;
+}
+.combined-table caption {
+  text-align: left;
+  margin-bottom: 6px;
+}
+.combined-table th,
+.combined-table td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid #2b2b33;
+  vertical-align: middle;
+}
+.combined-table th {
+  font-weight: 600;
+  color: var(--muted, #9a97a3);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.combined .badge-warn {
+  border-color: #8a6d2f;
+  background: #2b210f;
+  color: #f0c36d;
+}
+.combined .badge-loaded {
+  border-color: #3a3a44;
+  background: #17171d;
+  color: #b9b7c3;
+}
+.combined .combined-notes {
+  margin: 12px 0 0;
+  padding-left: 18px;
+}
+.combined .combined-notes li {
+  margin-top: 4px;
+}
+.combined .warn-text {
+  color: #f0c36d;
+}
+.combined .addr summary {
+  cursor: pointer;
+  list-style: none;
+}
+.combined .addr summary::after {
+  content: ' · show';
+  color: var(--muted, #9a97a3);
+  font-size: 11px;
+}
+.combined .addr[open] summary::after {
+  content: ' · hide';
+}
+.combined .addr code {
+  display: block;
+  word-break: break-all;
+  margin-top: 4px;
+}
+.combined .metric strong.obs-value {
+  white-space: normal;
+  font-size: 15px;
+}
+/* Narrow screens: each address becomes a card with every field visible - no horizontal hunting. */
+@media (max-width: 720px) {
+  .combined-table-wrap {
+    overflow-x: visible;
+  }
+  .combined-table,
+  .combined-table tbody,
+  .combined-table tr,
+  .combined-table td {
+    display: block;
+    width: 100%;
+  }
+  .combined-table thead {
+    display: none;
+  }
+  .combined-table tr {
+    padding: 8px 0;
+  }
+  .combined-table td {
+    border-bottom: none;
+    padding: 3px 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+  }
+  .combined-table td::before {
+    content: attr(data-label);
+    color: var(--muted, #9a97a3);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    flex-shrink: 0;
+  }
+  .combined-table td[data-label='Address'] {
+    display: block;
+  }
+  .combined-table td[data-label='Address']::before {
+    display: block;
+    margin-bottom: 2px;
+  }
 }

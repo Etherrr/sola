@@ -372,10 +372,10 @@ export function AccountsPanel() {
           {ready.accounts.length > 0 &&
             (clearing ? (
               <div className="notice">
-                <p className="fine">Clear every saved address? This deletes your saved list.</p>
+                <p className="fine">Clear every saved address? This removes only the saved list shown here. It does not sign you out or delete anything else.</p>
                 <div className="actions">
                   <button type="button" className="button secondary" disabled={busy} onClick={() => void onClear()}>
-                    Clear everything
+                    Clear saved list
                   </button>
                   <button type="button" className="button secondary" onClick={() => setClearing(false)}>
                     Keep my list
