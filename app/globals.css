@@ -3169,6 +3169,7 @@ html {
    because it carries the instrument class and issuer disclosure. */
 .app .panel.price-card > .eyebrow {
   display: block;
+}
 /* Combined-view proof section (simulated aggregation) */
 .combined {
   max-width: 100%;
