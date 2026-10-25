@@ -47,7 +47,7 @@ Preview headers restrict connections to the same origin, deny framing, disable c
 
 ## Verification and remaining gates
 
-Commands: `npm run check`, `npm run test:e2e`, and `npm audit`. Browser tests run the production build, all 16 public routes, keyboard/mobile navigation, reduced motion, quizzes, optional persistence/clearing, blocked storage, headers, forbidden signing surfaces, missing-page behavior, and absence of external exercise requests. Unit tests cover empty holdings, exact large values, negative net value, missing prices, duplicate exposures/LP receipts, network allocation, malformed saved state, lesson structure, official-link allowlist, and the absence of wallet SDKs/signing operations.
+Commands: `npm run check`, `npm run test:e2e`, and `npm audit`. Browser tests run the production build, all 20 app routes, keyboard/mobile navigation, reduced motion, quizzes, optional persistence/clearing, blocked storage, headers, forbidden signing surfaces, missing-page behavior, and absence of external exercise requests. Unit tests cover empty holdings, exact large values, negative net value, missing prices, duplicate exposures/LP receipts, network allocation, malformed saved state, lesson structure, official-link allowlist, and the absence of wallet SDKs/signing operations.
 
 Loading and error components provide recovery without financial claims. The holdings table includes an empty state; there are no provider outage states because there is no provider. Full provider reconciliation, live network/address validation, and connectivity security tests belong to later releases.
 
@@ -55,7 +55,7 @@ Owner review is required for brand fidelity, editorial accuracy, privacy/legal l
 
 ### Verified locally on 2026-10-23
 
-- `npm run check`: passed lint, route generation/typecheck, 10 unit tests, and Next.js production build (all 16 public routes prerendered).
+- `npm run check`: passed lint, route generation/typecheck, 332 unit tests, and Next.js production build (all 20 app routes prerendered).
 - `npm run test:e2e`: 16 passed across desktop and mobile Chromium. All 16 routes passed automated axe checks; key views also passed 320/768/1024px reflow. Keyboard, reduced motion, persistence/clearing, blocked storage, no external exercise requests, and preview headers passed.
 - `npm run format:check` and `git diff --check`: passed.
 - `npm audit` and `npm audit --omit=dev`: zero vulnerabilities reported after removing the affected development lint dependency.

@@ -23,9 +23,11 @@ export default function OnboardingPrototype() {
       <section className="panel">
         <h2>Proposed: Sola-native sign-in</h2>
         <p>
-          A future Sola-owned sign-in: enter your email, receive a one-time code, done. The secure
-          gate would keep protecting the app; only who draws the door changes. This is a mock;
-          the controls are disabled and nothing is sent anywhere.
+          A future Sola-owned sign-in: enter your email, receive a one-time code, done. Whether
+          that can protect the app as well as today's gate is a security question still being
+          validated - Cloudflare Access stays unchanged unless a replacement is proven and
+          explicitly approved. This is a mock; the controls are disabled and nothing is sent
+          anywhere.
         </p>
         <p>
           <input type="email" disabled placeholder="you@example.com" aria-label="Email (prototype, disabled)" />{' '}
@@ -66,9 +68,7 @@ export default function OnboardingPrototype() {
         <span className="badge">DESIGN NOTE</span>
       </section>
       <p className="notice">
-        Visual prototype for review. Full options, threat model and open decisions live in
-        docs/NATIVE_ENTRY_DESIGN.md. No route, gate, session or identity behavior changes on this
-        page.
+        Design preview only. No route, gate, sign-in or account behavior changes on this page.
       </p>
     </div>
   );
