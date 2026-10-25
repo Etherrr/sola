@@ -21,7 +21,7 @@ const routes = [
   '/learn/security-lab',
   '/settings',
   '/onboarding',
-  '/welcome',
+  '/dev/welcome',
 ];
 test.beforeEach(async ({ page }) => {
   // The intro plays on every load now; tests that are not about it opt out via reduced motion.
@@ -583,7 +583,11 @@ test('the top-bar network selector and the track form share one selection', asyn
 
 test('corporate site link is reachable on every width', async ({ page }) => {
   await page.goto('/settings');
-  await expect(page.getByRole('link', { name: 'Back to solacapitalpartners.com' })).toBeVisible();
+  // Reachable on every width: the top bar shows it on wide layouts, the app
+  // footer carries the same destination on every width including phones.
+  await expect(
+    page.locator('footer').getByRole('link', { name: 'solacapitalpartners.com' }),
+  ).toBeVisible();
 });
 
 test.describe('session status', () => {
@@ -720,71 +724,158 @@ test('onboarding prototype is clearly nonfunctional: every control disabled, not
   expect(posts).toEqual([]);
 });
 
-test('orientation page is honest, inert and sends nothing', async ({ page }) => {
+test('native welcome door: real 48px actions, visible keyboard focus, nothing sent', async ({
+  page,
+}) => {
   const posts: string[] = [];
   page.on('request', (r) => {
     if (r.method() === 'POST') posts.push(r.url());
   });
-  await page.goto('/welcome');
-  await expect(page.locator('#main')).toContainText('What this app does, honestly.');
-  await expect(page.locator('#main')).toContainText('SOL balance only');
-  await expect(page.locator('#main')).toContainText('not proven to be yours');
-  await expect(page.locator('#main')).toContainText('nothing is signed');
-  await expect(page.locator('#main')).toContainText('never substitutes an invented number');
-  await expect(page.locator('#main')).toContainText('design preview');
-  await expect(page.locator('#main input')).toHaveCount(0);
-  await expect(page.locator('#main button')).toHaveCount(0);
+  // Deterministic signed-out native branch: the door renders its two entry actions.
+  await page.route('**/api/v1/auth/email/session', (r) =>
+    r.fulfill({ status: 401, contentType: 'application/json', body: '{}' }),
+  );
+  await page.goto('/dev/welcome');
+  const main = page.locator('#main');
+  const signIn = main.getByRole('link', { name: 'Sign in', exact: true });
+  const create = main.getByRole('link', { name: 'Create account' });
+  await expect(signIn).toHaveAttribute('href', '/dev/sign-in');
+  await expect(create).toHaveAttribute('href', '/dev/create-account');
+  // Touch targets: both entry actions meet the 48px minimum.
+  for (const action of [signIn, create]) {
+    const box = await action.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.height).toBeGreaterThanOrEqual(48);
+  }
+  // Keyboard: tabbing reaches Sign in with a VISIBLE focus outline, then Create account.
+  let reached = false;
+  for (let i = 0; i < 25 && !reached; i += 1) {
+    await page.keyboard.press('Tab');
+    reached = await signIn.evaluate((el) => el === document.activeElement);
+  }
+  expect(reached, 'Sign in is keyboard-reachable').toBe(true);
+  const outline = await signIn.evaluate((el) => {
+    const cs = getComputedStyle(el);
+    return { style: cs.outlineStyle, width: cs.outlineWidth };
+  });
+  expect(outline.style).toBe('solid');
+  expect(parseFloat(outline.width)).toBeGreaterThanOrEqual(2);
+  await page.keyboard.press('Tab');
+  await expect(create).toBeFocused();
+  // The door sends nothing on its own.
   await page.waitForTimeout(500);
   expect(posts).toEqual([]);
 });
 
-test('orientation is discoverable from the shell nav and the account menu', async ({ page }) => {
-  await page.goto('/welcome');
+test('shell nav is keyboard-reachable in DOM order', async ({ page }) => {
+  await page.goto('/portfolio');
   const nav = page.locator('nav[aria-label="Main"]');
-  const navLink = nav.getByRole('link', { name: 'Start here' });
-  await expect(navLink).toHaveAttribute('href', '/welcome/');
-  await expect(navLink).toHaveAttribute('aria-current', 'page');
-  // Every nav item is keyboard-reachable in DOM order, not only reachable by pointer.
-  const names = ['Overview', 'Markets', 'Start here', 'Education', 'Settings'];
+  const names = ['Overview', 'Markets', 'Education', 'Settings'];
   await nav.getByRole('link', { name: 'Overview' }).focus();
   await expect(nav.getByRole('link', { name: 'Overview' })).toBeFocused();
   for (const name of names.slice(1)) {
     await page.keyboard.press('Tab');
     await expect(nav.getByRole('link', { name })).toBeFocused();
   }
-  await page.goto('/settings');
-  await page.getByRole('button', { name: /^Account/ }).click();
-  const menuLink = page.getByRole('link', { name: 'Start here - what this app does' });
-  await expect(menuLink).toHaveAttribute('href', '/welcome/');
-  // Every account-menu item is keyboard-reachable in DOM order: orientation, privacy, the
-  // external site link and sign out. Tabbing starts from the menu button that has focus.
+});
+
+test('account menu: native signed-out branch keyboard order and back', async ({ page }) => {
+  await page.route('**/api/v1/auth/email/session', (r) =>
+    r.fulfill({ status: 401, contentType: 'application/json', body: '{}' }),
+  );
+  await page.goto('/portfolio');
+  const btn = page.getByRole('button', { name: /^Account/ });
+  await btn.click();
+  await expect(btn).toHaveAttribute('aria-expanded', 'true');
   const menu = page.getByRole('group', { name: 'Account' });
+  await expect(menu).toContainText('Not signed in.');
+  const order = ['Sign in', 'Privacy & local data', /Sola Capital Partners/] as const;
+  for (const name of order) {
+    await page.keyboard.press('Tab');
+    await expect(menu.getByRole('link', { name })).toBeFocused();
+  }
+  // No passkey action and no sign-out while signed out.
+  await expect(menu.getByRole('button')).toHaveCount(0);
+  // Shift+Tab walks the same order backwards.
+  for (const name of [...order].reverse().slice(1)) {
+    await page.keyboard.press('Shift+Tab');
+    await expect(menu.getByRole('link', { name })).toBeFocused();
+  }
+});
+
+test('account menu: live native session shows passkey then sign out last', async ({ page }) => {
+  await page.route('**/api/v1/auth/email/session', (r) =>
+    r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'ok', email: 'owner@example.com', fresh: true }),
+    }),
+  );
+  await page.goto('/portfolio');
+  const btn = page.getByRole('button', { name: /^Account/ });
+  await expect(btn).toHaveAttribute('aria-label', /owner@example\.com/);
+  await btn.click();
+  await expect(btn).toHaveAttribute('aria-expanded', 'true');
+  const menu = page.getByRole('group', { name: 'Account' });
+  await expect(menu).toContainText('Signed in as');
+  // Exactly four tabbable panel items, in this order: privacy, external,
+  // passkey setup, sign out LAST.
+  await expect(menu.locator('a, button')).toHaveCount(4);
   await page.keyboard.press('Tab');
-  await expect(menuLink).toBeFocused();
+  await expect(menu.getByRole('link', { name: 'Privacy & local data' })).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(menu.getByRole('link', { name: /Sola Capital Partners/ })).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(menu.getByRole('button', { name: 'Set up a passkey' })).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(menu.getByRole('button', { name: 'Sign out' })).toBeFocused();
+  // And back.
+  await page.keyboard.press('Shift+Tab');
+  await expect(menu.getByRole('button', { name: 'Set up a passkey' })).toBeFocused();
+});
+
+test('account menu: native-off branch keeps the Access sign-out and scope note', async ({
+  page,
+}) => {
+  // Native routes off (404 on the static host maps to the Access fallback),
+  // Access session verified: the menu must keep the Access sign-out with its
+  // honest scope note and no passkey action.
+  await page.route('**/api/v1/session', (r) =>
+    r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        status: 'ok',
+        via: 'cloudflare-access',
+        identity: { email: 'owner@example.com' },
+        expiresAt: '2099-01-01T00:00:00.000Z',
+      }),
+    }),
+  );
+  await page.goto('/portfolio');
+  const btn = page.getByRole('button', { name: /^Account/ });
+  await expect(btn).toHaveAttribute('aria-label', /owner@example\.com/);
+  await btn.click();
+  await expect(btn).toHaveAttribute('aria-expanded', 'true');
+  const menu = page.getByRole('group', { name: 'Account' });
+  await expect(menu).toContainText('Signed in via Cloudflare Access as');
+  await expect(menu.getByRole('button', { name: 'Set up a passkey' })).toHaveCount(0);
   await page.keyboard.press('Tab');
   await expect(menu.getByRole('link', { name: 'Privacy & local data' })).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(menu.getByRole('link', { name: /Sola Capital Partners/ })).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(menu.getByRole('button', { name: 'Sign out' })).toBeFocused();
-  // Keyboard activation of the orientation link, not only pointer.
-  await page.keyboard.press('Shift+Tab');
-  await page.keyboard.press('Shift+Tab');
-  await page.keyboard.press('Shift+Tab');
-  await expect(menuLink).toBeFocused();
-  await page.keyboard.press('Enter');
-  await expect(page).toHaveURL(/\/welcome/);
-  await expect(page.locator('#main')).toContainText('What this app does, honestly.');
+  await expect(menu).toContainText('also signs you out of other apps protected by this Cloudflare Access account');
 });
 
-test('at 320px the tab bar shows four fitting tabs and the orientation stays in the account menu', async ({
+test('at 320px the tab bar shows four fitting tabs and the account menu stays on screen', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 320, height: 700 });
   await page.goto('/settings');
   const nav = page.locator('nav[aria-label="Main"]');
-  await expect(nav.getByRole('link', { name: 'Start here' })).toBeHidden();
-  // The bar is position:fixed, so document scrollWidth cannot catch a cutoff; measure the last
+  // The bar is position:fixed, so document scrollWidth cannot catch a cutoff; measure each
   // tab's box against the viewport instead.
   const visible = ['Overview', 'Markets', 'Education', 'Settings'];
   for (const name of visible) {
@@ -793,11 +884,11 @@ test('at 320px the tab bar shows four fitting tabs and the orientation stays in 
     expect(box!.x).toBeGreaterThanOrEqual(0);
     expect(box!.x + box!.width).toBeLessThanOrEqual(320);
   }
-  // The orientation remains one tap away inside the account menu.
+  // The open account menu must not clip past the viewport either.
   await page.getByRole('button', { name: /^Account/ }).click();
-  const menuLink = page.getByRole('link', { name: 'Start here - what this app does' });
-  await expect(menuLink).toBeVisible();
-  await menuLink.click();
-  await expect(page).toHaveURL(/\/welcome/);
-  await expect(page.locator('#main')).toContainText('What this app does, honestly.');
+  const menu = page.getByRole('group', { name: 'Account' });
+  const box = await menu.boundingBox();
+  expect(box).not.toBeNull();
+  expect(box!.x).toBeGreaterThanOrEqual(0);
+  expect(box!.x + box!.width).toBeLessThanOrEqual(320);
 });
