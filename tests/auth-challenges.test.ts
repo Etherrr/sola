@@ -26,6 +26,9 @@ function makeDb(): ChallengeDb {
               const info = stmt.run(...(args as never[]));
               return { success: true, meta: { changes: Number(info.changes) } };
             },
+            async all<T>() {
+              return { results: stmt.all(...(args as never[])) as T[] };
+            },
             async first<T>() {
               return (stmt.get(...(args as never[])) ?? null) as T | null;
             },

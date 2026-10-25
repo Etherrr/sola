@@ -32,6 +32,7 @@ export interface ChallengeDb {
   prepare(sql: string): {
     bind(...args: unknown[]): {
       run(): Promise<{ success: boolean; meta?: { changes?: number } }>;
+      all<T>(): Promise<{ results: T[] }>;
       first<T>(): Promise<T | null>;
     };
   };
