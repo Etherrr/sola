@@ -40,7 +40,7 @@ const obsPartial = (amount: string, observedAt: string): Extract<ProviderResult,
 describe('loadBalanceHistory', () => {
   it('no history => honest empty state', async () => {
     const h = await loadBalanceHistory(db, 'u1');
-    expect(h).toEqual({ latestObservedAt: null, newerPartial: false, prior: null, latest: [] });
+    expect(h).toEqual({ latestObservedAt: null, newerPartial: false, prior: null, latest: [], networks: [] });
   });
 
   it('one observation => prior is null (never a fabricated zero baseline)', async () => {
@@ -66,7 +66,7 @@ describe('loadBalanceHistory', () => {
     await grantSnapshotConsent(db, 'u1');
     await recordObservation(db, 'u1', obs('1.5', '2026-10-25T11:00:00Z'), net);
     const h = await loadBalanceHistory(db, 'u2');
-    expect(h).toEqual({ latestObservedAt: null, newerPartial: false, prior: null, latest: [] });
+    expect(h).toEqual({ latestObservedAt: null, newerPartial: false, prior: null, latest: [], networks: [] });
   });
 });
 
@@ -104,3 +104,63 @@ describe('complete-runs-only baselines (reviewer)', () => {
     expect(h.latestObservedAt).toBe('2026-10-25T10:00:00Z'); // still the complete one
     expect(h.newerPartial).toBe(true); // UI must say "latest COMPLETE observation"
   });
+
+describe('per-network baselines (reviewer MEDIUM: no cross-network comparison)', () => {
+  const SOL_ADDR = 'SoLaNa1111111111111111111111111111111111111';
+  const solObs = (amount: string, observedAt: string): Extract<ProviderResult, { ok: true }> => ({
+    ok: true,
+    provider: 'test-provider',
+    simulated: false,
+    observedAt,
+    wallets: [{
+      address: SOL_ADDR,
+      partial: false,
+      warnings: [],
+      assets: [{
+        assetId: 'solana/native', symbol: 'SOL', decimals: 9,
+        rawAmount: '0', amount, price: '100', value: '0', priceSource: 'test', priceObservedAt: observedAt,
+      }],
+      aave: undefined,
+    }],
+  });
+  const netOf = (address: string) => (address === SOL_ADDR ? 'solana' as const : 'ethereum' as const);
+
+  it('REGRESSION: ETH run at 12:00 + SOL run at 12:05 - merged latest keeps BOTH networks (no vanish, no false adds)', async () => {
+    await grantSnapshotConsent(db, 'u1');
+    await recordObservation(db, 'u1', obs('1.5', '2026-10-25T12:00:00Z'), netOf);
+    await recordObservation(db, 'u1', solObs('4', '2026-10-25T12:05:00Z'), netOf);
+    const h = await loadBalanceHistory(db, 'u1');
+    // merged latest must contain BOTH the ETH row (12:00) and the SOL row (12:05);
+    // the old global-timestamp query would have dropped ETH entirely.
+    expect(h.latest).toHaveLength(2);
+    expect(h.latest.map((o) => o.network).sort()).toEqual(['ethereum', 'solana']);
+    // per-network slices carry their own honest timestamps
+    const eth = h.networks.find((n) => n.network === 'ethereum')!;
+    const sol = h.networks.find((n) => n.network === 'solana')!;
+    expect(eth.latestObservedAt).toBe('2026-10-25T12:00:00Z');
+    expect(sol.latestObservedAt).toBe('2026-10-25T12:05:00Z');
+    expect(eth.prior).toBeNull();
+    expect(sol.prior).toBeNull();
+    // top-level: max timestamp, no prior anywhere
+    expect(h.latestObservedAt).toBe('2026-10-25T12:05:00Z');
+    expect(h.prior).toBeNull();
+  });
+
+  it('per-network priors: ETH has two observations, SOL one - ETH prior exists, SOL prior null, no cross-pollution', async () => {
+    await grantSnapshotConsent(db, 'u1');
+    await recordObservation(db, 'u1', obs('1.5', '2026-10-25T10:00:00Z'), netOf);
+    await recordObservation(db, 'u1', solObs('4', '2026-10-25T11:00:00Z'), netOf);
+    await recordObservation(db, 'u1', obs('2', '2026-10-25T12:00:00Z'), netOf);
+    const h = await loadBalanceHistory(db, 'u1');
+    const eth = h.networks.find((n) => n.network === 'ethereum')!;
+    const sol = h.networks.find((n) => n.network === 'solana')!;
+    expect(eth.latest[0].amount).toBe('2');
+    expect(eth.prior).toHaveLength(1);
+    expect(eth.prior![0].amount).toBe('1.5');
+    expect(sol.latest[0].amount).toBe('4');
+    expect(sol.prior).toBeNull(); // SOL has ONE observation - never compared against ETH's
+    // merged prior = ETH's prior only
+    expect(h.prior).toHaveLength(1);
+    expect(h.prior![0].network).toBe('ethereum');
+  });
+});

@@ -50,11 +50,17 @@ export async function handleOverview(req: Request, env: OverviewEnv): Promise<Re
       });
     return json(200, {
       status: 'ok',
+      // Spot balances only; Solana coverage is the SOL balance only (no SPL
+      // tokens/NFTs) - "no Solana rows" never means "empty Solana wallet".
       scope: 'spot_balances_only',
+      solanaScope: 'sol_only',
       latestCompleteObservedAt: h.latestObservedAt,
       newerPartial: h.newerPartial,
       latest: h.latest,
       prior: h.prior,
+      // Per-network slices with their own timestamps: the honest baseline for
+      // deltas (reviewer MEDIUM - never compare one network against another).
+      networks: h.networks,
     });
   } catch {
     return json(503, { error: 'storage_unavailable', message: 'History storage is unavailable. Try again later.' });
