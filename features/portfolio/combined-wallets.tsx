@@ -48,6 +48,7 @@ export function CombinedWallets() {
           <small>Each source's own time, never the request time</small>
         </div>
       </div>
+      <div className="combined-table-wrap" role="region" aria-label="Per-address contribution" tabIndex={0}>
       <table className="combined-table">
         <caption className="fine muted">Per-address contribution (invented samples)</caption>
         <thead>
@@ -82,6 +83,7 @@ export function CombinedWallets() {
           ))}
         </tbody>
       </table>
+      </div>
     </section>
   );
 }

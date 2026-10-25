@@ -41,6 +41,14 @@ export function Dashboard({ view = 'overview' }: { view?: View }) {
           </Link>
         ))}
       </nav>
+      {view === 'overview' ? <CombinedWallets /> : null}
+      {view === 'overview' ? (
+        <p className="notice demo-divider">
+          Below is the original standalone demo fixture (basis $12,000). It is a separate
+          invented example: it is not an input to, and does not reconcile with, the combined
+          view above.
+        </p>
+      ) : null}
       <div className="metric-grid">
         <div className="metric main-metric">
           <p>Priced net sample value</p>
@@ -63,7 +71,6 @@ export function Dashboard({ view = 'overview' }: { view?: View }) {
         DEMO has no sample price. Its value is unknown, so these totals are incomplete. LP receipts
         are excluded to avoid counting the same exposure twice.
       </p>
-      {view === 'overview' ? <CombinedWallets /> : null}
       {view === 'risk' ? (
         <div className="risk-grid">
           <section className="panel">

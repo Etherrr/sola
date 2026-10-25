@@ -3122,8 +3122,27 @@ html {
 }
 
 /* Combined-view proof section (simulated aggregation) */
+.combined {
+  max-width: 100%;
+  min-width: 0;
+}
 .combined .metric-grid {
   margin: 14px 0;
+}
+.combined .metric {
+  min-width: 0;
+}
+.combined .metric strong {
+  white-space: nowrap;
+}
+@media (max-width: 720px) {
+  .combined .metric-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.combined-table-wrap {
+  overflow-x: auto;
+  max-width: 100%;
 }
 .combined-table {
   width: 100%;
