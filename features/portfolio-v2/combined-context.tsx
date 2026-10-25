@@ -95,6 +95,9 @@ export function CombinedProvider({ children }: { children: ReactNode }) {
   const load = useCallback(() => {
     if (kindRef.current === 'loading') return;
     const g = ++generation.current;
+    // Set the ref synchronously so a second click in the same frame cannot
+    // start a duplicate send before the loading render commits.
+    kindRef.current = 'loading';
     setPhase({ kind: 'loading' });
     void (async () => {
       let res: Response;
