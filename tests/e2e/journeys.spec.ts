@@ -178,7 +178,7 @@ test('keyboard navigation, mobile menu, reduced motion, and missing page', async
     'auto',
   );
   const nav = page.getByRole('navigation', { name: 'Main' });
-  await expect(nav.getByRole('link', { name: 'Track' })).toBeVisible();
+  await expect(nav.getByRole('link', { name: 'Markets' })).toBeVisible();
   if (isMobile) {
     const box = await nav.boundingBox();
     expect(box && box.y > 400, 'tab bar sits at the bottom on phones').toBe(true);
@@ -477,9 +477,9 @@ test.describe('entrance', () => {
     // In-app navigation (no page reload) must trigger a fresh session check.
     await page
       .getByRole('navigation', { name: 'Main' })
-      .getByRole('link', { name: 'Track' })
+      .getByRole('link', { name: 'Markets' })
       .click();
-    await expect(page).toHaveURL(/\/track\/?$/);
+    await expect(page).toHaveURL(/\/markets\/?$/);
     await expect(btn).toHaveAttribute('aria-label', /a-very-long-address/);
     await expect.poll(() => calls).toBeGreaterThan(before);
     if (!isMobile) {
@@ -745,7 +745,7 @@ test('orientation is discoverable from the shell nav and the account menu', asyn
   await expect(navLink).toHaveAttribute('href', '/welcome/');
   await expect(navLink).toHaveAttribute('aria-current', 'page');
   // Every nav item is keyboard-reachable in DOM order, not only reachable by pointer.
-  const names = ['Overview', 'Track', 'Markets', 'Start here', 'Education', 'Settings'];
+  const names = ['Overview', 'Markets', 'Start here', 'Education', 'Settings'];
   await nav.getByRole('link', { name: 'Overview' }).focus();
   await expect(nav.getByRole('link', { name: 'Overview' })).toBeFocused();
   for (const name of names.slice(1)) {
@@ -777,7 +777,7 @@ test('orientation is discoverable from the shell nav and the account menu', asyn
   await expect(page.locator('#main')).toContainText('What this app does, honestly.');
 });
 
-test('at 320px the tab bar shows five fitting tabs and the orientation stays in the account menu', async ({
+test('at 320px the tab bar shows four fitting tabs and the orientation stays in the account menu', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 320, height: 700 });
@@ -786,7 +786,7 @@ test('at 320px the tab bar shows five fitting tabs and the orientation stays in 
   await expect(nav.getByRole('link', { name: 'Start here' })).toBeHidden();
   // The bar is position:fixed, so document scrollWidth cannot catch a cutoff; measure the last
   // tab's box against the viewport instead.
-  const visible = ['Overview', 'Track', 'Markets', 'Education', 'Settings'];
+  const visible = ['Overview', 'Markets', 'Education', 'Settings'];
   for (const name of visible) {
     const box = await nav.getByRole('link', { name }).boundingBox();
     expect(box).not.toBeNull();
