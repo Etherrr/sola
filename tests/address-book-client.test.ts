@@ -49,7 +49,7 @@ describe('overview history response mapping', () => {
     expect(await mapOverviewResponse(new Response('{}', { status: 500 }))).toEqual({ kind: 'failed' });
   });
   it('passes through the ok payload with the complete-observation label fields', async () => {
-    const latest = [{ assetId: 'eth/native', network: 'ethereum', address: '0xAbC', kind: 'native', amount: '1.5', observedAt: '2026-10-25T00:00:00Z' }];
+    const latest = [{ assetId: 'eip155:1/native', network: 'ethereum', address: '0xAbC', kind: 'native', amount: '1.5', observedAt: '2026-10-25T00:00:00Z' }];
     const res = new Response(
       JSON.stringify({ status: 'ok', scope: 'spot_balances_only', latestCompleteObservedAt: '2026-10-25T00:00:00Z', newerPartial: true, latest, prior: null,
         networks: [{ network: 'ethereum', latestObservedAt: '2026-10-25T00:00:00Z', latest, prior: null }] }),
@@ -61,8 +61,8 @@ describe('overview history response mapping', () => {
     });
   });
   it('maps per-network slices with their own timestamps; Solana keeps its own baseline', async () => {
-    const ethLatest = [{ assetId: 'eth/native', network: 'ethereum', address: '0xAbC', kind: 'wallet_balance', amount: '2', observedAt: '2026-10-25T01:00:00Z' }];
-    const ethPrior = [{ assetId: 'eth/native', network: 'ethereum', address: '0xAbC', kind: 'wallet_balance', amount: '1', observedAt: '2026-10-25T00:00:00Z' }];
+    const ethLatest = [{ assetId: 'eip155:1/native', network: 'ethereum', address: '0xAbC', kind: 'wallet_balance', amount: '2', observedAt: '2026-10-25T01:00:00Z' }];
+    const ethPrior = [{ assetId: 'eip155:1/native', network: 'ethereum', address: '0xAbC', kind: 'wallet_balance', amount: '1', observedAt: '2026-10-25T00:00:00Z' }];
     const solLatest = [{ assetId: 'sol/sol', network: 'solana', address: 'SoLaBC', kind: 'wallet_balance', amount: '3', observedAt: '2026-10-25T01:05:00Z' }];
     const res = new Response(
       JSON.stringify({

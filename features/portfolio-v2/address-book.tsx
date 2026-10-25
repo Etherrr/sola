@@ -13,6 +13,7 @@ import {
 } from './overview-history';
 import { SYNCED_EVENT } from './snapshot-consent';
 import { assetLabel } from './asset-label';
+import { fmtTimestamp } from './format-time';
 
 /**
  * Native address book (v0.2): the only actions the signed-in user has on the
@@ -304,7 +305,7 @@ export function AddressBook() {
                             )}
                             {hist?.kind === 'ok' && rows.length > 0 && (
                               <>
-                                <table>
+                                <table className="ab-details-table">
                                   <thead>
                                     <tr><th>Asset</th><th>Amount</th></tr>
                                   </thead>
@@ -319,8 +320,14 @@ export function AddressBook() {
                                 </table>
                                 <p>
                                   <em>
-                                    Latest complete observation{netAt ? `: ${netAt}` : ''}. Spot
-                                    balances only.
+                                    Latest complete observation{netAt ? (
+                                      <>
+                                        {' '}
+                                        <span title={netAt}>{fmtTimestamp(netAt)}</span>
+                                      </>
+                                    ) : (
+                                      ''
+                                    )}. Spot balances only.
                                   </em>
                                 </p>
                               </>

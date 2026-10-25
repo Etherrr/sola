@@ -3211,6 +3211,42 @@ html {
     opacity: 0.65;
     margin-bottom: 0.1rem;
   }
+  .accounts .ab-scroll td[data-label] {
+    display: flex;
+    gap: 0.5rem;
+    align-items: baseline;
+    padding: 0.12rem 0;
+  }
+  .accounts .ab-scroll td[data-label]::before {
+    margin-bottom: 0;
+    min-width: 3.8rem;
+    flex-shrink: 0;
+  }
+  /* The expanded Details table stays a real table on mobile: the card
+     treatment above is for the address rows only (reviewer: header gap +
+     cramped rows came from card-ifying the nested table). */
+  .accounts .ab-scroll .ab-details-table { display: table; width: 100%; }
+  .accounts .ab-scroll .ab-details-table thead {
+    display: table-header-group;
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip: auto;
+  }
+  .accounts .ab-scroll .ab-details-table tbody { display: table-row-group; }
+  .accounts .ab-scroll .ab-details-table tr {
+    display: table-row;
+    border: 0;
+    padding: 0;
+    margin: 0;
+  }
+  .accounts .ab-scroll .ab-details-table th,
+  .accounts .ab-scroll .ab-details-table td {
+    display: table-cell;
+    padding: 0.25rem 0.75rem 0.25rem 0;
+    border: 0;
+  }
   .accounts .ab-actions {
     white-space: normal;
     display: flex;

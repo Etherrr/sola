@@ -3,6 +3,8 @@ import { useEffect, useState } from 'react';
 import { fetchOverview, type NetworkSlice, type ObservedAmount } from './overview-history';
 import { diffNetwork, isZero, keyOf } from './network-diff';
 import { SYNCED_EVENT } from './snapshot-consent';
+import { assetLabel } from './asset-label';
+import { fmtTimestamp } from './format-time';
 
 /**
  * "What changed" section of the v0.2 Overview: the first UI consuming the
@@ -21,7 +23,6 @@ type Load =
   | { kind: 'ok'; at: string; newerPartial: boolean; latest: ObservedAmount[]; prior: ObservedAmount[] | null; networks: NetworkSlice[] }
   | { kind: 'failed' };
 
-const assetLabel = (assetId: string) => assetId.split('/').pop() ?? assetId;
 const short = (a: string) => (a.length > 16 ? `${a.slice(0, 8)}…${a.slice(-6)}` : a);
 
 export function WhatChanged() {
@@ -94,7 +95,7 @@ export function WhatChanged() {
             <p className="ov2-net-label">
               {sec.network === 'solana' ? 'Solana (SOL balance only)' : 'Ethereum'}
             </p>
-            <p className="ov2-net-time">Latest complete observation: {sec.at}. Spot balances only.</p>
+            <p className="ov2-net-time">Latest complete observation: <span title={sec.at}>{fmtTimestamp(sec.at)}</span>. Spot balances only.</p>
             {sec.prior === null && (
               <p>First recorded observation - there is no earlier complete observation to compare yet.</p>
             )}

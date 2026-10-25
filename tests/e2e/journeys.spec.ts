@@ -841,7 +841,7 @@ test('v2 address book: Details expands recorded rows from the shared payload', a
         newerPartial: false,
         latest: [
           {
-            assetId: 'eth/native',
+            assetId: 'eip155:1/native',
             network: 'ethereum',
             address: '0xabc1230000000000000000000000000000000000',
             kind: 'wallet_balance',
@@ -856,7 +856,7 @@ test('v2 address book: Details expands recorded rows from the shared payload', a
             latestObservedAt: '2026-10-25T01:00:00Z',
             latest: [
               {
-                assetId: 'eth/native',
+                assetId: 'eip155:1/native',
                 network: 'ethereum',
                 address: '0xabc1230000000000000000000000000000000000',
                 kind: 'wallet_balance',
@@ -958,7 +958,7 @@ test('v2 address book: a pre-event in-flight response cannot repopulate cleared 
       newerPartial: false,
       latest: [
         {
-          assetId: 'eth/native',
+          assetId: 'eip155:1/native',
           network: 'ethereum',
           address: '0xabc1230000000000000000000000000000000000',
           kind: 'wallet_balance',
@@ -973,7 +973,7 @@ test('v2 address book: a pre-event in-flight response cannot repopulate cleared 
           latestObservedAt: '2026-10-25T01:00:00Z',
           latest: [
             {
-              assetId: 'eth/native',
+              assetId: 'eip155:1/native',
               network: 'ethereum',
               address: '0xabc1230000000000000000000000000000000000',
               kind: 'wallet_balance',
@@ -1045,7 +1045,7 @@ test('v2 overview: withdrawal clears every panel without reload; stale mount res
     });
   });
   const row = {
-    assetId: 'eth/native',
+    assetId: 'eip155:1/native',
     network: 'ethereum',
     address: '0xabc1230000000000000000000000000000000000',
     kind: 'wallet_balance',
@@ -1140,7 +1140,7 @@ test('v2 address lookup: on-demand lookup uses the shared rows, disclosure near 
         warnings: [],
         assets: [
           {
-            assetId: 'eth/native',
+            assetId: 'eip155:1/native',
             symbol: 'ETH',
             decimals: 18,
             amount: '1.5',
@@ -1276,7 +1276,7 @@ test('v2 address lookup: Solana SOL-only footer; empty incomplete answer says un
         partial: false,
         warnings: [],
         assets: [
-          { assetId: 'sol/native', symbol: 'SOL', decimals: 9, amount: '12.3', price: null, value: null },
+          { assetId: 'solana:mainnet/native', symbol: 'SOL', decimals: 9, amount: '12.3', price: null, value: null },
         ],
       },
     ],

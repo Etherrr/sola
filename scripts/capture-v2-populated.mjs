@@ -12,12 +12,12 @@ const row = (network, address, assetId, amount, at) => ({
 });
 const LATEST_AT = '2026-10-25T01:00:00Z';
 const PRIOR_AT = '2026-10-24T01:00:00Z';
-const evmLatest = [row('ethereum', EVM.toLowerCase(), 'eth/native', '1.5', LATEST_AT),
-  row('ethereum', EVM.toLowerCase(), 'eth/erc20:usdc', '250', LATEST_AT)];
-const evmPrior = [row('ethereum', EVM.toLowerCase(), 'eth/native', '1.2', PRIOR_AT),
-  row('ethereum', EVM.toLowerCase(), 'eth/erc20:usdc', '250', PRIOR_AT)];
-const solLatest = [row('solana', SOL, 'sol/native', '12.3', LATEST_AT)];
-const solPrior = [row('solana', SOL, 'sol/native', '10.0', PRIOR_AT)];
+const evmLatest = [row('ethereum', EVM.toLowerCase(), 'eip155:1/native', '1.5', LATEST_AT),
+  row('ethereum', EVM.toLowerCase(), 'eip155:1/erc20:0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', '250', LATEST_AT)];
+const evmPrior = [row('ethereum', EVM.toLowerCase(), 'eip155:1/native', '1.2', PRIOR_AT),
+  row('ethereum', EVM.toLowerCase(), 'eip155:1/erc20:0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', '250', PRIOR_AT)];
+const solLatest = [row('solana', SOL, 'solana:mainnet/native', '12.3', LATEST_AT)];
+const solPrior = [row('solana', SOL, 'solana:mainnet/native', '10.0', PRIOR_AT)];
 
 const server = spawn('npm', ['run', 'start'], { stdio: 'ignore' });
 const waitUp = async () => {
@@ -79,8 +79,8 @@ for (const vp of [
         schemaVersion: 1, mode: 'mock', simulated: true, provider: 'fixture',
         generatedAt: LATEST_AT, observedAt: LATEST_AT,
         wallets: [{ address: EVM.toLowerCase(), partial: false, warnings: [], assets: [
-          { assetId: 'eth/native', symbol: 'ETH', decimals: 18, amount: '1.5', price: '3000', value: '4500' },
-          { assetId: 'eth/erc20:usdc', symbol: 'USDC', decimals: 6, amount: '250', price: '1', value: '250' },
+          { assetId: 'eip155:1/native', symbol: 'ETH', decimals: 18, amount: '1.5', price: '3000', value: '4500' },
+          { assetId: 'eip155:1/erc20:0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', symbol: 'USDC', decimals: 6, amount: '250', price: '1', value: '250' },
         ] }],
         totals: { recognizedPricedSubtotalUsd: '4750', unpricedAssetCount: 0, note: 'fixture' },
         partial: false, warnings: [],
@@ -89,7 +89,7 @@ for (const vp of [
   await page.getByRole('cell', { name: 'ETH' }).first().waitFor();
   // Expand the first address's Details and run a lookup, so one frame shows both.
   await page.getByRole('button', { name: /Details for Main/ }).click();
-  await page.locator('.ab-details').getByRole('cell', { name: 'USDC' }).waitFor();
+  await page.locator('.ab-details').getByRole('cell', { name: '0xA0b8\u2026eB48' }).waitFor();
   await page.getByLabel('Address to look up').fill(EVM);
   await page.getByRole('button', { name: 'Look up', exact: true }).click();
   await page.locator('.ab-lookup').getByRole('cell', { name: 'USDC' }).waitFor();

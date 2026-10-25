@@ -9,6 +9,7 @@ import {
 } from './overview-history';
 import { SYNCED_EVENT } from './snapshot-consent';
 import { assetLabel } from './asset-label';
+import { fmtTimestamp } from './format-time';
 
 /**
  * v0.2 Holdings table: renders the caller's OWN latest COMPLETE recorded
@@ -110,7 +111,7 @@ export function HoldingsTable() {
           <span key={n.network}>
             {' '}
             {n.network === 'ethereum' ? 'Ethereum' : 'Solana (SOL balance only)'} as of{' '}
-            {new Date(n.at).toLocaleString()}.
+            <span title={n.at}>{fmtTimestamp(n.at)}</span>.
           </span>
         ))}
         {load.newerPartial ? ' A newer observation is still partial.' : ''}

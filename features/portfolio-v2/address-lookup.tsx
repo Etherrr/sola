@@ -6,6 +6,7 @@ import {
   type LookupOutcome,
   type TrackNetwork,
 } from '../portfolio/api-client';
+import { fmtTimestamp } from './format-time';
 
 /**
  * v0.2 "Look up an address" - the on-demand single-address lookup the plan
@@ -139,7 +140,7 @@ export function AddressLookup() {
           </table>
           <p><em>
             On-demand lookup{state.data.simulated ? ' (simulated)' : ''} as of{' '}
-            {new Date(state.data.observedAt).toLocaleString()}. Not a recorded observation.
+            <span title={state.data.observedAt}>{fmtTimestamp(state.data.observedAt)}</span>. Not a recorded observation.
             {state.network === 'solana' ? ' Solana lookups show the SOL balance only.' : ''}
             {state.data.partial ? ' Some sources did not answer - figures may be incomplete.' : ''}
             {state.data.warnings.length > 0 ? ` ${state.data.warnings.join('; ')}.` : ''}
