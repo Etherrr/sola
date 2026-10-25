@@ -3,9 +3,13 @@
  * - requireSameOrigin: strict Origin check on auth POSTs (login CSRF). A browser
  *   cross-site POST carries a foreign Origin; missing Origin on a mutating auth
  *   request is also rejected (browsers always send it on fetch/form POST).
- * - requireNativeSession: entitlement middleware. Every route that serves native
- *   account data must call this BEFORE reading data; it exists and is tested
- *   before any such route ships.
+ * - requireLiveSession: SESSION GUARD ONLY - proves a live native session. It is NOT
+ *   an entitlement check and must never be described as one.
+ * - requireEntitledSession: the real gate for ANY native-session-protected data route
+ *   (reviewer 2026-10-25): composes the session guard with an explicit ACTIVE
+ *   entitlement (entitlements row matching the user's verified email identity,
+ *   revoked_at IS NULL). Any verified email can hold a session; only entitled
+ *   identities may read data. No such route ships before this gate exists.
  */
 import { readLiveSession, type SessionRow } from './sessions';
 import type { ChallengeDb } from './challenges';
@@ -31,7 +35,7 @@ export function requireSameOrigin(req: Request): Response | null {
 
 export type NativeIdentity = { userId: string; session: SessionRow };
 
-export async function requireNativeSession(
+export async function requireLiveSession(
   req: Request,
   db: ChallengeDb,
 ): Promise<NativeIdentity | Response> {
@@ -46,4 +50,37 @@ export async function requireNativeSession(
       status: 401, headers: { 'content-type': 'application/json' },
     });
   return { userId: session.user_id, session };
+}
+
+/** The actual data gate: live session + active entitlement for the session user's
+ *  verified email. Returns the identity or a 401/403 Response. */
+export async function requireEntitledSession(
+  req: Request,
+  db: ChallengeDb,
+): Promise<NativeIdentity | Response> {
+  const base = await requireLiveSession(req, db);
+  if (base instanceof Response) return base;
+  const identity = await db
+    .prepare(
+      `SELECT identifier FROM auth_identities
+        WHERE user_id = ? AND kind = 'email' ORDER BY verified_at DESC LIMIT 1`,
+    )
+    .bind(base.userId)
+    .first<{ identifier: string }>();
+  if (!identity)
+    return new Response(JSON.stringify({ error: 'no_verified_identity' }), {
+      status: 403, headers: { 'content-type': 'application/json' },
+    });
+  const entitled = await db
+    .prepare(
+      `SELECT id FROM entitlements
+        WHERE email = ? AND revoked_at IS NULL LIMIT 1`,
+    )
+    .bind(identity.identifier)
+    .first<{ id: string }>();
+  if (!entitled)
+    return new Response(JSON.stringify({ error: 'not_entitled' }), {
+      status: 403, headers: { 'content-type': 'application/json' },
+    });
+  return base;
 }
