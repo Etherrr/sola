@@ -207,3 +207,85 @@ it('timestamps the SOL balance response independently of the Ethereum pricing bl
     new Date((nowS - 60) * 1000).toISOString(),
   );
 });
+
+describe('Solana read failover: one bounded attempt, only on primary HTTP 429', () => {
+  const primary429 = (base: typeof fetch, counter: { fb: number }): typeof fetch =>
+    (async (url: string, init: RequestInit) => {
+      if (url.includes('solana-rpc.publicnode.com')) return new Response('x', { status: 429 });
+      if (url.includes('api.mainnet.solana.com')) {
+        counter.fb += 1;
+        return base(url, init);
+      }
+      return base(url, init);
+    }) as unknown as typeof fetch;
+
+  it('primary 429 falls back exactly once and the result names the failover provider', async () => {
+    const counter = { fb: 0 };
+    const r = await run(primary429(rpc(), counter));
+    expect(counter.fb).toBe(1);
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.provider).toBe('solana-public-rpc+chainlink');
+      expect(r.wallets[0]!.assets.some((a) => a.symbol === 'SOL')).toBe(true);
+      expect(r.wallets[0]!.partial).toBe(false);
+    }
+  });
+
+  it('primary 429 with fallback also 429 stays rate_limited and substitutes no data', async () => {
+    const r = await run(rpc({ solanaStatus: 429 }));
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.kind).toBe('rate_limited');
+  });
+
+  it('primary 500 does NOT fail over: unavailable, zero fallback calls', async () => {
+    const counter = { fb: 0 };
+    const f = (async (url: string, init: RequestInit) => {
+      if (url.includes('solana-rpc.publicnode.com')) return new Response('x', { status: 500 });
+      if (url.includes('api.mainnet.solana.com')) counter.fb += 1;
+      return rpc()(url, init);
+    }) as unknown as typeof fetch;
+    const r = await run(f);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.kind).toBe('unavailable');
+    expect(counter.fb).toBe(0);
+  });
+
+  it('primary network error does NOT fail over: unavailable, zero fallback calls', async () => {
+    const counter = { fb: 0 };
+    const f = (async (url: string, init: RequestInit) => {
+      if (url.includes('solana-rpc.publicnode.com')) throw new Error('network down');
+      if (url.includes('api.mainnet.solana.com')) counter.fb += 1;
+      return rpc()(url, init);
+    }) as unknown as typeof fetch;
+    const r = await run(f);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.kind).toBe('unavailable');
+    expect(counter.fb).toBe(0);
+  });
+
+  it('primary bad response does NOT fail over: bad_response, zero fallback calls', async () => {
+    const counter = { fb: 0 };
+    const f = (async (url: string, init: RequestInit) => {
+      if (url.includes('solana-rpc.publicnode.com'))
+        return new Response('not json', { status: 200 });
+      if (url.includes('api.mainnet.solana.com')) counter.fb += 1;
+      return rpc()(url, init);
+    }) as unknown as typeof fetch;
+    const r = await run(f);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.kind).toBe('bad_response');
+    expect(counter.fb).toBe(0);
+  });
+
+  it('primary success never touches the fallback and keeps the PublicNode provider name', async () => {
+    const counter = { fb: 0 };
+    const f = (async (url: string, init: RequestInit) => {
+      if (url.includes('api.mainnet.solana.com')) counter.fb += 1;
+      return rpc()(url, init);
+    }) as unknown as typeof fetch;
+    const r = await run(f);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.provider).toBe('publicnode-solana+chainlink');
+    expect(counter.fb).toBe(0);
+  });
+});

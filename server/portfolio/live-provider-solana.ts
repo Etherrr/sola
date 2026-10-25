@@ -26,7 +26,12 @@ import {
 // needed getTokenAccountsByOwner call is an "indexed request" that PublicNode's free tier rejects
 // (it requires a personal token, i.e. an account), and no other provider has been vetted for this
 // app. A missing token must never read as an empty wallet.
+// FAILOVER: PublicNode answers shared-free-tier rate limiting with HTTP 429. On exactly that
+// signal (no other failure category), the balance step is asked ONCE of a different public,
+// keyless endpoint (Solana Labs' public RPC) - never a retry of PublicNode, never a loop. The
+// result's provider name records which endpoint answered so the UI labels it honestly.
 export const SOLANA_RPC_URL = 'https://solana-rpc.publicnode.com';
+export const SOLANA_RPC_FALLBACK_URL = 'https://api.mainnet.solana.com';
 export const SOL_DECIMALS = 9; // lamports per SOL
 
 // USD reference price: Chainlink SOL/USD on Ethereum mainnet, read through the same PublicNode
@@ -52,6 +57,7 @@ export type SolanaLiveDeps = {
   fetch: typeof fetch;
   now: () => Date;
   solanaRpcUrl: string;
+  solanaFallbackRpcUrl: string;
   ethRpcUrl: string;
 };
 
@@ -60,10 +66,12 @@ export function createSolanaLiveProvider(over: Partial<SolanaLiveDeps> = {}): Po
     fetch: (...a) => fetch(...a),
     now: () => new Date(),
     solanaRpcUrl: SOLANA_RPC_URL,
+    solanaFallbackRpcUrl: SOLANA_RPC_FALLBACK_URL,
     ethRpcUrl: ETH_RPC_URL,
     ...over,
   };
   const NAME = 'publicnode-solana+chainlink';
+  const FAILOVER_NAME = 'solana-public-rpc+chainlink';
   return {
     name: NAME,
     simulated: false,
@@ -186,24 +194,42 @@ export function createSolanaLiveProvider(over: Partial<SolanaLiveDeps> = {}): Po
       // Step 2: ONE batched Solana JSON-RPC POST with getBalance per address (finalized). A batch
       // is one HTTP request; each element carries its own context.slot.
       diag = { step: 'request', calls: calls.length + addresses.length };
-      let sres: Response;
-      try {
-        sres = await d.fetch(d.solanaRpcUrl, {
+      const solanaBody = JSON.stringify(
+        addresses.map((a, i) => ({
+          jsonrpc: '2.0',
+          id: i + 1,
+          method: 'getBalance',
+          params: [a, { commitment: 'finalized' }],
+        })),
+      );
+      const postSolana = (url: string) =>
+        d.fetch(url, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(
-            addresses.map((a, i) => ({
-              jsonrpc: '2.0',
-              id: i + 1,
-              method: 'getBalance',
-              params: [a, { commitment: 'finalized' }],
-            })),
-          ),
+          body: solanaBody,
           signal,
           redirect: 'manual',
         });
+      let sres: Response;
+      try {
+        sres = await postSolana(d.solanaRpcUrl);
       } catch {
         return fail(signal.aborted ? 'timeout' : 'unavailable');
+      }
+      // Bounded failover: ONLY a 429 from the primary earns ONE attempt at the secondary public
+      // endpoint. Any other failure category stays as-is; the secondary is never retried either.
+      let solanaVia: 'primary' | 'fallback' = 'primary';
+      if (
+        sres.status === 429 &&
+        d.solanaFallbackRpcUrl &&
+        d.solanaFallbackRpcUrl !== d.solanaRpcUrl
+      ) {
+        try {
+          sres = await postSolana(d.solanaFallbackRpcUrl);
+          solanaVia = 'fallback';
+        } catch {
+          return fail(signal.aborted ? 'timeout' : 'unavailable');
+        }
       }
       diag = { step: 'response', calls: calls.length + addresses.length, http: sres.status };
       if (sres.status === 429) return fail('rate_limited');
@@ -301,7 +327,7 @@ export function createSolanaLiveProvider(over: Partial<SolanaLiveDeps> = {}): Po
           );
       return {
         ok: true,
-        provider: NAME,
+        provider: solanaVia === 'fallback' ? FAILOVER_NAME : NAME,
         simulated: false,
         observedAt: balanceObservedAt,
         wallets,

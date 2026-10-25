@@ -193,7 +193,7 @@ export function TrackForm({ mode = 'mock' }: { mode?: 'checking' | 'mock' | 'liv
           <p id="track-privacy" className="fine">
             {mode === 'live'
               ? network === 'solana'
-                ? "A pasted address is sent to this app's lookup service and then to PublicNode, a public Solana node, to read its SOL balance. PublicNode's policy text says it keeps data at most 24 hours; that is not verified. The address is not saved in your browser. It is observed, not proven to be yours."
+                ? "A pasted address is sent to this app's lookup service and then to PublicNode, a public Solana node, to read its SOL balance - or, only when PublicNode answers rate limiting, once to Solana's public RPC endpoint instead. PublicNode's policy text says it keeps data at most 24 hours; that is not verified. The address is not saved in your browser. It is observed, not proven to be yours."
                 : "A pasted address is sent to this app's lookup service and then to PublicNode, a public Ethereum node, to read its balances. PublicNode's policy text says it keeps data at most 24 hours; that is not verified. The address is not saved in your browser. It is observed, not proven to be yours."
               : mode === 'mock'
                 ? "A pasted address is sent to this app's own lookup service and is not saved in your browser. It is observed, not proven to be yours."
@@ -423,7 +423,9 @@ export function TrackForm({ mode = 'mock' }: { mode?: 'checking' | 'mock' | 'liv
             {!ok.simulated && (
               <p className="fine">
                 {network === 'solana'
-                  ? "Privacy: this lookup sent the address to a public Solana node (PublicNode) from the app server, and read the Chainlink SOL/USD price feed through a public Ethereum node (PublicNode). PublicNode's published policy says it keeps IP addresses and request data for at most 24 hours; that is their statement and is not verified here. Prices are on-chain feed values at the time shown on each feed, not market quotes."
+                  ? ok.provider === 'solana-public-rpc+chainlink'
+                    ? "Privacy: this lookup sent the address from the app server to a public Solana node (Solana's public RPC endpoint, api.mainnet.solana.com), after PublicNode answered rate limiting, and read the Chainlink SOL/USD price feed through a public Ethereum node (PublicNode). The node operators' published data policies are their own statements and are not verified here. Prices are on-chain feed values at the time shown on each feed, not market quotes."
+                    : "Privacy: this lookup sent the address to a public Solana node (PublicNode) from the app server, and read the Chainlink SOL/USD price feed through a public Ethereum node (PublicNode). PublicNode's published policy says it keeps IP addresses and request data for at most 24 hours; that is their statement and is not verified here. Prices are on-chain feed values at the time shown on each feed, not market quotes."
                   : "Privacy: this lookup sent the address to a public Ethereum node (PublicNode) from the app server and read Chainlink USD price feeds through it. PublicNode's published policy says it keeps IP addresses and request data for at most 24 hours; that is their statement and is not verified here. Prices are on-chain feed values at the time shown on each feed, not market quotes."}
               </p>
             )}

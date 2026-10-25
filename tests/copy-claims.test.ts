@@ -17,10 +17,19 @@ describe('network-specific result copy never names the wrong chain', () => {
     // The old single-network wording claimed the address went to an Ethereum node; that claim
     // must not survive in any Solana branch. The Solana line may name Ethereum only as the
     // chain hosting the SOL/USD price feed.
-    const solLine = form.match(/sent the address to a public Solana node[^"]*"/);
-    expect(solLine).not.toBeNull();
-    expect(solLine![0]).not.toContain('sent the address to a public Ethereum node');
-    expect(solLine![0]).toContain('SOL/USD price feed through a public Ethereum node');
+    const solLines = [...form.matchAll(/sent the address (?:from the app server )?to a public Solana node[^"]*"/g)];
+    expect(solLines.length).toBeGreaterThanOrEqual(2); // primary + rate-limit failover variant
+    for (const m of solLines) {
+      expect(m[0]).not.toContain('sent the address to a public Ethereum node');
+      expect(m[0]).toContain('SOL/USD price feed through a public Ethereum node');
+    }
+  });
+  it('the failover privacy variant names the actual endpoint and its rate-limit precondition', () => {
+    expect(form).toContain("Solana's public RPC endpoint, api.mainnet.solana.com");
+    expect(form).toContain('after PublicNode answered rate limiting');
+    expect(form).toContain("ok.provider === 'solana-public-rpc+chainlink'");
+    // The pre-lookup disclosure must not promise PublicNode as the only possible node.
+    expect(form).toContain('only when PublicNode answers rate limiting');
   });
   it('the Ethereum result privacy line sends the address to an Ethereum node, never a Solana one', () => {
     const ethLine = form.match(/sent the address to a public Ethereum node[^"]*"/);
