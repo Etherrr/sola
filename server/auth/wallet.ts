@@ -18,11 +18,11 @@ import {
   recordFailedAttempt,
   type ChallengeDb,
 } from './challenges';
-import { createSession } from './sessions';
+import { createSession, readLiveSession } from './sessions';
 import { requireSameOrigin } from './guards';
 import { createD1Limiter } from '../accounts/d1-limiter';
 import type { LimitWindow } from '../accounts/limiter';
-import { SESSION_COOKIE, type NativeAuthEnv } from './email';
+import { readSessionCookie, SESSION_COOKIE, type NativeAuthEnv } from './email';
 import {
   buildSiweMessage,
   isValidEvmAddress,
@@ -239,4 +239,168 @@ async function findOrCreateWalletUser(
     .run();
   if (!r3.success) throw new Error('wallet_link_insert_failed');
   return userId;
+}
+
+/** Link challenges bind BOTH the authenticated user and the address: subject =
+ *  `link:<userId>:<addressSubject>`. They reuse the wallet_evm/wallet_solana
+ *  challenge KINDS (the `link:` subject prefix namespaces them - a sign-in claim
+ *  keyed on the bare address subject can never match a link row, and vice
+ *  versa), so no schema change is needed. A fresh single-use challenge is
+ *  required for every link; there is NO automatic transfer of an
+ *  already-linked wallet. */
+const linkKindOf = kindOf;
+const linkSubjectOf = (userId: string, addrSubject: string): string =>
+  `link:${userId}:${addrSubject}`;
+
+async function sessionUserId(req: Request, db: ChallengeDb): Promise<string | null> {
+  const id = readSessionCookie(req);
+  if (!id) return null;
+  const session = await readLiveSession(db, id);
+  return session?.user_id ?? null;
+}
+
+/** POST {address} with a live session -> {message, expiresAt}. Lets a signed-in
+ *  user prove ownership of an additional wallet and link it to THIS account. */
+export async function handleWalletLinkChallenge(
+  req: Request,
+  env: NativeAuthEnv,
+  chain: WalletChain,
+): Promise<Response> {
+  const requestId = crypto.randomUUID();
+  if (req.method !== 'POST')
+    return json(405, { error: 'method_not_allowed', requestId }, { allow: 'POST' });
+  const csrf = requireSameOrigin(req);
+  if (csrf) return csrf;
+  if (env.NATIVE_AUTH_ENABLED !== 'true')
+    return json(503, { error: 'disabled', message: 'Native sign-in is switched off.', requestId });
+  if (!env.PORTFOLIO_ACCOUNTS_DB)
+    return json(503, { error: 'not_configured', message: 'Native sign-in is not configured.', requestId });
+
+  const db = env.PORTFOLIO_ACCOUNTS_DB;
+  const userId = await sessionUserId(req, db);
+  if (!userId) return json(401, { error: 'not_authenticated', requestId });
+
+  let body: Record<string, unknown>;
+  try {
+    body = (await req.json()) as Record<string, unknown>;
+  } catch {
+    return json(400, { error: 'invalid_request', requestId });
+  }
+  const addr = normalizeAddress(chain, body?.address);
+  if (!addr) return json(400, { error: 'invalid_address', requestId });
+
+  const subject = linkSubjectOf(userId, addr.subject);
+  const limiter = createD1Limiter(db as never, CHALLENGE_WINDOWS, `auth_wallet_link_challenge_${chain}`);
+  const lim = await limiter.check(subject);
+  if (!lim.allowed)
+    return json(429, { error: 'rate_limited', retryAfterSec: lim.retryAfterSec, requestId });
+
+  const issued = await issueChallenge(db, linkKindOf(chain), subject, WALLET_TTL_MS);
+  const issuedAt = new Date().toISOString();
+  const exp = expectedFrom(req, addr.display, issued.secret, chain, env);
+  const message =
+    chain === 'evm'
+      ? buildSiweMessage({ ...exp, chainId: (exp as { chainId: number }).chainId, issuedAt, expirationTime: issued.expiresAt })
+      : buildSiwsMessage({ ...exp, issuedAt, expirationTime: issued.expiresAt });
+  return json(200, { status: 'ok', message, expiresAt: issued.expiresAt, requestId });
+}
+
+/** POST {address, message, signature} with a live session -> links the wallet to
+ *  the SESSION's account. A wallet already verified on a DIFFERENT account is
+ *  refused with 409 wallet_linked_elsewhere - never silently transferred. */
+export async function handleWalletLinkVerify(
+  req: Request,
+  env: NativeAuthEnv,
+  chain: WalletChain,
+): Promise<Response> {
+  const requestId = crypto.randomUUID();
+  if (req.method !== 'POST')
+    return json(405, { error: 'method_not_allowed', requestId }, { allow: 'POST' });
+  const csrf = requireSameOrigin(req);
+  if (csrf) return csrf;
+  if (env.NATIVE_AUTH_ENABLED !== 'true')
+    return json(503, { error: 'disabled', message: 'Native sign-in is switched off.', requestId });
+  if (!env.PORTFOLIO_ACCOUNTS_DB)
+    return json(503, { error: 'not_configured', message: 'Native sign-in is not configured.', requestId });
+
+  const db = env.PORTFOLIO_ACCOUNTS_DB;
+  const userId = await sessionUserId(req, db);
+  if (!userId) return json(401, { error: 'not_authenticated', requestId });
+
+  let body: Record<string, unknown>;
+  try {
+    body = (await req.json()) as Record<string, unknown>;
+  } catch {
+    return json(400, { error: 'invalid_request', requestId });
+  }
+  const addr = normalizeAddress(chain, body?.address);
+  const message = typeof body?.message === 'string' ? body.message : '';
+  const signature = typeof body?.signature === 'string' ? body.signature : '';
+  if (!addr || !message || !signature) return json(400, { error: 'invalid_request', requestId });
+
+  const subject = linkSubjectOf(userId, addr.subject);
+  const limiter = createD1Limiter(db as never, VERIFY_WINDOWS, `auth_wallet_link_verify_${chain}`);
+  const lim = await limiter.check(subject);
+  if (!lim.allowed)
+    return json(429, { error: 'rate_limited', retryAfterSec: lim.retryAfterSec, requestId });
+
+  const kind = linkKindOf(chain);
+  const state = await getChallengeState(db, kind, subject);
+  if (state && state.attempts >= MAX_VERIFY_ATTEMPTS && !state.consumed_at)
+    return json(429, { error: 'too_many_attempts', message: 'Request a new link message.', requestId });
+
+  // Verify the signature and every bound field BEFORE touching the challenge store.
+  const nonceMatch = message.match(/\nNonce: ([^\n]+)\n/);
+  const nonce = nonceMatch?.[1] ?? '';
+  const exp = expectedFrom(req, addr.display, nonce, chain, env);
+  const verdict =
+    chain === 'evm'
+      ? verifySiweMessage(message, signature, exp as Parameters<typeof verifySiweMessage>[2])
+      : verifySiwsMessage(message, b64decode(signature) ?? new Uint8Array(0), exp);
+  if (!verdict.ok) {
+    await recordFailedAttempt(db, kind, subject);
+    return json(401, { error: 'invalid_signature', reason: verdict.error, requestId });
+  }
+
+  const attemptId = crypto.randomUUID();
+  const won = await claimChallenge(db, kind, subject, nonce, attemptId);
+  if (!won) {
+    await recordFailedAttempt(db, kind, subject);
+    return json(401, { error: 'invalid_or_consumed_challenge', requestId });
+  }
+
+  const challenge = await db
+    .prepare(`SELECT id FROM challenges WHERE kind = ? AND subject = ? AND claim_attempt_id = ?`)
+    .bind(kind, subject, attemptId)
+    .first<{ id: string }>();
+
+  // No automatic transfer: a wallet already verified on another account stays there.
+  const identityKind = kindOf(chain);
+  const existing = await db
+    .prepare(`SELECT user_id FROM auth_identities WHERE kind = ? AND identifier = ?`)
+    .bind(identityKind, addr.subject)
+    .first<{ user_id: string }>();
+  if (existing && existing.user_id !== userId)
+    return json(409, { error: 'wallet_linked_elsewhere', requestId });
+  if (existing)
+    return json(200, { status: 'ok', linked: 'already', requestId });
+
+  const now = new Date().toISOString();
+  const r1 = await db
+    .prepare(
+      `INSERT INTO auth_identities (id, user_id, kind, identifier, verified_at)
+       VALUES (?, ?, ?, ?, ?)`,
+    )
+    .bind(crypto.randomUUID(), userId, identityKind, addr.subject, now)
+    .run();
+  if (!r1.success) throw new Error('identity_insert_failed');
+  const r2 = await db
+    .prepare(
+      `INSERT INTO wallet_links (chain, address, user_id, verified_at, challenge_id)
+       VALUES (?, ?, ?, ?, ?)`,
+    )
+    .bind(linkChainOf(chain), addr.display, userId, now, challenge?.id ?? '')
+    .run();
+  if (!r2.success) throw new Error('wallet_link_insert_failed');
+  return json(200, { status: 'ok', linked: 'added', requestId });
 }
