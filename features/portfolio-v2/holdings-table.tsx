@@ -8,6 +8,7 @@ import {
   type OverviewResult,
 } from './overview-history';
 import { SYNCED_EVENT } from './snapshot-consent';
+import { assetLabel } from './asset-label';
 
 /**
  * v0.2 Holdings table: renders the caller's OWN latest COMPLETE recorded
@@ -95,7 +96,7 @@ export function HoldingsTable() {
         <tbody>
           {load.rows.map((r) => (
             <tr key={`${r.network}:${r.address}:${r.assetId}:${r.kind}`}>
-              <td>{r.assetId}</td>
+              <td title={r.assetId}>{assetLabel(r.assetId)}</td>
               <td>{r.network === 'ethereum' ? 'EVM' : 'Solana'}</td>
               <td>{r.amount}</td>
               <td><code>{short(r.address)}</code></td>

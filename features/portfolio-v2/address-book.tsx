@@ -12,6 +12,7 @@ import {
   type OverviewResult,
 } from './overview-history';
 import { SYNCED_EVENT } from './snapshot-consent';
+import { assetLabel } from './asset-label';
 
 /**
  * Native address book (v0.2): the only actions the signed-in user has on the
@@ -240,12 +241,13 @@ export function AddressBook() {
                   return (
                     <Fragment key={k}>
                       <tr>
-                        <td>{e.label}</td>
-                        <td>{e.network === 'ethereum' ? 'EVM' : 'Solana'}</td>
-                        <td>
+                        <td data-label="Label">{e.label}</td>
+                        <td data-label="Network">{e.network === 'ethereum' ? 'EVM' : 'Solana'}</td>
+                        <td data-label="Address">
                           <code title={e.address}>{short(e.address)}</code>{' '}
                           <button
                             type="button"
+                            className="button secondary chip"
                             onClick={() => void copyAddress(e)}
                             disabled={busy}
                             aria-label={`Copy address for ${e.label} (${short(e.address)})`}
@@ -253,10 +255,11 @@ export function AddressBook() {
                             Copy
                           </button>
                         </td>
-                        <td>{e.verification === 'verified' ? 'Verified' : 'Watched (no ownership proof)'}</td>
+                        <td data-label="Status">{e.verification === 'verified' ? 'Verified' : 'Watched (no ownership proof)'}</td>
                         <td className="ab-actions">
                           <button
                             type="button"
+                            className="button secondary chip"
                             onClick={() => toggleDetails(e)}
                             disabled={busy}
                             aria-expanded={expanded}
@@ -266,6 +269,7 @@ export function AddressBook() {
                           </button>{' '}
                           <button
                             type="button"
+                            className="button secondary chip"
                             onClick={() => rename(e)}
                             disabled={busy}
                             aria-label={`Rename ${e.label} (${short(e.address)})`}
@@ -274,6 +278,7 @@ export function AddressBook() {
                           </button>{' '}
                           <button
                             type="button"
+                            className="button secondary chip"
                             onClick={() => remove(e)}
                             disabled={busy}
                             aria-label={`Remove ${e.label} (${short(e.address)})`}
@@ -306,7 +311,7 @@ export function AddressBook() {
                                   <tbody>
                                     {rows.map((r) => (
                                       <tr key={`${r.assetId}:${r.kind}`}>
-                                        <td>{r.assetId.split('/').pop()}</td>
+                                        <td title={r.assetId}>{assetLabel(r.assetId)}</td>
                                         <td>{r.amount}</td>
                                       </tr>
                                     ))}

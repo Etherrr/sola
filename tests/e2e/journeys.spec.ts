@@ -872,12 +872,23 @@ test('v2 address book: Details expands recorded rows from the shared payload', a
   );
   await page.goto('/dev/overview-v2');
   const main = page.locator('#main');
+  // The manager and history blocks carry their own headings (visual review).
+  await expect(main.getByRole('heading', { name: 'Addresses & Wallets' })).toBeVisible();
+  await expect(main.getByRole('heading', { name: 'What changed' })).toBeVisible();
   // EVM case-insensitive match: the saved 0xAbC123 row expands to its recorded 1.5 ETH.
   const details = main.getByRole('button', { name: /Details for Main/ });
   await details.click();
+  // Row actions stay within the viewport - no offscreen hunting (visual review).
+  for (const name of [/Details for Main/, /Rename Main/, /Remove Main/, /Copy address for Main/]) {
+    const box = await main.getByRole('button', { name }).boundingBox();
+    const vw = page.viewportSize()!.width;
+    expect(box).not.toBeNull();
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(vw + 1);
+  }
   await expect(details).toHaveAttribute('aria-expanded', 'true');
   const region = main.locator('.ab-details');
-  await expect(region.getByRole('cell', { name: 'native' })).toBeVisible();
+  await expect(region.getByRole('cell', { name: 'ETH' })).toBeVisible();
   await expect(region.getByRole('cell', { name: '1.5' })).toBeVisible();
   await expect(region).toContainText('Latest complete observation: 2026-10-25T01:00:00Z');
   // Collapse hides the recorded rows again.
@@ -994,7 +1005,7 @@ test('v2 address book: a pre-event in-flight response cannot repopulate cleared 
   await page.goto('/dev/overview-v2');
   const main = page.locator('#main');
   // Page load consumed overview request 1 before we interact.
-  await expect(main.getByRole('cell', { name: 'eth/native' }).first()).toBeVisible();
+  await expect(main.getByRole('cell', { name: 'ETH' }).first()).toBeVisible();
   const details = main.getByRole('button', { name: /Details for Main/ });
   await details.click();
   await expect(details).toHaveAttribute('aria-expanded', 'true');
@@ -1167,7 +1178,7 @@ test('v2 address lookup: on-demand lookup uses the shared rows, disclosure near 
   // an on-demand simulated lookup, never as recorded history.
   await input.fill('0xAbC1230000000000000000000000000000000000');
   await go.click();
-  await expect(tool.getByRole('cell', { name: 'eth/native' })).toBeVisible();
+  await expect(tool.getByRole('cell', { name: 'ETH' })).toBeVisible();
   await expect(tool.getByRole('cell', { name: '1.5' })).toBeVisible();
   // The result names the address and network it belongs to.
   await expect(tool.getByText('Balances for')).toBeVisible();
@@ -1176,7 +1187,7 @@ test('v2 address lookup: on-demand lookup uses the shared rows, disclosure near 
   await expect(tool.getByText(/Not a recorded observation/)).toBeVisible();
   // Editing the input clears the result: A's balances never sit beside B.
   await input.fill('0xAbC1230000000000000000000000000000000001');
-  await expect(tool.getByRole('cell', { name: 'eth/native' })).toHaveCount(0);
+  await expect(tool.getByRole('cell', { name: 'ETH' })).toHaveCount(0);
   await expect(tool.getByText('Balances for')).toHaveCount(0);
 });
 
@@ -1218,7 +1229,7 @@ test('v2 address lookup: rate limit shows the retry wording, nothing substituted
   await tool.getByLabel('Address to look up').fill('0xAbC1230000000000000000000000000000000000');
   await tool.getByRole('button', { name: 'Look up' }).click();
   await expect(tool.getByText(/Retry in about 42s/)).toBeVisible();
-  await expect(tool.getByRole('cell', { name: 'eth/native' })).toHaveCount(0);
+  await expect(tool.getByRole('cell', { name: 'ETH' })).toHaveCount(0);
 });
 
 test('v2 address lookup: Solana SOL-only footer; empty incomplete answer says unknown', async ({

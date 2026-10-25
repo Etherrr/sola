@@ -23,6 +23,7 @@ export default function OverviewV2() {
             <HoldingsTable />
           </div>
           <div className="ov2-block">
+            <h3 className="ov2-h3">Addresses &amp; Wallets</h3>
             <AddressBook />
           </div>
           <div className="ov2-block">
@@ -32,6 +33,7 @@ export default function OverviewV2() {
             <SnapshotConsent />
           </div>
           <div className="ov2-block">
+            <h3 className="ov2-h3">What changed</h3>
             <WhatChanged />
           </div>
         </SignedOutGate>
@@ -46,7 +48,7 @@ export default function OverviewV2() {
 
       <section className="panel">
         <h2>Allocation</h2>
-        <p className="ov2-quiet">Allocation appears once holdings load.</p>
+        <p className="ov2-quiet">No allocation breakdown in this preview yet.</p>
       </section>
     </div>
   );

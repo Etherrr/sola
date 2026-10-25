@@ -1,4 +1,4 @@
-/* global fetch, setTimeout, console */
+/* global fetch, setTimeout, console, window, document */
 // Synthetic-fixture capture of the populated v2 Overview (address manager +
 // lookup tool). NOT a live session: every API is mocked with fixture data,
 // served from the local static build. Output is emulated-viewport evidence.
@@ -35,9 +35,11 @@ const waitUp = async () => {
 await waitUp();
 
 const browser = await chromium.launch();
+// Tall viewports fit the whole populated page so a viewport (not fullPage)
+// shot shows everything without sticky-header duplication.
 for (const vp of [
-  { label: 'desktop', width: 1280, height: 720 },
-  { label: 'mobile', width: 390, height: 844, isMobile: true, hasTouch: true },
+  { label: 'desktop', width: 1280, height: 2500 },
+  { label: 'mobile', width: 390, height: 2750, isMobile: true, hasTouch: true },
 ]) {
   const ctx = await browser.newContext({
     viewport: { width: vp.width, height: vp.height },
@@ -87,11 +89,26 @@ for (const vp of [
   await page.getByRole('cell', { name: 'eth/native' }).first().waitFor();
   // Expand the first address's Details and run a lookup, so one frame shows both.
   await page.getByRole('button', { name: /Details for Main/ }).click();
-  await page.locator('.ab-details').getByRole('cell', { name: 'usdc' }).waitFor();
+  await page.locator('.ab-details').getByRole('cell', { name: 'USDC' }).waitFor();
   await page.getByLabel('Address to look up').fill(EVM);
   await page.getByRole('button', { name: 'Look up', exact: true }).click();
-  await page.locator('.ab-lookup').getByRole('cell', { name: 'eth/erc20:usdc' }).waitFor();
-  await page.screenshot({ path: `/downloads/v2-populated-${vp.label}-dark.png`, fullPage: true });
+  await page.locator('.ab-lookup').getByRole('cell', { name: 'USDC' }).waitFor();
+  // Reset scroll positions the interactions changed (click auto-scrolls the
+  // horizontally scrollable address table) so the capture shows rest state.
+  await page.evaluate(() => {
+    window.scrollTo(0, 0);
+    document.querySelectorAll('.ab-scroll').forEach((el) => { el.scrollLeft = 0; });
+  });
+  await page.screenshot({ path: `/downloads/v2-populated-${vp.label}-dark.png` });
+  // Close-up crops at a normal viewport: the manager and the lookup tool.
+  await page.setViewportSize({ width: vp.width, height: vp.label === 'mobile' ? 844 : 720 });
+  await page.evaluate(() => {
+    window.scrollTo(0, 0);
+    document.querySelectorAll('.ab-scroll').forEach((el) => { el.scrollLeft = 0; });
+  });
+  await page.locator('.ov2-block', { has: page.locator('.ab-scroll') })
+    .screenshot({ path: `/downloads/v2-crop-manager-${vp.label}.png` });
+  await page.locator('.ab-lookup').screenshot({ path: `/downloads/v2-crop-lookup-${vp.label}.png` });
   await ctx.close();
   console.log(`captured ${vp.label}`);
 }

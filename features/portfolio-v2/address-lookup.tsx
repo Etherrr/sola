@@ -75,7 +75,7 @@ export function AddressLookup() {
   const wallet = state.kind === 'ok' ? state.data.wallets[0] : null;
 
   return (
-    <div className="ab-lookup">
+    <div className="accounts ab-lookup">
       <h3>Look up an address</h3>
       <p className="ov2-quiet">
         A lookup sends the address you enter to third-party blockchain data providers. Nothing is
@@ -92,6 +92,7 @@ export function AddressLookup() {
         />
         <button
           type="button"
+          className="button primary"
           onClick={() => void run()}
           disabled={!detected || state.kind === 'busy'}
         >
@@ -122,7 +123,7 @@ export function AddressLookup() {
             <tbody>
               {wallet.assets.map((a) => (
                 <tr key={a.assetId}>
-                  <td>{a.assetId}</td>
+                  <td title={a.assetId}>{a.symbol}</td>
                   <td>{state.network === 'ethereum' ? 'EVM' : 'Solana'}</td>
                   <td>{a.amount}</td>
                 </tr>
