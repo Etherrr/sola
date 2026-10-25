@@ -39,3 +39,56 @@ export type MarketObservation = {
 export type MarketResult =
   | { status: 'unavailable'; reason: 'source-not-approved'; observations: [] }
   | { status: 'available'; observations: MarketObservation[]; staleAfterSeconds: number };
+
+/**
+ * M-MARKETS-1: on-chain price cards for a fixed Solana instrument allowlist. These types are
+ * deliberately separate from MARKET_METRICS / MarketObservation above: a venue price is not a
+ * funding rate, open-interest figure or liquidation report, and none of those fields are reused
+ * to carry it.
+ */
+export type PriceKind = 'native-asset' | 'tokenized-equity';
+
+export type PriceObservation = {
+  metric: 'overview';
+  instrument: string;
+  name: string;
+  kind: PriceKind;
+  issuer: string | null;
+  underlying: string | null;
+  chain: 'solana';
+  mint: string;
+  /** Exact decimal USD string copied verbatim from the venue feed; never float-derived. */
+  value: string;
+  unit: 'USD';
+  /** Venue of the displayed price (highest-liquidity qualified pool). */
+  primaryVenue: string;
+  primaryPairAddress: string;
+  venues: string[];
+  venueCount: number;
+  /** Whole-dollar approximation for display context; ranking input, never a quote. */
+  liquidityUsdApprox: string;
+  /** max-to-min spread across qualified venues, percent, 2-dp decimal string; null when < 2 venues. */
+  dispersionPct: string | null;
+  source: 'DexScreener';
+  /** DexScreener exposes no feed timestamp. Always null; UI says "Retrieved", never "Updated". */
+  sourceUpdatedAt: null;
+  coverage: 'selected-venues';
+  warnings: string[];
+};
+
+export type UnpricedInstrument = { instrument: string; reason: string };
+
+export type MarketOverviewResult =
+  | { status: 'unavailable'; reason: 'source-error'; observations: [] }
+  | {
+      status: 'available';
+      source: 'DexScreener';
+      observations: PriceObservation[];
+      unpriced: UnpricedInstrument[];
+      /** True when the source failed and these are the last good values, labeled in the UI. */
+      stale: boolean;
+      /** Response-completion time of the upstream batch these values came from. */
+      retrievedAt: string;
+      cacheAgeSeconds: number;
+      staleAfterSeconds: number;
+    };

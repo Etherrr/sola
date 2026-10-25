@@ -3,6 +3,14 @@
 Document **material, user-visible, architecture, security, or process changes**. Use dates and an Unreleased section. Do not record future work as completed.
 
 
+## Unreleased — 2026-10-25: Markets overview (M-MARKETS-1), local branch only
+
+- `/markets` gains an on-chain price overview for a fixed five-instrument Solana allowlist (SOL via wrapped SOL, plus Backed xStocks TSLAx/NVDAx/AAPLx/SPYx), sourced from DexScreener pool data through a new gated route `GET /api/v1/markets/overview`. Mints verified against official issuer registries (SPL native_mint source, xStocks public assets API, Circle and Tether contract lists) on 2026-10-25; see docs/MARKETS_OVERVIEW.md.
+- Route gates in order: kill switch `MARKETS_OVERVIEW=1` (default OFF), Cloudflare Access JWT, same-origin Origin and sec-fetch-site checks. Fails closed. Per-isolate cache: 60 s TTL, single-flight, 15 s forced-refresh spacing, last-good served explicitly marked STALE up to 10 minutes, then unavailable; no background polling; a missing price is never zero or reconstructed.
+- Prices stay exact decimal strings end to end (venue spread via BigInt math); pool liquidity is display context only, rounded with an approximate marker. DexScreener exposes no feed timestamp, so the UI says "Retrieved", never "Updated". Tokenized equities are labeled by issuer with the can-differ-from-underlying disclosure. Coverage is stated as selected Solana venues, never the whole market.
+- DexScreener's published API terms permit this display without attribution or a key (read in full 2026-10-25). Jupiter/CoinGecko/TradFi sources remain unconfigured pending owner decisions (see handoff).
+- No new dependencies, no credentials, no D1 changes, no deployment. The fifth browser request is added to the single approved fetch module (tests updated).
+
 ## Unreleased — 2026-10-24: reliability and source preparation
 
 - Track honors API Retry-After with visible minimum wait and explicit manual retry, blocks premature resubmission, and discards cancelled/old-network responses. No automatic provider retry or polling.

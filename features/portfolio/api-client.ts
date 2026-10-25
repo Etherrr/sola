@@ -40,7 +40,7 @@ export type LookupOutcome =
 
 const DEC = /^\d+(\.\d+)?$/;
 const isStr = (v: unknown): v is string => typeof v === 'string';
-const isDec = (v: unknown) => isStr(v) && DEC.test(v);
+const isDec = (v: unknown): v is string => isStr(v) && DEC.test(v);
 const isDecOrNull = (v: unknown) => v === null || isDec(v);
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null;
 const strArr = (v: unknown): v is string[] => Array.isArray(v) && v.every(isStr);
@@ -298,4 +298,115 @@ export async function accountsRequest(
     clearTimeout(timer);
     signal?.removeEventListener('abort', onAbort);
   }
+}
+
+// --- Markets overview: the fifth browser request, a same-origin GET to our own read-only API. ---
+import type { MarketOverviewResult, PriceObservation, UnpricedInstrument } from '../markets/model';
+
+export type OverviewOutcome =
+  | { kind: 'ok'; data: Extract<MarketOverviewResult, { status: 'available' }> }
+  | { kind: 'error'; message: string; retryable: boolean };
+
+const MINT_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+
+function isObservation(v: unknown): v is PriceObservation {
+  if (!isObj(v)) return false;
+  return (
+    v.metric === 'overview' &&
+    isStr(v.instrument) &&
+    v.instrument.length <= 12 &&
+    isStr(v.name) &&
+    v.name.length <= 60 &&
+    (v.kind === 'native-asset' || v.kind === 'tokenized-equity') &&
+    (v.issuer === null || (isStr(v.issuer) && v.issuer.length <= 60)) &&
+    (v.underlying === null || (isStr(v.underlying) && v.underlying.length <= 12)) &&
+    v.chain === 'solana' &&
+    isStr(v.mint) &&
+    MINT_RE.test(v.mint) &&
+    isDec(v.value) &&
+    v.value.length <= 24 &&
+    v.unit === 'USD' &&
+    isStr(v.primaryVenue) &&
+    isStr(v.primaryPairAddress) &&
+    strArr(v.venues) &&
+    v.venues.length <= 12 &&
+    Number.isInteger(v.venueCount) &&
+    isDec(v.liquidityUsdApprox) &&
+    isDecOrNull(v.dispersionPct) &&
+    v.source === 'DexScreener' &&
+    v.sourceUpdatedAt === null &&
+    v.coverage === 'selected-venues' &&
+    strArr(v.warnings) &&
+    v.warnings.length <= 8
+  );
+}
+
+/** Strict runtime check of the whole response. Anything unexpected is rejected, never guessed. */
+export function parseOverviewSuccess(
+  raw: unknown,
+): Extract<MarketOverviewResult, { status: 'available' }> | null {
+  if (!isObj(raw)) return null;
+  if (raw.schemaVersion !== 1) return null;
+  if (raw.status !== 'available') return null;
+  if (typeof raw.stale !== 'boolean') return null;
+  if (raw.source !== 'DexScreener') return null;
+  if (!isStr(raw.retrievedAt) || !Number.isFinite(Date.parse(raw.retrievedAt))) return null;
+  if (!Number.isInteger(raw.cacheAgeSeconds) || !Number.isInteger(raw.staleAfterSeconds))
+    return null;
+  if (!Array.isArray(raw.observations) || raw.observations.length > 12) return null;
+  if (!raw.observations.every(isObservation)) return null;
+  if (!Array.isArray(raw.unpriced) || raw.unpriced.length > 12) return null;
+  for (const u of raw.unpriced as unknown[]) {
+    if (!isObj(u) || !isStr(u.instrument) || !isStr(u.reason)) return null;
+  }
+  return raw as unknown as Extract<MarketOverviewResult, { status: 'available' }> & {
+    unpriced: UnpricedInstrument[];
+  };
+}
+
+const OVERVIEW_MESSAGES: Record<number, [string, boolean]> = {
+  401: ['You need to sign in through Access to use this feature.', false],
+  403: ['This request was blocked.', false],
+  502: ['The price source is unavailable. Nothing was substituted.', true],
+  503: ['This feature is switched off or not configured yet.', false],
+  504: ['The price source took too long. Nothing was substituted.', true],
+};
+
+export async function fetchOverview(force: boolean, signal?: AbortSignal): Promise<OverviewOutcome> {
+  let res: Response;
+  try {
+    res = await fetch(`/api/v1/markets/overview${force ? '?refresh=1' : ''}`, {
+      method: 'GET',
+      credentials: 'same-origin',
+      headers: { accept: 'application/json' },
+      signal,
+    });
+  } catch {
+    return { kind: 'error', message: 'The price request could not be sent.', retryable: true };
+  }
+  if (!res.ok) {
+    const [message, retryable] = OVERVIEW_MESSAGES[res.status] ?? [
+      'Prices could not be loaded. Nothing was substituted.',
+      true,
+    ];
+    return { kind: 'error', message, retryable };
+  }
+  let raw: unknown;
+  try {
+    raw = await res.json();
+  } catch {
+    return {
+      kind: 'error',
+      message: 'The price source returned an unusable answer.',
+      retryable: true,
+    };
+  }
+  const data = parseOverviewSuccess(raw);
+  if (!data)
+    return {
+      kind: 'error',
+      message: 'The price source returned an unusable answer.',
+      retryable: true,
+    };
+  return { kind: 'ok', data };
 }

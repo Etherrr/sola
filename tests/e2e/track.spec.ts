@@ -735,21 +735,33 @@ test.describe('manual retries and request ownership', () => {
     await expect(page.getByText('$3,000.00', { exact: true })).toHaveCount(0);
   });
 
-  test('market source preparation shows no invented figures and makes no market requests', async ({
-    page,
-  }) => {
-    let calls = 0;
+  test('markets overview stays honest when the price API is not reachable', async ({ page }) => {
+    // New contract: viewing the page may make one bounded overview request (manual refresh
+    // thereafter); derivatives venues are never contacted; nothing is invented on failure.
+    let overviewCalls = 0;
+    let venueCalls = 0;
     page.on('request', (r) => {
-      if (/coinglass|binance|\/api\/v1\/markets/.test(r.url())) calls++;
+      // The static dev server 308-redirects /api/... to a trailing slash before 404ing;
+      // count only the original request, not the redirect leg. No redirect exists behind
+      // the production functions route.
+      if (r.redirectedFrom()) return;
+      if (/\/api\/v1\/markets\/overview/.test(r.url())) overviewCalls++;
+      if (/coinglass|binance/.test(r.url())) venueCalls++;
     });
     await page.goto('/markets/');
     await expect(page.getByRole('heading', { name: 'The wider market.' })).toBeVisible();
-    await expect(page.getByText('Not available', { exact: true })).toHaveCount(4);
-    await expect(page.locator('.sim-pill')).toHaveText('◇ DATA UNAVAILABLE');
+    // The static export has no functions backend, so the overview honestly reports failure.
+    await expect(page.getByText('Prices are unavailable.')).toBeVisible();
+    // The three derivatives cards remain unavailable; no figures are ever substituted.
+    await expect(page.getByText('Not available', { exact: true })).toHaveCount(3);
+    await expect(page.getByText(/\$\d/)).toHaveCount(0);
+    // The coverage disclaimer is always stated.
+    await expect(page.getByText(/not the whole financial market/)).toBeVisible();
     await expect(
       page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Education' }),
     ).toHaveCount(1);
-    expect(calls).toBe(0);
+    expect(overviewCalls).toBe(1);
+    expect(venueCalls).toBe(0);
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     ).toBe(true);

@@ -1,28 +1,26 @@
 import { PageIntro } from '@/components/ui';
 import { MARKET_METRICS } from '@/features/markets/model';
+import { OverviewPanel } from '@/features/markets/overview-panel';
 
-export const metadata = { title: 'Markets — source pending' };
+export const metadata = { title: 'Markets' };
 export default function Markets() {
   return (
     <div className="page-container">
       <PageIntro eyebrow="MARKETS · READ-ONLY" title="The wider market.">
-        <p>Derivatives context, with coverage that stays visible.</p>
-      </PageIntro>
-      <div className="notice market-status">
-        <span className="badge">DATA UNAVAILABLE</span>
         <p>
-          No market source is connected. Figures will appear after a source is reviewed and
-          approved.
+          On-chain prices for a fixed, named list of Solana instruments, then derivatives
+          context. Coverage is always stated; nothing is inferred.
         </p>
-      </div>
+      </PageIntro>
+      <OverviewPanel />
       <div className="market-grid">
-        {MARKET_METRICS.map((metric, i) => (
+        {MARKET_METRICS.filter((m) => m.id !== 'overview').map((metric, i) => (
           <section
             key={metric.id}
             className="panel market-card"
             aria-labelledby={`market-${metric.id}`}
           >
-            <p className="eyebrow">0{i + 1} / MARKET INDICATORS</p>
+            <p className="eyebrow">0{i + 2} / MARKET INDICATORS</p>
             <h2 id={`market-${metric.id}`}>{metric.title}</h2>
             <p className="market-empty">Not available</p>
             <p>{metric.detail}</p>
@@ -44,9 +42,12 @@ export default function Markets() {
         ))}
       </div>
       <p className="fine data-footer">
-        A venue feed covers that venue only. Missing liquidation reports cannot establish that no
-        liquidations occurred. Funding intervals and open-interest units can differ by instrument.
-        No estimates, market-wide totals or historical charts are inferred.
+        Prices come from selected Solana DEX pools reported by DexScreener and cover those pools
+        only, not the whole financial market. Tokenized equities are on-chain tokens issued by
+        Backed (xStocks); they are not the underlying stocks and can trade above or below them. A
+        venue feed covers that venue only. Missing liquidation reports cannot establish that no
+        liquidations occurred. No estimates, market-wide totals or historical charts are
+        inferred, and a missing price is never shown as zero.
       </p>
     </div>
   );

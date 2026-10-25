@@ -118,12 +118,23 @@ describe('the Overview carries no education traces either', () => {
   });
 });
 
-describe('source-pending markets and privacy claims', () => {
-  it('never presents unconnected markets as simulated or live figures', () => {
-    const market = readFileSync('app/markets/page.tsx', 'utf8');
-    expect(market).toContain('DATA UNAVAILABLE');
-    expect(market).toContain('No market source is connected');
-    expect(market).not.toMatch(/\$\d|\d+%|fixture/);
+describe('markets coverage and privacy claims', () => {
+  it('never presents venue prices as the whole market, the underlying security, or a source timestamp', () => {
+    const page = readFileSync('app/markets/page.tsx', 'utf8');
+    // Derivatives metrics stay honestly unavailable; no fixture figures anywhere.
+    expect(page).toContain('Not available');
+    expect(page).not.toMatch(/\$\d|fixture/);
+    expect(page).toContain('cover those pools');
+    expect(page).toContain('not the underlying stocks');
+    expect(page).toContain('never shown as zero');
+    const view = readFileSync('features/markets/overview-view.tsx', 'utf8');
+    expect(view).toContain('DATA UNAVAILABLE');
+    expect(view).toContain('not the whole market');
+    expect(view).toContain('It is not the stock itself');
+    // The source exposes no feed time: the UI says "Retrieved", never "Updated".
+    expect(view).toContain('Retrieved');
+    expect(view).not.toMatch(/[Uu]pdated/);
+    expect(view).toContain('wrapped SOL');
   });
   it('settings disclose provider reads and Access identity without claiming saved account lists', () => {
     const settings = readFileSync('app/settings/page.tsx', 'utf8');

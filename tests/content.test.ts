@@ -43,13 +43,15 @@ describe('learning and safety boundaries', () => {
       .filter((file) => /\.(ts|tsx)$/.test(file) && file !== API_CLIENT)
       .map((file) => readFileSync(file, 'utf8'))
       .join('\n');
-    // Exactly four browser requests exist: the lookup POST, the same-origin session GET, the same-origin
-    // health GET and the same-origin saved-addresses API (all through this one module).
-    expect(readFileSync(API_CLIENT, 'utf8').match(/fetch\s*\(/g)).toHaveLength(4);
+    // Exactly five browser requests exist: the lookup POST, the same-origin session GET, the same-origin
+    // health GET, the same-origin saved-addresses API and the same-origin markets overview GET
+    // (all through this one module).
+    expect(readFileSync(API_CLIENT, 'utf8').match(/fetch\s*\(/g)).toHaveLength(5);
     expect(readFileSync(API_CLIENT, 'utf8')).toMatch(/fetch\('\/api\/v1\/health'/);
     expect(readFileSync(API_CLIENT, 'utf8')).toMatch(/fetch\('\/api\/v1\/session'/);
     expect(readFileSync(API_CLIENT, 'utf8')).toMatch(/fetch\('\/api\/v1\/portfolio\/resolve'/);
     expect(readFileSync(API_CLIENT, 'utf8')).toMatch(/fetch\('\/api\/v1\/portfolio\/accounts'/);
+    expect(readFileSync(API_CLIENT, 'utf8')).toMatch(/\/api\/v1\/markets\/overview/);
     expect(source).not.toMatch(
       /window\.(ethereum|solana)|eth_requestAccounts|signTransaction|signMessage|sendTransaction|fetch\s*\(/,
     );

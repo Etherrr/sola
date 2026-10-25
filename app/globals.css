@@ -3120,3 +3120,35 @@ html {
 .bfcache-mask [data-sensitive] {
   visibility: hidden;
 }
+
+/* Markets overview price cards. Reuses .panel/.market-card/.market-meta/.notice/.badge/.chip. */
+.price-overview {
+  margin-top: 24px;
+}
+.price-overview .market-status {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-start;
+}
+.price-name {
+  font-size: 0.6em;
+  color: var(--muted, #9baac0);
+  font-weight: 400;
+}
+.price-value {
+  font-size: clamp(1.8rem, 3.4vw, 2.6rem);
+  margin: 20px 0 6px;
+  font-variant-numeric: tabular-nums;
+}
+.price-note {
+  color: var(--muted, #9baac0);
+  font-size: 0.85rem;
+  margin: 0 0 8px;
+}
+.price-warnings {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 4px 0 0;
+}
