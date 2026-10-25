@@ -7,10 +7,12 @@ test.beforeEach(async ({ page }) => {
 
 test('combined view renders aggregate totals, per-address status and observation window', async ({ page }, info) => {
   await page.goto('/portfolio');
-  const section = page.locator('.combined');
+  // Scope to #main: during Next.js streaming the prerendered segment sits briefly in a
+  // hidden sibling container (#S:0) outside #main; scoping removes that transient from the
+  // locator instead of relying on settle timing (reviewer-captured 170-190ms window).
+  const section = page.locator('#main .combined');
   await expect(section.getByRole('heading', { name: 'Saved addresses, combined' })).toBeVisible();
   // Honest framing: simulated aggregation, invented samples, never live.
-  // Hydration can transiently mount a duplicate subtree; wait until exactly one remains.
   await expect(section.getByText('COMBINED VIEW · SIMULATED AGGREGATION')).toHaveCount(1);
   await expect(section.getByText('COMBINED VIEW · SIMULATED AGGREGATION').first()).toBeVisible();
   await expect(section.getByText(/not your wallet, not live data/)).toBeVisible();

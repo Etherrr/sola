@@ -94,6 +94,30 @@ describe('aggregateAddresses', () => {
     expect(r.perAddress[1].status).toBe('duplicate');
   });
 
+  it('dedupes an Ethereum address across checksum casing (case is not identity)', () => {
+    const upper = '0x' + 'A'.repeat(40);
+    const r = aggregateAddresses([
+      input('ethereum', ETH1, ok([wallet(ETH1, [asset('e:eth', 'ETH', '1', '100')])], '2026-10-24T10:00:00Z')),
+      input('ethereum', upper, ok([wallet(upper, [asset('e:eth', 'ETH', '1', '100')])], '2026-10-24T10:01:00Z')),
+    ]);
+    expect(r.positions).toHaveLength(1);
+    expect(summarize(r.positions).net).toBe(10000n);
+    expect(r.perAddress[1].status).toBe('duplicate');
+  });
+
+  it('never dedupes Solana base58 case variants: different case is a different address', () => {
+    const variant = 'SO1dEMOaDDR9' + 'Z'.repeat(31);
+    expect(variant).not.toBe(SOL1);
+    expect(variant.toLowerCase()).toBe(SOL1.toLowerCase());
+    const r = aggregateAddresses([
+      input('solana', SOL1, ok([wallet(SOL1, [asset('s:sol', 'SOL', '1', '100')])], '2026-10-24T10:00:00Z')),
+      input('solana', variant, ok([wallet(variant, [asset('s:sol', 'SOL', '2', '200')])], '2026-10-24T10:00:00Z')),
+    ]);
+    expect(r.positions).toHaveLength(2);
+    expect(summarize(r.positions).net).toBe(30000n);
+    expect(r.perAddress.every((a) => a.status === 'ok')).toBe(true);
+  });
+
   it('keeps the same asset in two different wallets as two real holdings', () => {
     const r = aggregateAddresses([
       input('ethereum', ETH1, ok([wallet(ETH1, [asset('e:eth', 'ETH', '1', '100')])], '2026-10-24T10:00:00Z')),

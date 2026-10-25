@@ -73,7 +73,10 @@ export function aggregateAddresses(inputs: readonly AggregateInput[]): Aggregate
   let latest: string | null = null;
 
   for (const input of inputs) {
-    const key = `${input.network}:${input.address.toLowerCase()}`;
+    // Identity casing differs by chain: EVM hex addresses are case-insensitive (EIP-55
+    // casing is a checksum, not identity), so Ethereum dedupes lowercase. Solana base58
+    // addresses are case-sensitive: different case IS a different address, keep verbatim.
+    const key = `${input.network}:${input.network === 'ethereum' ? input.address.toLowerCase() : input.address}`;
     if (seen.has(key)) {
       perAddress.push({
         network: input.network,
