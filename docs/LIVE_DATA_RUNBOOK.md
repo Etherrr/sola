@@ -91,3 +91,11 @@ real latency. Those need a disposable deployment and are UNTESTED.
 
 429 "data source is rate limiting", 503 unavailable, 504 too slow, 502 unusable answer. None shows balances, and the
 page says the result cannot tell whether the wallet is empty. Diagnostics are a fixed step name and small numbers only.
+
+## Manual retry UX (2026-10-24)
+
+The browser now reads the API's `Retry-After` on 429 (integer seconds or HTTP date; missing/invalid defaults to 30 seconds), displays a minimum wait, and disables submit, simulated-example requests and the explicit Retry lookup button during that wait. Expiry only enables a user action; there is no provider polling or automatic retry. This cooldown is a browser usability control, not a server-side rate limiter. A retry does not guarantee recovery. Switching networks cancels the browser request and invalidates its UI result; it cannot guarantee cancellation of upstream work already started. Changing networks retains an active cooldown.
+
+Reported Solana failure: source maps upstream HTTP 429 and RPC -32005/-32029 to rate_limited; the API maps that category to 429 with 30 seconds minimum wait. This is consistent with throttling, not log-confirmed incident attribution. No production request logs, bindings or flag values were inspected during this branch's work, and no genuine live lookups were performed. To confirm an incident, correlate sanitized request ID, provider_failure category/step and timestamp through authorized Cloudflare access. Do not paste identities, tokens or addresses into logs or PRs. Do not switch providers as an incident workaround without approval.
+
+Balance observation, response completion and each price-feed update now have separate labels in Track. Solana observation now records receipt of its balance response, rather than reusing the Ethereum pricing block timestamp; it is not an inferred Solana block time. No new price freshness or executable-quote claim is made. See [account design](PORTFOLIO_ACCOUNTS_DESIGN.md) and [market source review](MARKET_SOURCES_REVIEW.md) for pending decisions.

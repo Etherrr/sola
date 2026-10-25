@@ -215,6 +215,8 @@ export function createSolanaLiveProvider(over: Partial<SolanaLiveDeps> = {}): Po
         return fail(signal.aborted ? 'timeout' : 'unavailable');
       }
       if (stext === null) return fail('bad_response');
+      // Receipt time of the balance response, not the Ethereum pricing block's timestamp.
+      const balanceObservedAt = d.now().toISOString();
       let items: unknown;
       try {
         items = JSON.parse(stext);
@@ -301,7 +303,7 @@ export function createSolanaLiveProvider(over: Partial<SolanaLiveDeps> = {}): Po
         ok: true,
         provider: NAME,
         simulated: false,
-        observedAt: new Date(nowS * 1000).toISOString(),
+        observedAt: balanceObservedAt,
         wallets,
       };
     },

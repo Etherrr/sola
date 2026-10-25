@@ -2,7 +2,7 @@
 
 This repository is the shared **engineering handoff and source-code home** for Sola Lens, the proposed read-only DeFi portfolio and learning web application.
 
-**Status (2026-10-23): Sola Lens v0.1 local preview implemented.** Next.js/TypeScript application, learning journeys, and simulated portfolio. No real wallet integration, blockchain API, or deployment.
+**Source status (2026-10-24):** static-export Next.js app with Cloudflare Pages Functions, Access-verified identity, and read-only Ethereum/Solana lookup adapters. Overview remains simulated. Live lookup mode requires the exact server flag `PORTFOLIO_LIVE_DATA=1`; this does not confirm current production settings. Account persistence is deferred by the owner. Markets is source-pending with no figures. See the [live runbook](docs/LIVE_DATA_RUNBOOK.md), [account proposal](docs/PORTFOLIO_ACCOUNTS_DESIGN.md) and [market review](docs/MARKET_SOURCES_REVIEW.md).
 
 ## Two separate products
 
@@ -48,7 +48,7 @@ npm ci
 npm run dev
 ```
 
-Open `http://127.0.0.1:3000`. For the exported static local preview, run `npm run build` then `npm run start`. The static server binds only to loopback by default. No environment variables, provider credentials, database, or wallet extension are required.
+Open `http://127.0.0.1:3000`. For the exported static local preview, run `npm run build` then `npm run start`. The static server binds only to loopback by default. No environment variables, provider credentials, database, or wallet extension are required for the local simulated preview. The loopback static server has no Pages Functions; API/session browser tests use explicit mocks.
 
 ```sh
 npm run check                 # lint, typecheck, unit tests, production build
@@ -58,7 +58,7 @@ npx prettier --check app components features content lib tests
 npm audit
 ```
 
-Browser tests start the local static-export server if one is not already running. CI installs Chromium and runs the same checks. No workflow deploys the app.
+Browser tests start the local static-export server if one is not already running. CI installs Chromium and runs the same checks. The production release branch `feat/live-wallet-app` auto-deploys; never push to it without owner approval. Work on a separate feature branch. Do not infer hosting configuration from local tests.
 
 ## Preview features
 

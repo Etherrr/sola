@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  createSolanaLiveProvider,
-  SOL_USD_FEED,
-} from '../server/portfolio/live-provider-solana';
+import { createSolanaLiveProvider, SOL_USD_FEED } from '../server/portfolio/live-provider-solana';
 
 const NOW = new Date('2026-10-24T03:00:00.000Z');
 const nowS = Math.floor(NOW.getTime() / 1000);
@@ -10,8 +7,9 @@ const ADDR = 'So11111111111111111111111111111111111111112';
 const hex = (n: bigint) => '0x' + n.toString(16).padStart(64, '0');
 const round = (answer: bigint, updated: number, id = 7n, started = updated - 10) =>
   '0x' +
-  [id, answer, BigInt(started), BigInt(updated), id].map((x) => x.toString(16).padStart(64, '0')).join('');
-
+  [id, answer, BigInt(started), BigInt(updated), id]
+    .map((x) => x.toString(16).padStart(64, '0'))
+    .join('');
 
 function encodeResults(rs: { success: boolean; data: string }[]): string {
   const w = (x: number) => x.toString(16).padStart(64, '0');
@@ -188,4 +186,24 @@ describe('solana live provider', () => {
     expect(r.wallets[0]!.assets.length).toBe(0);
     expect(r.wallets[0]!.partial).toBe(false);
   });
+});
+
+it('timestamps the SOL balance response independently of the Ethereum pricing block', async () => {
+  let receivedSolana = false;
+  const original = rpc({ chainTs: nowS - 30 });
+  const balanceReceipt = new Date(NOW.getTime() + 2000);
+  const result = await createSolanaLiveProvider({
+    fetch: (async (...args: Parameters<typeof fetch>) => {
+      const response = await original(...args);
+      if (String(args[0]).includes('solana')) receivedSolana = true;
+      return response;
+    }) as typeof fetch,
+    now: () => (receivedSolana ? balanceReceipt : NOW),
+  }).fetchWallets([ADDR], new AbortController().signal);
+  expect(result.ok).toBe(true);
+  if (!result.ok) return;
+  expect(result.observedAt).toBe(balanceReceipt.toISOString());
+  expect(result.wallets[0]!.assets[0]!.priceObservedAt).toBe(
+    new Date((nowS - 60) * 1000).toISOString(),
+  );
 });

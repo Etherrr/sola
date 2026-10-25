@@ -678,3 +678,84 @@ test.describe('/track focus offsets follow the real top bar height (30-asset moc
     });
   }
 });
+
+test.describe('manual retries and request ownership', () => {
+  test('429 cooldown blocks all submits, never polls, and enables explicit retry', async ({
+    page,
+  }) => {
+    let calls = 0;
+    await page.route('**/api/v1/portfolio/resolve', (r) => {
+      calls++;
+      return r.fulfill({
+        status: 429,
+        headers: { 'retry-after': '3' },
+        contentType: 'application/json',
+        body: '{}',
+      });
+    });
+    await page.goto('/track/');
+    await page.getByRole('textbox').fill(ADDR);
+    await page.getByRole('button', { name: 'Look up', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Retry lookup' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Look up', exact: true })).toBeDisabled();
+    await page.getByRole('textbox').press('Enter');
+    expect(calls).toBe(1);
+    await expect(page.getByRole('button', { name: 'Retry lookup' })).toBeEnabled({ timeout: 6000 });
+    expect(calls).toBe(1); // display timer made no network requests
+    await page.screenshot({
+      path: `output/playwright/retry-${test.info().project.name}.png`,
+      fullPage: true,
+    });
+    await page.getByRole('button', { name: 'Retry lookup' }).click();
+    await expect.poll(() => calls).toBe(2);
+  });
+
+  test('switching the top bar during a request discards the old network result', async ({
+    page,
+  }) => {
+    let finish!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    await page.route('**/api/v1/portfolio/resolve', async (r) => {
+      await gate;
+      await r
+        .fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(okBody) })
+        .catch(() => {});
+    });
+    await page.goto('/track/');
+    await page.getByRole('textbox').fill(ADDR);
+    await page.getByRole('button', { name: 'Look up', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Looking up…' })).toBeDisabled();
+    await page.locator('.chain-select select').selectOption('solana');
+    finish();
+    await expect(page.getByRole('textbox')).toHaveValue('');
+    await expect(page.getByRole('button', { name: 'Look up', exact: true })).toBeEnabled();
+    await expect(page.getByRole('heading', { name: 'Result', exact: true })).toHaveCount(0);
+    await expect(page.getByText('$3,000.00', { exact: true })).toHaveCount(0);
+  });
+
+  test('market source preparation shows no invented figures and makes no market requests', async ({
+    page,
+  }) => {
+    let calls = 0;
+    page.on('request', (r) => {
+      if (/coinglass|binance|\/api\/v1\/markets/.test(r.url())) calls++;
+    });
+    await page.goto('/markets/');
+    await expect(page.getByRole('heading', { name: 'The wider market.' })).toBeVisible();
+    await expect(page.getByText('Not available', { exact: true })).toHaveCount(4);
+    await expect(page.locator('.sim-pill')).toHaveText('◇ DATA UNAVAILABLE');
+    await expect(
+      page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Education' }),
+    ).toHaveCount(1);
+    expect(calls).toBe(0);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true);
+    await page.screenshot({
+      path: `output/playwright/markets-${test.info().project.name}.png`,
+      fullPage: true,
+    });
+  });
+});

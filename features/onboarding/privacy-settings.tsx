@@ -7,8 +7,9 @@ export function PrivacySettings() {
       <h2>Your progress, your choice</h2>
       <p>
         Optional saving stores only completed lesson IDs in this browser under{' '}
-        <code>sola-lens.progress.v1</code>. No account, addresses, wallet details, or analytics are
-        collected by this app.
+        <code>sola-lens.progress.v1</code>. This preference does not save addresses or account
+        identity. Track sends pasted public addresses to the lookup service, and to PublicNode when
+        live mode is enabled. The app does not persist these addresses or use analytics.
       </p>
       <p>
         Separately, the entrance animation keeps one flag, <code>sola-welcomed</code>, in this

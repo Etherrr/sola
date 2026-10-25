@@ -2985,3 +2985,47 @@ html {
 .track-table caption {
   white-space: normal;
 }
+
+.market-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  margin-top: 24px;
+}
+.market-status {
+  border-left: 3px solid var(--gold, #bb9b60);
+}
+.market-card {
+  min-width: 0;
+}
+.market-card h2 {
+  margin-top: 12px;
+}
+.market-empty {
+  font-size: clamp(1.6rem, 3vw, 2.3rem);
+  color: var(--muted, #9baac0);
+  margin: 28px 0 20px;
+}
+.market-meta {
+  margin: 24px 0 0;
+  font-size: 0.8rem;
+}
+.market-meta div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  border-top: 1px solid #ffffff15;
+  padding: 10px 0;
+}
+.market-meta dt {
+  color: var(--muted, #9baac0);
+}
+.market-meta dd {
+  margin: 0;
+  text-align: right;
+}
+@media (max-width: 640px) {
+  .market-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

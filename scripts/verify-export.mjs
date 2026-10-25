@@ -1,6 +1,6 @@
 /* global console */
 import { stat, readFile, readdir } from 'node:fs/promises';
-const routes=['/','/start/','/start/wallets/','/start/security/','/start/networks/','/start/defi/','/connect/','/portfolio/','/portfolio/assets/','/portfolio/positions/','/portfolio/risk/','/explore/','/track/','/learn/network-journey/','/learn/security-lab/','/learn/','/learn/addresses/','/learn/risks/','/settings/','/education/'];
+const routes=['/','/start/','/start/wallets/','/start/security/','/start/networks/','/start/defi/','/connect/','/portfolio/','/portfolio/assets/','/portfolio/positions/','/portfolio/risk/','/explore/','/track/','/markets/','/learn/network-journey/','/learn/security-lab/','/learn/','/learn/addresses/','/learn/risks/','/settings/','/education/'];
 // Every exported page must be in the list above, so a new route cannot ship unchecked.
 async function pages(dir, base) {
   const out = [];

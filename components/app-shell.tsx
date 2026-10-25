@@ -14,6 +14,7 @@ const sections = [
     items: [
       { href: '/portfolio', label: 'Overview', icon: '◧' },
       { href: '/track', label: 'Track', icon: '⌕' },
+      { href: '/markets', label: 'Markets', icon: '◷' },
     ],
   },
 ];
@@ -101,7 +102,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <header className="topbar" ref={bar}>
             <ChainSelector />
             <span className="sim-pill">
-              {path.startsWith('/track') ? '◇ MODE SHOWN WITH RESULT' : '◇ SIMULATED'}
+              {path.startsWith('/track')
+                ? '◇ MODE SHOWN WITH RESULT'
+                : path.startsWith('/markets')
+                  ? '◇ DATA UNAVAILABLE'
+                  : path.startsWith('/portfolio')
+                    ? '◇ SIMULATED'
+                    : '◇ READ-ONLY'}
             </span>
             <AccountMenu />
             <a

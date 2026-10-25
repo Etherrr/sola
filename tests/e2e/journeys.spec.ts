@@ -3,6 +3,7 @@ import AxeBuilder from '@axe-core/playwright';
 const routes = [
   '/',
   '/education',
+  '/markets',
   '/start',
   '/start/wallets',
   '/start/security',
@@ -482,7 +483,7 @@ test.describe('entrance', () => {
 });
 test('the top-bar network selector and the track form share one selection', async ({ page }) => {
   await page.goto('/track');
-  const select = page.getByLabel('Network');
+  const select = page.getByRole('combobox', { name: 'Network', exact: true });
   await expect(select).toHaveValue('ethereum');
   // Only networks the lookup actually reads are offered; none are disabled placeholders.
   await expect(select.locator('option')).toHaveText(['Ethereum', 'Solana (SOL only)']);
@@ -588,5 +589,33 @@ test.describe('session status', () => {
     await page.goto('/track');
     await page.waitForTimeout(400);
     await expect(page.getByRole('button', { name: 'Account', exact: true })).toBeVisible();
+  });
+});
+
+test('welcome animation visual evidence uses no account identity; reduced motion skips it', async ({
+  page,
+}) => {
+  await page.addInitScript(() => window.sessionStorage.removeItem('sola-welcomed'));
+  await page.route('**/api/v1/session', (r) =>
+    r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'ok', via: 'cloudflare-access', identity: null }),
+    }),
+  );
+  await page.goto('/');
+  await expect(page.locator('.entrance-curtain')).toHaveCount(1);
+  await page.waitForTimeout(600); // inspect an actual CSS animation frame, no provider calls
+  await page.screenshot({
+    path: `output/playwright/welcome-animation-${test.info().project.name}.png`,
+  });
+  await expect(page.locator('.entrance-curtain')).toHaveCount(0, { timeout: 5000 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.reload();
+  await expect(page.locator('.entrance')).not.toHaveClass(/intro/);
+  await expect(page.getByRole('link', { name: /^DeFi App/ })).toBeVisible();
+  await page.screenshot({
+    path: `output/playwright/welcome-reduced-${test.info().project.name}.png`,
+    fullPage: true,
   });
 });

@@ -40,3 +40,7 @@ Trading, swaps, transaction simulation presented as real, approvals, signatures,
 - All data includes source/observation time and coverage; partial outages do not show misleading totals.
 - No production WordPress or DNS change until independently authorized.
 - Changes to scope are logged in CHANGELOG.md.
+
+## Owner-directed next phase (2026-10-24)
+
+Prioritize resilient manual live lookup, then Sola portfolio/address-tracker accounts using verified Cloudflare Access identity, then account-derived supported holdings. Account persistence is explicitly deferred by the owner pending the [storage design](docs/PORTFOLIO_ACCOUNTS_DESIGN.md); the existing simulated Overview remains labeled and never fills live failures. No password authentication or Access audience expansion. Market-indicator UI/source preparation is authorized, but data-source adoption, credentials and paid tiers require separate approval. See [source review](docs/MARKET_SOURCES_REVIEW.md). Keep one Education exit in the app navigation, separate from the dashboard. No production release is authorized by implementation or green tests.

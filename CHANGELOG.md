@@ -2,6 +2,14 @@
 
 Document **material, user-visible, architecture, security, or process changes**. Use dates and an Unreleased section. Do not record future work as completed.
 
+
+## Unreleased — 2026-10-24: reliability and source preparation
+
+- Track honors API Retry-After with visible minimum wait and explicit manual retry, blocks premature resubmission, and discards cancelled/old-network responses. No automatic provider retry or polling.
+- Distinguish balance observation time, response completion and price-feed updates; correct Solana observation to use balance-response receipt instead of Ethereum pricing block time; correct stale Settings/privacy claims about provider reads and verified Access identity.
+- Add source-pending Markets UI and disabled typed server adapter without fabricated values, new vendors, credentials or dependencies.
+- Document account storage alternatives, isolation/deletion gates and market terms/coverage/cost research. Owner deferred account persistence; real account lists and account-derived Overview remain pending. No deployment or production configuration changes.
+
 ## Unreleased
 
 - DATA-03 failure drill and runbook: `tests/live-failure-drill.test.ts` (mocked upstream, real handler and provider: statuses, one upstream request per lookup, nothing private in body or log, burst without amplification) and `docs/LIVE_DATA_RUNBOOK.md` (switch-off paths for production vs preview, a rehearsal to run once on a disposable deployment, documented limits). Tests and docs only; live data stays OFF.

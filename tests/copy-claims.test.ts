@@ -117,3 +117,25 @@ describe('the Overview carries no education traces either', () => {
     expect(fixtureSrc).not.toMatch(/educational/i);
   });
 });
+
+describe('source-pending markets and privacy claims', () => {
+  it('never presents unconnected markets as simulated or live figures', () => {
+    const market = readFileSync('app/markets/page.tsx', 'utf8');
+    expect(market).toContain('DATA UNAVAILABLE');
+    expect(market).toContain('No market source is connected');
+    expect(market).not.toMatch(/\$\d|\d+%|fixture/);
+  });
+  it('settings disclose provider reads and Access identity without claiming saved account lists', () => {
+    const settings = readFileSync('app/settings/page.tsx', 'utf8');
+    expect(settings).toContain('Cloudflare Access verifies');
+    expect(settings).toContain('PublicNode');
+    expect(settings).not.toContain('no provider APIs');
+    expect(settings).toMatch(/save\s+address lists/);
+  });
+  it('balance observation and response completion have separate labels', () => {
+    const form = readFileSync('features/portfolio/track-form.tsx', 'utf8');
+    expect(form).toContain('Balance observation: ${feedTime(ok.observedAt)}');
+    expect(form).toContain('Response completed: ${ok.generatedAt');
+    expect(form).toContain('feed updated');
+  });
+});

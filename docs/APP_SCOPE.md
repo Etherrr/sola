@@ -51,3 +51,7 @@ Every normalized position needs: chain ID, normalized public address, provider/s
 
 ## Non-goals
 No wallets created or recovered by Sola; no trading; no mandatory user login; no external client deposits; no guarantees of universal protocol coverage. New functionality requires updated SPEC and owner review.
+
+## Current next-phase boundaries (2026-10-24)
+
+The owner has requested account-based portfolio tracking with Access identity, but deferred persistence during this reliability/source-preparation change. The no-database baseline remains in force. Account CRUD, cross-device returning-user lists and live Overview aggregation await the approved storage work package. The market page is source-pending with no figures; the disabled server adapter is preparation only. No market vendor is adopted. Detailed decisions and acceptance gates: [account design](PORTFOLIO_ACCOUNTS_DESIGN.md), [market sources](MARKET_SOURCES_REVIEW.md).

@@ -30,7 +30,13 @@ export type ApiSuccess = {
 };
 export type LookupOutcome =
   | { kind: 'ok'; data: ApiSuccess; address: string }
-  | { kind: 'error'; message: string; retryable: boolean; address: string };
+  | {
+      kind: 'error';
+      message: string;
+      retryable: boolean;
+      address: string;
+      retryAfterSeconds?: number;
+    };
 
 const DEC = /^\d+(\.\d+)?$/;
 const isStr = (v: unknown): v is string => typeof v === 'string';
@@ -48,6 +54,8 @@ export function parseApiSuccess(raw: unknown): ApiSuccess | null {
   if (raw.mode === 'mock' && raw.simulated !== true) return null;
   if (raw.mode === 'live' && raw.simulated !== false) return null;
   if (!isStr(raw.provider) || !isStr(raw.generatedAt) || !isStr(raw.observedAt)) return null;
+  if (!Number.isFinite(Date.parse(raw.generatedAt)) || !Number.isFinite(Date.parse(raw.observedAt)))
+    return null;
   if (typeof raw.partial !== 'boolean' || !strArr(raw.warnings)) return null;
   const t = raw.totals;
   if (!isObj(t) || !isDecOrNull(t.recognizedPricedSubtotalUsd)) return null;
@@ -88,12 +96,32 @@ const MESSAGES: Record<number, [string, boolean]> = {
 
 export type TrackNetwork = 'ethereum' | 'solana';
 
+/** Retry-After is a minimum wait, not a promise the upstream will recover. */
+export function retryAfterSeconds(header: string | null, now = Date.now()): number {
+  if (header && /^\d+$/.test(header.trim())) {
+    const seconds = Number(header.trim());
+    if (Number.isSafeInteger(seconds) && seconds <= 2 ** 31 - 1) return seconds;
+  }
+  if (
+    header &&
+    /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun), \d{2} [A-Z][a-z]{2} \d{4} \d{2}:\d{2}:\d{2} GMT$/.test(header)
+  ) {
+    const at = Date.parse(header);
+    if (Number.isFinite(at)) return Math.max(0, Math.ceil((at - now) / 1000));
+  }
+  return 30; // Our API's documented backoff when a proxy omits or corrupts the header.
+}
+
 export async function lookupAddress(
   address: string,
   network: TrackNetwork = 'ethereum',
+  signal?: AbortSignal,
 ): Promise<LookupOutcome> {
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), 12000);
+  const onAbort = () => ctl.abort();
+  signal?.addEventListener('abort', onAbort);
+  if (signal?.aborted) ctl.abort();
   try {
     const res = await fetch('/api/v1/portfolio/resolve', {
       method: 'POST',
@@ -112,9 +140,10 @@ export async function lookupAddress(
       }
       if (
         data &&
-        (network === 'ethereum'
-          ? data.wallets[0]!.address.toLowerCase() !== address.toLowerCase()
-          : data.wallets[0]!.address !== address)
+        (data.wallets.length !== 1 ||
+          (network === 'ethereum'
+            ? data.wallets[0]!.address.toLowerCase() !== address.toLowerCase()
+            : data.wallets[0]!.address !== address))
       )
         data = null;
       if (!data)
@@ -151,7 +180,15 @@ export async function lookupAddress(
       'The lookup failed. Nothing was substituted.',
       true,
     ];
-    return { kind: 'error', message, retryable, address };
+    return {
+      kind: 'error',
+      message,
+      retryable,
+      address,
+      ...(res.status === 429
+        ? { retryAfterSeconds: retryAfterSeconds(res.headers.get('retry-after')) }
+        : {}),
+    };
   } catch {
     return {
       kind: 'error',
@@ -161,6 +198,7 @@ export async function lookupAddress(
     };
   } finally {
     clearTimeout(timer);
+    signal?.removeEventListener('abort', onAbort);
   }
 }
 

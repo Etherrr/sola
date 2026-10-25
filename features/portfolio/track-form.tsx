@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ModeMarker } from '@/components/mode-marker';
 import { lookupAddress, type LookupOutcome } from './api-client';
 import { useTrackNetwork } from './track-network-context';
@@ -28,16 +28,42 @@ export function TrackForm({ mode = 'mock' }: { mode?: 'checking' | 'mock' | 'liv
   const [busy, setBusy] = useState(false);
   const [outcome, setOutcome] = useState<LookupOutcome | null>(null);
   const [exact, setExact] = useState(false);
+  const [retryAt, setRetryAt] = useState(0);
+  const [now, setNow] = useState(0);
+  const waiting = Math.max(0, Math.ceil((retryAt - now) / 1000));
+  const active = useRef<AbortController | null>(null);
+  const generation = useRef(0);
+  useEffect(
+    () => () => {
+      generation.current++;
+      active.current?.abort();
+    },
+    [],
+  );
+  // Only the display clock runs. There is never an automatic lookup or provider retry.
+  useEffect(() => {
+    if (!retryAt) return;
+    const tick = () => setNow(Date.now());
+    tick();
+    const timer = window.setInterval(() => {
+      tick();
+      if (Date.now() >= retryAt) window.clearInterval(timer);
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [retryAt]);
   const input = useRef<HTMLInputElement>(null);
   const output = useRef<HTMLDivElement>(null);
   // A network switch from the top-bar selector must reset the form exactly like the chips do,
   // so a stale address or result from the other network never sits under the new selection.
   const mounted = useRef(false);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!mounted.current) {
       mounted.current = true;
       return;
     }
+    generation.current++;
+    active.current?.abort();
+    setBusy(false);
     setValue('');
     setOutcome(null);
     setError(null);
@@ -60,7 +86,7 @@ export function TrackForm({ mode = 'mock' }: { mode?: 'checking' | 'mock' | 'liv
 
   async function run(raw: string) {
     // Never send an address before the mode is known: it could be a live lookup.
-    if (mode === 'checking') return;
+    if (mode === 'checking' || busy || Date.now() < retryAt) return;
     const address = raw.trim();
     setOutcome(null);
     setExact(false);
@@ -80,7 +106,17 @@ export function TrackForm({ mode = 'mock' }: { mode?: 'checking' | 'mock' | 'liv
     }
     setError(null);
     setBusy(true);
-    setOutcome(await lookupAddress(address, network));
+    const id = ++generation.current;
+    const ctl = new AbortController();
+    active.current = ctl;
+    const result = await lookupAddress(address, network, ctl.signal);
+    if (id !== generation.current || ctl.signal.aborted) return;
+    setOutcome(result);
+    if (result.kind === 'error' && result.retryAfterSeconds !== undefined) {
+      const completedAt = Date.now();
+      setNow(completedAt);
+      setRetryAt(completedAt + result.retryAfterSeconds * 1000);
+    }
     setBusy(false);
   }
 
@@ -153,8 +189,15 @@ export function TrackForm({ mode = 'mock' }: { mode?: 'checking' | 'mock' | 'liv
               {error}
             </p>
           )}
+          {waiting > 0 && (
+            <p className="fine">Retry available in {waiting} seconds. No automatic retry.</p>
+          )}
           <div className="actions">
-            <button className="button primary" type="submit" disabled={busy || mode === 'checking'}>
+            <button
+              className="button primary"
+              type="submit"
+              disabled={busy || mode === 'checking' || waiting > 0}
+            >
               {busy ? 'Looking up…' : mode === 'checking' ? 'Checking mode…' : 'Look up'}
             </button>
           </div>
@@ -173,7 +216,7 @@ export function TrackForm({ mode = 'mock' }: { mode?: 'checking' | 'mock' | 'liv
                   key={s.label}
                   type="button"
                   className="button secondary chip"
-                  disabled={busy}
+                  disabled={busy || waiting > 0}
                   onClick={() => {
                     setValue(s.address);
                     void run(s.address);
@@ -203,6 +246,24 @@ export function TrackForm({ mode = 'mock' }: { mode?: 'checking' | 'mock' | 'liv
               note="No balances are shown because the lookup did not complete. This result cannot tell you whether the wallet is empty."
             />
             <p>{outcome.message}</p>
+            {outcome.retryAfterSeconds !== undefined && (
+              <p className="fine">
+                {waiting > 0
+                  ? `Wait at least ${waiting} seconds before retrying.`
+                  : 'The suggested wait has passed.'}{' '}
+                This wait does not guarantee the source has recovered.
+              </p>
+            )}
+            {outcome.retryable && (
+              <button
+                type="button"
+                className="button secondary"
+                disabled={busy || waiting > 0}
+                onClick={() => void run(outcome.address)}
+              >
+                Retry lookup
+              </button>
+            )}
           </div>
         )}
         {ok && (
@@ -214,7 +275,7 @@ export function TrackForm({ mode = 'mock' }: { mode?: 'checking' | 'mock' | 'liv
               note={
                 ok.simulated
                   ? 'Fixed fixture data from this app. Nothing was read from a blockchain and these are not real balances.'
-                  : `Balances were read when you pressed Look up (${ok.generatedAt.slice(0, 19).replace('T', ' ')} UTC). Each price shows when its own feed last updated, which can be hours earlier.`
+                  : `Balance observation: ${feedTime(ok.observedAt)}. Response completed: ${ok.generatedAt.slice(0, 19).replace('T', ' ')} UTC. Each price shows when its own feed last updated, which can be hours earlier.`
               }
             />
             {canShowExact && (
