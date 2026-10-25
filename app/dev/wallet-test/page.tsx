@@ -22,7 +22,9 @@ export default function WalletTest() {
         <h2>What you are asked to approve</h2>
         <p>
           Linking a wallet asks your wallet app to{' '}
-          <strong>sign one short, domain-bound, expiring authentication message</strong>. That
+          <strong>sign one short, domain-bound, expiring authentication message</strong> - a plain
+          personal_sign on EVM or signMessage on Solana. It never uses permit or typed-data
+          payloads. That
           specific Sola sign-in message is not a transaction and grants no spending approval - it
           only proves you control the wallet, so the preview can treat it as yours. Other apps can
           ask for very different signatures that DO move funds or grant permissions, so always read
@@ -48,13 +50,14 @@ export default function WalletTest() {
 {`<the site's domain> wants you to sign in with your Ethereum account:
 <your wallet address>
 
-Sign in to Sola Lens preview to link this wallet to your account.
+Sign in to Sola.
 
 URI: <the page's address>
 Version: 1
 Chain ID: 1
-Nonce: <one-time code, valid 10 minutes>
-Issued At: <timestamp>`}
+Nonce: <one-time code>
+Issued At: <timestamp>
+Expiration Time: <timestamp, 10 minutes after issue>`}
         </pre>
         <p>
           Solana wallets sign a plain-text message with the same purpose and expiry instead; the
