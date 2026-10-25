@@ -80,8 +80,8 @@ describe('changesSincePrior', () => {
     const rows = changesSincePrior(
       [pos({ amount: '1.5' }), pos({ asset: asset('eth:0xb', 'UNI', 18), amount: '10' })],
       [
-        { assetId: 'eth:0xa', amount: '2', observedAt: '2026-10-25T11:00:00Z' },
-        { assetId: 'eth:0xb', amount: '10', observedAt: '2026-10-25T11:00:00Z' },
+        { assetId: 'eth:0xa', network: 'ethereum', address: '0xabc', kind: 'wallet_balance', amount: '2', observedAt: '2026-10-25T11:00:00Z' },
+        { assetId: 'eth:0xb', network: 'ethereum', address: '0xabc', kind: 'wallet_balance', amount: '10', observedAt: '2026-10-25T11:00:00Z' },
       ],
     )!;
     expect(rows).toHaveLength(1);
@@ -90,7 +90,7 @@ describe('changesSincePrior', () => {
   });
 
   it('a newly appeared asset is a change from 0', () => {
-    const rows = changesSincePrior([pos({})], [{ assetId: 'eth:0xb', amount: '5', observedAt: NOW }])!;
+    const rows = changesSincePrior([pos({})], [{ assetId: 'eth:0xb', network: 'ethereum', address: '0xabc', kind: 'wallet_balance', amount: '5', observedAt: NOW }])!;
     expect(rows[0].previousAmount).toBe('0');
     expect(rows[0].delta).toBe('1');
   });
@@ -130,5 +130,56 @@ describe('riskView', () => {
     expect(v.byAsset).toHaveLength(1);
     expect(v.byAsset[0].label).toBe('ETH');
     expect(v.partial).toBe(true);
+  });
+});
+
+describe('read model identity granularity (reviewer)', () => {
+  it('defiView groups EVM case forms of ONE address together', () => {
+    const rows = defiView([
+      pos({ kind: 'protocol_supplied', protocol: 'aave-v3', address: '0xABC', amount: '1', valueUsd: '3000' }),
+      pos({ kind: 'protocol_supplied', protocol: 'aave-v3', address: '0xabc', amount: '1', valueUsd: '3000' }),
+    ]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].supplied).toBe('2');
+  });
+
+  it('defiView NEVER merges Solana addresses differing only by case', () => {
+    const rows = defiView([
+      pos({ kind: 'protocol_supplied', protocol: 'marinade', network: 'solana', address: 'SoLabc', amount: '1', valueUsd: '10' }),
+      pos({ kind: 'protocol_supplied', protocol: 'marinade', network: 'solana', address: 'Solabc', amount: '1', valueUsd: '10' }),
+    ]);
+    expect(rows).toHaveLength(2);
+  });
+
+  it('defiView excludes stale USD from sums and flags it, never silently sums', () => {
+    const stale = new Date(now.getTime() - 2 * 60 * 60_000).toISOString();
+    const rows = defiView([
+      pos({ kind: 'protocol_supplied', protocol: 'aave-v3', amount: '1', valueUsd: '3000', price: { usd: '3000', source: 'test', observedAt: stale } }),
+    ]);
+    expect(rows[0].suppliedValueUsd).toBeNull();
+    expect(rows[0].priceStale).toBe(true);
+  });
+
+  it('changesSincePrior keys on full identity: same asset at TWO addresses never collapses', () => {
+    const rows = changesSincePrior(
+      [pos({ address: '0xAAA', amount: '1' }), pos({ address: '0xBBB', amount: '5' })],
+      [
+        { assetId: 'eth:0xa', network: 'ethereum', address: '0xaaa', kind: 'wallet_balance', amount: '1', observedAt: NOW },
+        { assetId: 'eth:0xa', network: 'ethereum', address: '0xbbb', kind: 'wallet_balance', amount: '4', observedAt: NOW },
+      ],
+    )!;
+    expect(rows).toHaveLength(1);
+    expect(rows[0].address).toBe('0xBBB');
+    expect(rows[0].delta).toBe('1');
+  });
+
+  it('changesSincePrior distinguishes kinds at the same address', () => {
+    const rows = changesSincePrior(
+      [pos({}), pos({ kind: 'protocol_supplied', protocol: 'aave-v3', amount: '2' })],
+      [{ assetId: 'eth:0xa', network: 'ethereum', address: '0xabc', kind: 'wallet_balance', amount: '1', observedAt: NOW }],
+    )!;
+    expect(rows).toHaveLength(1);
+    expect(rows[0].kind).toBe('protocol_supplied');
+    expect(rows[0].previousAmount).toBe('0');
   });
 });

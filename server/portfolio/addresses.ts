@@ -164,13 +164,6 @@ export async function handleAddressAdd(req: Request, env: NativeAuthEnv): Promis
   const portfolioId = await ensurePortfolio(db, userId, now);
   const canonical = canonicalOf(addr.network, addr.display);
 
-  const count = await db
-    .prepare(
-      `SELECT COUNT(*) AS n FROM portfolio_addresses
-        WHERE portfolio_id = ? AND network = ? AND removed_at IS NULL`,
-    )
-    .bind(portfolioId, addr.network)
-    .first<{ n: number }>();
   const active = await db
     .prepare(
       `SELECT verification, removed_at FROM portfolio_addresses
@@ -180,8 +173,6 @@ export async function handleAddressAdd(req: Request, env: NativeAuthEnv): Promis
     .first<{ verification: string; removed_at: string | null }>();
   if (active && !active.removed_at)
     return json(409, { error: 'address_exists', verification: active.verification, requestId });
-  if (!active && (count?.n ?? 0) >= MAX_ADDRESSES_PER_NETWORK)
-    return json(409, { error: 'too_many_addresses', max: MAX_ADDRESSES_PER_NETWORK, requestId });
 
   if (active?.removed_at) {
     // revive: keep the original verification class (a removed verified row is
@@ -194,14 +185,23 @@ export async function handleAddressAdd(req: Request, env: NativeAuthEnv): Promis
       .bind(label, portfolioId, addr.network, canonical)
       .run();
   } else {
+    // CAP ATOMICITY (reviewer 2026-10-25): the cap check lives INSIDE the
+    // insert statement - a concurrent adder at 4 rows can never push the book
+    // to 6, because SQLite serializes writers and the count is evaluated as
+    // part of this same statement.
     const r = await db
       .prepare(
         `INSERT INTO portfolio_addresses (portfolio_id, network, address, label, verification, created_at)
-         VALUES (?, ?, ?, ?, 'watched', ?)`,
+         SELECT ?, ?, ?, ?, 'watched', ?
+         WHERE (SELECT COUNT(*) FROM portfolio_addresses
+                 WHERE portfolio_id = ? AND network = ? AND removed_at IS NULL) < ?
+         ON CONFLICT(portfolio_id, network, address) DO NOTHING`,
       )
-      .bind(portfolioId, addr.network, canonical, label, now)
+      .bind(portfolioId, addr.network, canonical, label, now, portfolioId, addr.network, MAX_ADDRESSES_PER_NETWORK)
       .run();
     if (!r.success) throw new Error('address_insert_failed');
+    if ((r.meta?.changes ?? 0) === 0)
+      return json(409, { error: 'too_many_addresses', max: MAX_ADDRESSES_PER_NETWORK, requestId });
   }
   return json(200, {
     status: 'ok',

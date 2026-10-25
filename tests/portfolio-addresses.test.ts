@@ -156,3 +156,20 @@ describe('address manager (session-gated)', () => {
     expect(r.status).toBe(403);
   });
 });
+
+describe('cap race atomicity (both writers)', () => {
+  const evmAt = (i: number) => toChecksumAddress('1'.repeat(36) + i.toString(16).padStart(4, '0'));
+
+  it('concurrent adds at 4 rows land exactly 5, loser gets 409 - never 6', async () => {
+    for (let i = 0; i < 4; i++)
+      expect((await handleAddressAdd(req('POST', { network: 'ethereum', address: evmAt(i), label: `w${i}` }, cookie), env)).status).toBe(200);
+    const [r1, r2] = await Promise.all([
+      handleAddressAdd(req('POST', { network: 'ethereum', address: evmAt(4), label: 'w4' }, cookie), env),
+      handleAddressAdd(req('POST', { network: 'ethereum', address: evmAt(5), label: 'w5' }, cookie), env),
+    ]);
+    const statuses = [r1.status, r2.status].sort();
+    expect(statuses).toEqual([200, 409]);
+    const n = await db.prepare("SELECT COUNT(*) AS n FROM portfolio_addresses WHERE network='ethereum' AND removed_at IS NULL").bind().first<{ n: number }>();
+    expect(n!.n).toBe(5);
+  });
+});

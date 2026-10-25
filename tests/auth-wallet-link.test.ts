@@ -270,3 +270,32 @@ describe('wallet link cap + portfolio race safety', () => {
     expect(threw).toBe(true);
   });
 });
+
+describe('link cap race atomicity', () => {
+  it('concurrent links of two NEW wallets at 4 rows: one links, one 409, exactly 5 rows', async () => {
+    const cookie = await makeUser('u1');
+    const mk = () => {
+      const priv = secp256k1.utils.randomPrivateKey();
+      const address = toEip55('0x' + [...keccak_256(secp256k1.getPublicKey(priv, false).slice(1))].slice(-20).map((b) => b.toString(16).padStart(2, '0')).join(''));
+      return { priv, address };
+    };
+    for (let i = 0; i < 4; i++) {
+      const w = mk();
+      const ch = await handleWalletLinkChallenge(post({ address: w.address }, cookie), env, 'evm');
+      const { message } = (await ch.json()) as { message: string };
+      expect((await handleWalletLinkVerify(post({ address: w.address, message, signature: signEvm(w.priv)(message) }, cookie), env, 'evm')).status).toBe(200);
+    }
+    const link = async (w: { priv: Uint8Array; address: string }) => {
+      const ch = await handleWalletLinkChallenge(post({ address: w.address }, cookie), env, 'evm');
+      const { message } = (await ch.json()) as { message: string };
+      return handleWalletLinkVerify(post({ address: w.address, message, signature: signEvm(w.priv)(message) }, cookie), env, 'evm');
+    };
+    const [r1, r2] = await Promise.all([link(mk()), link(mk())]);
+    expect([r1.status, r2.status].sort()).toEqual([200, 409]);
+    const n = await db.prepare("SELECT COUNT(*) AS n FROM portfolio_addresses WHERE network='ethereum' AND removed_at IS NULL").bind().first<{ n: number }>();
+    expect(n!.n).toBe(5);
+    // the refused wallet left NO identity/link residue
+    const ids = await db.prepare("SELECT COUNT(*) AS n FROM auth_identities WHERE kind='wallet_evm'").bind().first<{ n: number }>();
+    expect(ids!.n).toBe(5);
+  });
+});

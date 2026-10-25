@@ -9,6 +9,15 @@
  * - "Prior observation" = the most recent DISTINCT observed_at strictly before
  *   the latest one. With only one observation the honest answer is null
  *   ("first recorded observation") - never a fabricated zero baseline.
+ * - COMPLETE RUNS ONLY (reviewer 2026-10-25): both the latest and the prior
+ *   observation are drawn exclusively from sync_runs with
+ *   completeness='complete'. A partial run (e.g. only Solana succeeded) is
+ *   NEVER a comparison baseline - otherwise an asset absent from the partial
+ *   prior would falsely read as "new" / a gain against zero. When no complete
+ *   prior exists the answer is null = "unknown", never zero.
+ * - SCOPE: spot balances only (balance_snapshots). DeFi/position history needs
+ *   position_snapshots reads before any overall-delta claim; callers must
+ *   label deltas as spot-only until then.
  * - Consent-withdrawn users have no rows (withdrawal deletes history), so the
  *   honest empty state falls out naturally.
  */
@@ -30,7 +39,8 @@ export async function loadBalanceHistory(db: ChallengeDb, userId: string): Promi
       `SELECT DISTINCT bs.observed_at AS t
          FROM balance_snapshots bs
          JOIN portfolios pf ON pf.id = bs.portfolio_id
-        WHERE pf.user_id = ?
+         JOIN sync_runs sr ON sr.id = bs.sync_run_id
+        WHERE pf.user_id = ? AND sr.completeness = 'complete'
         ORDER BY bs.observed_at DESC
         LIMIT 2`,
     )
@@ -42,10 +52,12 @@ export async function loadBalanceHistory(db: ChallengeDb, userId: string): Promi
     (
       await db
         .prepare(
-          `SELECT bs.asset_id AS assetId, bs.amount AS amount, bs.observed_at AS observedAt
+          `SELECT bs.asset_id AS assetId, bs.network AS network, bs.address AS address,
+                  'wallet_balance' AS kind, bs.amount AS amount, bs.observed_at AS observedAt
              FROM balance_snapshots bs
              JOIN portfolios pf ON pf.id = bs.portfolio_id
-            WHERE pf.user_id = ? AND bs.observed_at = ?
+             JOIN sync_runs sr ON sr.id = bs.sync_run_id
+            WHERE pf.user_id = ? AND bs.observed_at = ? AND sr.completeness = 'complete'
             ORDER BY bs.asset_id`,
         )
         .bind(userId, t)

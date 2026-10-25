@@ -14,6 +14,7 @@
  */
 import {
   addDecimal,
+  addressKey,
   divDecimal,
   isPriceFresh,
   isZero,
@@ -110,8 +111,12 @@ export type ProtocolPositionRow = {
   debt: string;
   /** Signed net (supplied - debt); may be negative. */
   net: string;
+  /** USD sums over FRESH-priced contributions only; stale prices are excluded
+   *  (never silently summed) and flagged via priceStale. */
   suppliedValueUsd: string | null;
   debtValueUsd: string | null;
+  /** TRUE when any contributing position had a price too stale to use. */
+  priceStale: boolean;
   observedAt: string;
 };
 
@@ -119,7 +124,9 @@ export function defiView(positions: Position[]): ProtocolPositionRow[] {
   const keys = new Map<string, ProtocolPositionRow>();
   for (const p of positions) {
     if (p.protocol === null || p.kind === 'wallet_balance') continue;
-    const k = [p.protocol, p.network, p.address, p.asset.assetId].join('|');
+    // Chain-aware identity: two EVM case forms of ONE address group together;
+    // two Solana addresses differing only by case NEVER merge.
+    const k = [p.protocol, p.network, addressKey(p.network, p.address), p.asset.assetId].join('|');
     if (!keys.has(k)) {
       keys.set(k, {
         protocol: p.protocol,
@@ -132,16 +139,19 @@ export function defiView(positions: Position[]): ProtocolPositionRow[] {
         net: '0',
         suppliedValueUsd: null,
         debtValueUsd: null,
+        priceStale: false,
         observedAt: p.observedAt,
       });
     }
     const row = keys.get(k)!;
+    const fresh = isPriceFresh(p);
+    if (p.price !== null && !fresh) row.priceStale = true;
     if (p.kind === 'protocol_supplied') {
       row.supplied = addDecimal(row.supplied, p.amount);
-      if (p.valueUsd !== null) row.suppliedValueUsd = addDecimal(row.suppliedValueUsd ?? '0', p.valueUsd);
+      if (p.valueUsd !== null && fresh) row.suppliedValueUsd = addDecimal(row.suppliedValueUsd ?? '0', p.valueUsd);
     } else {
       row.debt = addDecimal(row.debt, p.amount);
-      if (p.valueUsd !== null) row.debtValueUsd = addDecimal(row.debtValueUsd ?? '0', p.valueUsd);
+      if (p.valueUsd !== null && fresh) row.debtValueUsd = addDecimal(row.debtValueUsd ?? '0', p.valueUsd);
     }
     if (p.observedAt > row.observedAt) row.observedAt = p.observedAt;
   }
@@ -152,11 +162,26 @@ export function defiView(positions: Position[]): ProtocolPositionRow[] {
 
 /* ---------- Overview: change since prior observation ---------- */
 
-export type ObservedAmount = { assetId: string; amount: string; observedAt: string };
+export type ObservedAmount = {
+  assetId: string;
+  network: 'ethereum' | 'solana';
+  address: string;
+  kind: Position['kind'];
+  amount: string;
+  observedAt: string;
+};
+
+/** Identity of one observed position: asset at an address on a network of a
+ *  kind - chain-aware addressKey, so EVM case forms reconcile and Solana
+ *  case-distinct addresses never collapse into one history. */
+const obsKey = (o: { assetId: string; network: 'ethereum' | 'solana'; address: string; kind: Position['kind'] }): string =>
+  [o.assetId, o.network, addressKey(o.network, o.address), o.kind].join('|');
 
 export type ChangeRow = {
   assetId: string;
   symbol: string;
+  network: Position['network'];
+  address: string;
   kind: Position['kind'];
   previousAmount: string;
   currentAmount: string;
@@ -172,17 +197,22 @@ export function changesSincePrior(
   prior: ObservedAmount[] | null,
 ): ChangeRow[] | null {
   if (prior === null || prior.length === 0) return null;
-  const priorByAsset = new Map(prior.map((o) => [o.assetId, o.amount]));
+  // Sum duplicate identities (defensive: the writer dedupes, the reader never
+  // assumes) so both sides of the comparison share ONE granularity.
+  const priorByKey = new Map<string, string>();
+  for (const o of prior) priorByKey.set(obsKey(o), addDecimal(priorByKey.get(obsKey(o)) ?? '0', o.amount));
   const out: ChangeRow[] = [];
   for (const p of current) {
-    const prev = priorByAsset.get(p.asset.assetId);
+    const key = obsKey({ assetId: p.asset.assetId, network: p.network, address: p.address, kind: p.kind });
+    const prev = priorByKey.get(key);
     if (prev === undefined) {
-      if (!isZero(p.amount)) out.push({ assetId: p.asset.assetId, symbol: p.asset.symbol, kind: p.kind, previousAmount: '0', currentAmount: p.amount, delta: p.amount });
+      if (!isZero(p.amount))
+        out.push({ assetId: p.asset.assetId, symbol: p.asset.symbol, network: p.network, address: p.address, kind: p.kind, previousAmount: '0', currentAmount: p.amount, delta: p.amount });
       continue;
     }
     const delta = subDecimal(p.amount, prev);
     if (!isZero(delta))
-      out.push({ assetId: p.asset.assetId, symbol: p.asset.symbol, kind: p.kind, previousAmount: prev, currentAmount: p.amount, delta });
+      out.push({ assetId: p.asset.assetId, symbol: p.asset.symbol, network: p.network, address: p.address, kind: p.kind, previousAmount: prev, currentAmount: p.amount, delta });
   }
   return out;
 }
