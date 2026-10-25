@@ -60,9 +60,10 @@ export async function issueChallenge(
   subject: string,
   ttlMs: number,
   now: Date = new Date(),
+  secretOverride?: string,
 ): Promise<IssuedChallenge> {
   const id = newId();
-  const secret = randomHex(kind === 'email_code' ? 4 : 24);
+  const secret = secretOverride ?? randomHex(kind === 'email_code' ? 4 : 24);
   const expiresAt = new Date(now.getTime() + ttlMs).toISOString();
   const r = await db
     .prepare(

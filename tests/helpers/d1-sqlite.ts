@@ -33,8 +33,18 @@ export function createSqliteD1(): { db: D1Like; raw: DatabaseSync } {
         },
       };
     },
-    async batch() {
-      return [];
+    // Real transactional batch: all statements commit together or roll back.
+    async batch(stmts: { run(): Promise<unknown> }[]) {
+      raw.exec('BEGIN');
+      try {
+        const out: unknown[] = [];
+        for (const st of stmts) out.push(await st.run());
+        raw.exec('COMMIT');
+        return out;
+      } catch (e) {
+        raw.exec('ROLLBACK');
+        throw e;
+      }
     },
   };
   return { db, raw };

@@ -24,9 +24,14 @@ const post = (body: unknown, cookie?: string, origin: string | null = 'https://p
   });
 
 const b64url = (s: string) => btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+const b64urlBytes = (b: Uint8Array) => btoa(String.fromCharCode(...b)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+// Standard browser shape: Registration/AuthenticationResponseJSON nests
+// clientDataJSON under .response.
 const responseWithChallenge = (challenge: string, id = 'cred-1') => ({
   id,
-  clientDataJSON: b64url(JSON.stringify({ challenge, origin: 'https://preview.test', type: 'webauthn.get' })),
+  response: {
+    clientDataJSON: b64url(JSON.stringify({ challenge, origin: 'https://preview.test', type: 'webauthn.get' })),
+  },
 });
 
 let db: ReturnType<typeof createSqliteD1>['db'];
@@ -38,9 +43,9 @@ beforeEach(async () => {
   ({ db } = createSqliteD1());
   env = { NATIVE_AUTH_ENABLED: 'true', PORTFOLIO_ACCOUNTS_DB: db };
   deps = {
-    generateRegistrationOptions: (async (o: { challenge: string }) => {
-      lastOptionsChallenge = o.challenge;
-      return { challenge: o.challenge };
+    generateRegistrationOptions: (async (o: { challenge: Uint8Array }) => {
+      lastOptionsChallenge = b64urlBytes(o.challenge); // what the authenticator echoes
+      return { challenge: lastOptionsChallenge };
     }) as never,
     verifyRegistrationResponse: (async (o: { expectedChallenge: string; expectedRPID: string; expectedOrigin: string }) => {
       if (o.expectedRPID !== 'preview.test' || o.expectedOrigin !== 'https://preview.test')
@@ -52,9 +57,9 @@ beforeEach(async () => {
         },
       };
     }) as never,
-    generateAuthenticationOptions: (async (o: { challenge: string }) => {
-      lastOptionsChallenge = o.challenge;
-      return { challenge: o.challenge };
+    generateAuthenticationOptions: (async (o: { challenge: Uint8Array }) => {
+      lastOptionsChallenge = b64urlBytes(o.challenge);
+      return { challenge: lastOptionsChallenge };
     }) as never,
     verifyAuthenticationResponse: (async () => ({
       verified: true,

@@ -6,6 +6,7 @@ import { handleWalletLinkChallenge, handleWalletLinkVerify } from '../server/aut
 import { toEip55, personalSignDigest } from '../server/auth/siwe';
 import { SESSION_COOKIE, type NativeAuthEnv } from '../server/auth/email';
 import { createSession } from '../server/auth/sessions';
+import type { createSqliteD1 as CreateD1 } from './helpers/d1-sqlite';
 
 const post = (body: unknown, cookie?: string, origin: string | null = 'https://preview.test'): Request =>
   new Request('https://preview.test/api/v1/auth/wallet/link/x', {
@@ -29,12 +30,20 @@ const signEvm = (priv: Uint8Array) => (message: string): string => {
   return '0x' + hex(sig.toCompactRawBytes()) + (sig.recovery! + 27).toString(16).padStart(2, '0');
 };
 
-let db: ReturnType<typeof createSqliteD1>['db'];
+let db: ReturnType<typeof CreateD1>['db'];
+let raw: ReturnType<typeof CreateD1>['raw'];
 let env: NativeAuthEnv;
 beforeEach(() => {
-  ({ db } = createSqliteD1());
+  ({ db, raw } = createSqliteD1());
   env = { NATIVE_AUTH_ENABLED: 'true', PORTFOLIO_ACCOUNTS_DB: db };
 });
+
+const makeStaleUser = async (id: string) => {
+  const cookie = await makeUser(id);
+  // Backdate the session past the 10-minute re-auth window.
+  raw.exec("UPDATE sessions SET created_at = strftime('%Y-%m-%dT%H:%M:%fZ','now','-30 minutes')");
+  return cookie;
+};
 
 const makeUser = async (id: string) => {
   const now = new Date().toISOString();
@@ -118,6 +127,49 @@ describe('wallet link (authenticated, fresh challenge, no auto-transfer)', () =>
     const good = await handleWalletLinkVerify(
       post({ address: evmAddress, message, signature: signEvm(evmPriv)(message) }, cookie), env, 'evm');
     expect(good.status).toBe(200);
+  });
+
+  it('a stale (14-day-age) session is refused on BOTH link endpoints (reauth required)', async () => {
+    const cookie = await makeStaleUser('u1');
+    const c = await handleWalletLinkChallenge(post({ address: evmAddress }, cookie), env, 'evm');
+    expect(c.status).toBe(403);
+    expect(((await c.json()) as { error: string }).error).toBe('reauth_required');
+    const v = await handleWalletLinkVerify(
+      post({ address: evmAddress, message: 'x', signature: 'y' }, cookie), env, 'evm');
+    expect(v.status).toBe(403);
+    expect(((await v.json()) as { error: string }).error).toBe('reauth_required');
+  });
+
+  it('a failed batch rolls back BOTH inserts (no partial identity without wallet_links)', async () => {
+    const cookie = await makeUser('u1');
+    raw.exec("CREATE TRIGGER fail_links BEFORE INSERT ON wallet_links BEGIN SELECT RAISE(ABORT, 'forced failure'); END");
+    const ch = await handleWalletLinkChallenge(post({ address: evmAddress }, cookie), env, 'evm');
+    const { message } = (await ch.json()) as { message: string };
+    await expect(
+      handleWalletLinkVerify(post({ address: evmAddress, message, signature: signEvm(evmPriv)(message) }, cookie), env, 'evm'),
+    ).rejects.toThrow();
+    const ident = await db
+      .prepare("SELECT user_id FROM auth_identities WHERE kind='wallet_evm' AND identifier=?")
+      .bind(evmAddress.toLowerCase()).first<{ user_id: string }>();
+    expect(ident).toBeNull(); // identity rolled back with the failed link insert
+  });
+
+  it('idempotent re-link REPAIRS a partial earlier write (identity without wallet_links)', async () => {
+    const cookie = await makeUser('u1');
+    // partial state: identity exists, wallet_links row missing
+    const now = new Date().toISOString();
+    await db
+      .prepare("INSERT INTO auth_identities (id, user_id, kind, identifier, verified_at) VALUES ('i1','u1','wallet_evm',?,?)")
+      .bind(evmAddress.toLowerCase(), now).run();
+    const ch = await handleWalletLinkChallenge(post({ address: evmAddress }, cookie), env, 'evm');
+    const { message } = (await ch.json()) as { message: string };
+    const r = await handleWalletLinkVerify(
+      post({ address: evmAddress, message, signature: signEvm(evmPriv)(message) }, cookie), env, 'evm');
+    expect(((await r.json()) as { linked: string }).linked).toBe('repaired');
+    const link = await db
+      .prepare("SELECT user_id FROM wallet_links WHERE address=?")
+      .bind(evmAddress).first<{ user_id: string }>();
+    expect(link!.user_id).toBe('u1');
   });
 
   it('a different wallet than the challenged one cannot claim (address binding)', async () => {

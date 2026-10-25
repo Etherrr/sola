@@ -87,11 +87,21 @@ const b64url = (bytes: Uint8Array): string =>
 const fromB64url = (s: string): Uint8Array =>
   Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
 
+/** The WebAuthn challenge secret = base64url of 32 random bytes. The BYTES are
+ *  handed to simplewebauthn; the authenticator echoes exactly this base64url
+ *  string in clientDataJSON, so the stored secret_hash matches the claim value. */
+function newWebauthnChallenge(): { bytes: Uint8Array<ArrayBuffer>; b64: string } {
+  const bytes = crypto.getRandomValues(new Uint8Array(new ArrayBuffer(32)));
+  return { bytes, b64: b64url(bytes) };
+}
+
 /** Extract the clientDataJSON challenge WITHOUT trusting it - it only locates
- *  the server-issued challenge to claim; cryptographic checks come after. */
-function clientChallenge(response: { clientDataJSON?: string } | null): string | null {
+ *  the server-issued challenge to claim; cryptographic checks come after.
+ *  `response` is the full Registration/AuthenticationResponseJSON whose nested
+ *  .response.clientDataJSON carries the challenge (standard browser shape). */
+function clientChallenge(response: { response?: { clientDataJSON?: string } } | null): string | null {
   try {
-    const raw = (response as { clientDataJSON: string }).clientDataJSON;
+    const raw = (response as { response: { clientDataJSON: string } }).response.clientDataJSON;
     const jsonStr = new TextDecoder().decode(fromB64url(raw));
     const parsed = JSON.parse(jsonStr) as { challenge?: string };
     return typeof parsed.challenge === 'string' ? parsed.challenge : null;
@@ -124,12 +134,13 @@ export async function handlePasskeyRegisterOptions(
   const user = await liveUser(req, db);
   if (user instanceof Response) return user;
   const { rpID, origin } = rpOf(req);
-  const issued = await issueChallenge(db, 'webauthn_register', user, TTL_MS);
+  const wc = newWebauthnChallenge();
+  const issued = await issueChallenge(db, 'webauthn_register', user, TTL_MS, new Date(), wc.b64);
   const options = await deps.generateRegistrationOptions({
     rpName: 'Sola',
     rpID,
     userName: user,
-    challenge: issued.secret,
+    challenge: wc.bytes,
     attestationType: 'none',
     authenticatorSelection: { residentKey: 'preferred', userVerification: 'preferred' },
   });
@@ -151,8 +162,10 @@ export async function handlePasskeyRegisterVerify(
   const db = env.PORTFOLIO_ACCOUNTS_DB;
   const user = await liveUser(req, db);
   if (user instanceof Response) return user;
-  const body = (await req.json().catch(() => null)) as { response?: { clientDataJSON?: string } } | null;
-  if (!body?.response) return json(400, { error: 'invalid_request', requestId });
+  const body = (await req.json().catch(() => null)) as {
+    response?: { response?: { clientDataJSON?: string } };
+  } | null;
+  if (!body?.response?.response?.clientDataJSON) return json(400, { error: 'invalid_request', requestId });
   const challenge = clientChallenge(body.response);
   if (!challenge) return json(400, { error: 'invalid_request', requestId });
 
@@ -191,8 +204,12 @@ export async function handlePasskeyRegisterVerify(
       )
       .bind(crypto.randomUUID(), user, reg.credential.id, new Date().toISOString(), JSON.stringify(meta))
       .run();
-  } catch {
-    return json(409, { error: 'credential_exists', requestId });
+  } catch (e) {
+    // Only the UNIQUE constraint conflict is a safe 409; other DB failures
+    // must not be masked as conflicts.
+    if (e instanceof Error && /unique/i.test(e.message))
+      return json(409, { error: 'credential_exists', requestId });
+    throw e;
   }
   return json(200, { status: 'ok', credentialId: reg.credential.id, requestId });
 }
@@ -217,10 +234,11 @@ export async function handlePasskeyLoginOptions(
   const lim = await limiter.check(req.headers.get('cf-connecting-ip') ?? 'unknown');
   if (!lim.allowed)
     return json(429, { error: 'rate_limited', retryAfterSec: lim.retryAfterSec, requestId });
-  const issued = await issueChallenge(db, 'webauthn_login', challengeId, TTL_MS);
+  const wc = newWebauthnChallenge();
+  const issued = await issueChallenge(db, 'webauthn_login', challengeId, TTL_MS, new Date(), wc.b64);
   const options = await deps.generateAuthenticationOptions({
     rpID,
-    challenge: issued.secret,
+    challenge: wc.bytes,
     userVerification: 'preferred',
   });
   return json(200, { status: 'ok', challengeId, options, expiresAt: issued.expiresAt, requestId });
@@ -241,7 +259,7 @@ export async function handlePasskeyLoginVerify(
   const db = env.PORTFOLIO_ACCOUNTS_DB;
   const body = (await req.json().catch(() => null)) as {
     challengeId?: string;
-    response?: { clientDataJSON?: string; id?: string };
+    response?: { id?: string; response?: { clientDataJSON?: string } };
   } | null;
   if (!body?.challengeId || !body?.response?.id) return json(400, { error: 'invalid_request', requestId });
   const challenge = clientChallenge(body.response);

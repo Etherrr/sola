@@ -20,13 +20,11 @@ export type D1Like = {
       first<T>(): Promise<T | null>;
     };
   };
+  // Callers pass BOUND statements (the result of prepare(sql).bind(...)), as
+  // with the real D1 API; batch commits them atomically.
   batch(
     statements: {
-      bind(...args: unknown[]): {
-        run(): Promise<{ success: boolean }>;
-        all<T>(): Promise<{ results: T[] }>;
-        first<T>(): Promise<T | null>;
-      };
+      run(): Promise<{ success: boolean; meta?: { changes?: number } }>;
     }[],
   ): Promise<unknown[]>;
 };

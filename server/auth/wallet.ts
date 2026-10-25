@@ -18,7 +18,7 @@ import {
   recordFailedAttempt,
   type ChallengeDb,
 } from './challenges';
-import { createSession, readLiveSession } from './sessions';
+import { createSession, readLiveSession, recentlyAuthenticated, type SessionRow } from './sessions';
 import { requireSameOrigin } from './guards';
 import { createD1Limiter } from '../accounts/d1-limiter';
 import type { LimitWindow } from '../accounts/limiter';
@@ -252,12 +252,20 @@ const linkKindOf = kindOf;
 const linkSubjectOf = (userId: string, addrSubject: string): string =>
   `link:${userId}:${addrSubject}`;
 
-async function sessionUserId(req: Request, db: ChallengeDb): Promise<string | null> {
+/** Link endpoints are account-sensitive: they require a live session that was
+ *  FRESHLY authenticated (created within SENSITIVE_REAUTH_MS = 10 min). A
+ *  long-lived 14-day session alone is never enough to attach a wallet. */
+async function freshSessionUser(req: Request, db: ChallengeDb): Promise<{ userId: string } | Response> {
   const id = readSessionCookie(req);
-  if (!id) return null;
-  const session = await readLiveSession(db, id);
-  return session?.user_id ?? null;
+  if (!id) return json(401, { error: 'not_authenticated' });
+  const session: SessionRow | null = await readLiveSession(db, id);
+  if (!session) return json(401, { error: 'session_expired' });
+  if (!recentlyAuthenticated(session)) return json(403, { error: 'reauth_required' });
+  return { userId: session.user_id };
 }
+
+const isUniqueViolation = (e: unknown): boolean =>
+  e instanceof Error && /unique/i.test(e.message);
 
 /** POST {address} with a live session -> {message, expiresAt}. Lets a signed-in
  *  user prove ownership of an additional wallet and link it to THIS account. */
@@ -277,8 +285,12 @@ export async function handleWalletLinkChallenge(
     return json(503, { error: 'not_configured', message: 'Native sign-in is not configured.', requestId });
 
   const db = env.PORTFOLIO_ACCOUNTS_DB;
-  const userId = await sessionUserId(req, db);
-  if (!userId) return json(401, { error: 'not_authenticated', requestId });
+  const authed = await freshSessionUser(req, db);
+  if (authed instanceof Response) {
+    const r = authed;
+    return json(r.status, { ...(await r.json()) as object, requestId });
+  }
+  const userId = authed.userId;
 
   let body: Record<string, unknown>;
   try {
@@ -324,8 +336,12 @@ export async function handleWalletLinkVerify(
     return json(503, { error: 'not_configured', message: 'Native sign-in is not configured.', requestId });
 
   const db = env.PORTFOLIO_ACCOUNTS_DB;
-  const userId = await sessionUserId(req, db);
-  if (!userId) return json(401, { error: 'not_authenticated', requestId });
+  const authed = await freshSessionUser(req, db);
+  if (authed instanceof Response) {
+    const r = authed;
+    return json(r.status, { ...(await r.json()) as object, requestId });
+  }
+  const userId = authed.userId;
 
   let body: Record<string, unknown>;
   try {
@@ -382,25 +398,46 @@ export async function handleWalletLinkVerify(
     .first<{ user_id: string }>();
   if (existing && existing.user_id !== userId)
     return json(409, { error: 'wallet_linked_elsewhere', requestId });
-  if (existing)
-    return json(200, { status: 'ok', linked: 'already', requestId });
 
   const now = new Date().toISOString();
-  const r1 = await db
-    .prepare(
-      `INSERT INTO auth_identities (id, user_id, kind, identifier, verified_at)
-       VALUES (?, ?, ?, ?, ?)`,
-    )
-    .bind(crypto.randomUUID(), userId, identityKind, addr.subject, now)
-    .run();
-  if (!r1.success) throw new Error('identity_insert_failed');
-  const r2 = await db
-    .prepare(
-      `INSERT INTO wallet_links (chain, address, user_id, verified_at, challenge_id)
-       VALUES (?, ?, ?, ?, ?)`,
-    )
-    .bind(linkChainOf(chain), addr.display, userId, now, challenge?.id ?? '')
-    .run();
-  if (!r2.success) throw new Error('wallet_link_insert_failed');
+  if (existing) {
+    // Same account: idempotent - but REPAIR a partial earlier write (identity
+    // without its wallet_links row) instead of skipping it forever.
+    const link = await db
+      .prepare(`SELECT rowid FROM wallet_links WHERE chain = ? AND address = ? AND user_id = ?`)
+      .bind(linkChainOf(chain), addr.display, userId)
+      .first<{ rowid: number }>();
+    if (!link) {
+      await db
+        .prepare(
+          `INSERT INTO wallet_links (chain, address, user_id, verified_at, challenge_id)
+           VALUES (?, ?, ?, ?, ?)`,
+        )
+        .bind(linkChainOf(chain), addr.display, userId, now, challenge?.id ?? '')
+        .run();
+      return json(200, { status: 'ok', linked: 'repaired', requestId });
+    }
+    return json(200, { status: 'ok', linked: 'already', requestId });
+  }
+
+  // identity + wallet_links commit ATOMICALLY via batch - no partial link.
+  // A concurrent linker loses the UNIQUE race: only that constraint conflict
+  // maps to a safe 409; any other DB failure propagates as a real error.
+  const batch = (db as unknown as { batch: (stmts: unknown[]) => Promise<unknown[]> }).batch.bind(db);
+  try {
+    await batch([
+      db.prepare(
+        `INSERT INTO auth_identities (id, user_id, kind, identifier, verified_at)
+         VALUES (?, ?, ?, ?, ?)`,
+      ).bind(crypto.randomUUID(), userId, identityKind, addr.subject, now),
+      db.prepare(
+        `INSERT INTO wallet_links (chain, address, user_id, verified_at, challenge_id)
+         VALUES (?, ?, ?, ?, ?)`,
+      ).bind(linkChainOf(chain), addr.display, userId, now, challenge?.id ?? ''),
+    ]);
+  } catch (e) {
+    if (isUniqueViolation(e)) return json(409, { error: 'wallet_linked_elsewhere', requestId });
+    throw e;
+  }
   return json(200, { status: 'ok', linked: 'added', requestId });
 }
