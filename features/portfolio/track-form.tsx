@@ -22,7 +22,7 @@ const feedTime = (iso: string) => iso.slice(0, 16).replace('T', ' ') + ' UTC';
 export function TrackForm({ mode = 'mock' }: { mode?: 'checking' | 'mock' | 'live' | 'unknown' }) {
   const examples = mode === 'mock';
   // Shared with the top-bar network selector: both controls drive one Track network choice.
-  const { network, setNetwork } = useTrackNetwork();
+  const { network, setNetwork, prefill, clearPrefill } = useTrackNetwork();
   const [value, setValue] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -64,10 +64,25 @@ export function TrackForm({ mode = 'mock' }: { mode?: 'checking' | 'mock' | 'liv
     generation.current++;
     active.current?.abort();
     setBusy(false);
-    setValue('');
+    setValue(prefill ?? '');
     setOutcome(null);
     setError(null);
   }, [network]);
+  // A saved-address prefill replaces the form text (and may have switched the network) but
+  // NEVER runs the lookup itself: the user still presses Look up. Consumed once, then focused.
+  useLayoutEffect(() => {
+    if (!prefill) return;
+    generation.current++;
+    active.current?.abort();
+    setBusy(false);
+    setValue(prefill);
+    setOutcome(null);
+    setError(null);
+    clearPrefill();
+    const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    input.current?.scrollIntoView({ block: 'center', behavior: calm ? 'auto' : 'smooth' });
+    input.current?.focus({ preventScroll: true });
+  }, [prefill]);
   // After a completed lookup, bring the result or error into view and move focus to it, so the
   // outcome is not hidden below the controls on a phone. Motion is skipped when the user asks.
   useEffect(() => {

@@ -1,5 +1,5 @@
 'use client';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSession } from './session-context';
 import { useTrackNetwork } from './track-network-context';
 import {
@@ -47,7 +47,7 @@ function failureText(f: AccountsFailure, maxPerNetwork: number): string {
 
 export function AccountsPanel() {
   const session = useSession();
-  const { network } = useTrackNetwork();
+  const { network, prefillAddress } = useTrackNetwork();
   const [load, setLoad] = useState<Load>({ kind: 'idle' });
   const [failure, setFailure] = useState<AccountsFailure | null>(null);
   const [busy, setBusy] = useState(false);
@@ -65,14 +65,24 @@ export function AccountsPanel() {
   const [removing, setRemoving] = useState<string | null>(null);
   const [clearing, setClearing] = useState(false);
   const email = session.kind === 'verified' ? session.email : null;
+  // In-flight guard: a mutation started under one identity must not apply its result after the
+  // identity expired or changed. The identity effect reloads for the new identity anyway.
+  const emailRef = useRef(email);
+  useEffect(() => {
+    emailRef.current = email;
+  }, [email]);
 
-  const refresh = useCallback(async (signal?: AbortSignal) => {
-    setLoad({ kind: 'loading' });
-    const r = await listAccounts(signal);
-    if (signal?.aborted) return;
-    if (r.kind === 'ok') setLoad({ kind: 'ready', accounts: r.accounts, maxPerNetwork: r.maxPerNetwork });
-    else setLoad({ kind: 'failed', failure: r });
-  }, []);
+  const refresh = useCallback(
+    async (signal?: AbortSignal) => {
+      const atEmail = emailRef.current;
+      setLoad({ kind: 'loading' });
+      const r = await listAccounts(signal);
+      if (signal?.aborted || emailRef.current !== atEmail) return;
+      if (r.kind === 'ok') setLoad({ kind: 'ready', accounts: r.accounts, maxPerNetwork: r.maxPerNetwork });
+      else setLoad({ kind: 'failed', failure: r });
+    },
+    [],
+  );
 
   // Identity change or expiry: drop every trace of the previous identity BEFORE any fresh data
   // is shown. This is the render-time adjust pattern (no effect), so the stale list never paints.
@@ -132,8 +142,10 @@ export function AccountsPanel() {
     setFormError(null);
     setFailure(null);
     setBusy(true);
+    const atEmail = emailRef.current;
     const r = await addAccount(network, v.address, v.label);
     setBusy(false);
+    if (emailRef.current !== atEmail) return;
     if (r.kind === 'ok') {
       setAddr('');
       setLabel('');
@@ -152,8 +164,10 @@ export function AccountsPanel() {
     }
     setFormError(null);
     setBusy(true);
+    const atEmail = emailRef.current;
     const r = await addAccount(acct.network, address, v.label); // same key: relabels
     setBusy(false);
+    if (emailRef.current !== atEmail) return;
     if (r.kind === 'ok') {
       setRenaming(null);
       await refresh();
@@ -163,8 +177,10 @@ export function AccountsPanel() {
   async function onRemove(acct: SavedAccount) {
     if (busy || nowMs() < retryAt) return;
     setBusy(true);
+    const atEmail = emailRef.current;
     const r = await removeAccount(acct.network, acct.address);
     setBusy(false);
+    if (emailRef.current !== atEmail) return;
     if (r.kind === 'ok') {
       setRemoving(null);
       await refresh();
@@ -174,8 +190,10 @@ export function AccountsPanel() {
   async function onClear() {
     if (busy || nowMs() < retryAt) return;
     setBusy(true);
+    const atEmail = emailRef.current;
     const r = await clearAccounts();
     setBusy(false);
+    if (emailRef.current !== atEmail) return;
     if (r.kind === 'ok') {
       setClearing(false);
       await refresh();
@@ -208,7 +226,9 @@ export function AccountsPanel() {
       <h2 id="accounts-h">Saved addresses</h2>
       <p className="fine">
         Saved under your verified sign-in on this service. A saved address is observed, not proven
-        to be yours. Removing an address deletes it from this saved list.
+        to be yours. Removing an address deletes it from the live saved list right away; the
+        storage system's backup feature can restore deleted data for up to 7 days, and no stronger
+        erasure is promised.
       </p>
 
       {load.kind === 'loading' && <p className="fine">Loading saved addresses…</p>}
@@ -270,6 +290,13 @@ export function AccountsPanel() {
                             </span>
                           ) : (
                             <span className="actions">
+                              <button
+                                type="button"
+                                className="button secondary chip"
+                                onClick={() => prefillAddress(a.address, a.network)}
+                              >
+                                Use in Track
+                              </button>
                               <button
                                 type="button"
                                 className="button secondary chip"

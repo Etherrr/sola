@@ -91,8 +91,12 @@ test('verified user sees saved addresses grouped and can add, rename, remove and
   await page.locator('#accounts-label').fill('Hot wallet');
   await panel.getByRole('button', { name: 'Save address' }).click();
   await expect(panel.getByText('Hot wallet')).toBeVisible();
-  await page.evaluate(() => window.scrollTo(0, 0));
-  await page.screenshot({ path: `test-results/accounts-${info.project.name}-populated.png`, fullPage: true });
+  await panel.getByText('Hot wallet').scrollIntoViewIfNeeded();
+  await page.screenshot({ path: `test-results/accounts-${info.project.name}-populated.png` });
+  // The add form, focused like a keyboard user: control must sit between the sticky bars.
+  await page.locator('#accounts-addr').focus();
+  await page.locator('#accounts-addr').scrollIntoViewIfNeeded();
+  await page.screenshot({ path: `test-results/accounts-${info.project.name}-form.png` });
 
   // Rename it; the same key relabels, it does not duplicate.
   await panel.getByRole('button', { name: 'Rename' }).first().click();
@@ -109,8 +113,8 @@ test('verified user sees saved addresses grouped and can add, rename, remove and
   // Clear-all is a two-step confirm.
   await panel.getByRole('button', { name: 'Clear all saved addresses' }).click();
   await expect(panel.getByText('Clear every saved address?')).toBeVisible();
-  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-  await panel.screenshot({ path: `test-results/accounts-${info.project.name}-clear-confirm.png` });
+  await panel.getByText('Clear every saved address?').scrollIntoViewIfNeeded();
+  await page.screenshot({ path: `test-results/accounts-${info.project.name}-clear-confirm.png` });
   await panel.getByRole('button', { name: 'Clear everything' }).click();
   await expect(panel.getByText('None saved.').first()).toBeVisible();
   await expect(panel.getByText('Solar')).toHaveCount(0);
@@ -165,4 +169,25 @@ test('cap and rate-limit surface their bounded messages; client blocks bad input
   await page.locator('#accounts-addr').fill('not-an-address');
   await panel.getByRole('button', { name: 'Save address' }).click();
   await expect(panel.getByText('Enter an Ethereum address: 0x followed by 40 hexadecimal characters.')).toBeVisible();
+});
+
+test('Use in Track prefills the lookup form and switches network without firing a lookup', async ({ page }, info) => {
+  await stubSession(page, true);
+  await stubAccounts(page, [mkRow('ethereum', ETH1, 'Cold wallet'), mkRow('solana', SOL1, 'Solar')]);
+  let lookups = 0;
+  await page.route('**/api/v1/portfolio/resolve', (r) => {
+    lookups += 1;
+    return r.abort();
+  });
+  await page.goto('/track');
+  const panel = page.locator('.accounts');
+  await expect(panel.getByText('Solar')).toBeVisible();
+  // Network starts on Ethereum; choosing the Solana row must switch it and fill the input.
+  await panel.getByRole('listitem').filter({ hasText: 'Solar' }).getByRole('button', { name: 'Use in Track' }).click();
+  const trackInput = page.locator('.track input').first();
+  await expect(trackInput).toHaveValue(SOL1);
+  await expect(trackInput).toBeFocused();
+  await expect(page.locator('.track').getByRole('button', { name: 'Solana (SOL only)' })).toHaveAttribute('aria-pressed', 'true');
+  expect(lookups).toBe(0); // no automatic provider request
+  await page.screenshot({ path: `test-results/accounts-${info.project.name}-useintrack.png` });
 });
