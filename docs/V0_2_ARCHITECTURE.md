@@ -64,6 +64,16 @@ every query carries user_id/owner predicates (existing D1 store pattern extends)
 ## 3. Security controls
 - Rate limits on email sends, code verification, wallet challenges, login attempts
   (extend existing rate_counters pattern; durable global limiter).
+- Atomic challenge consumption (advisory, Isa 2026-10-25): every single-use challenge
+  (email code, WebAuthn challenge, SIWE/SIWS nonce) is consumed by ONE conditional
+  UPDATE ... WHERE consumed_at IS NULL AND id = <current attempt>; a session is created
+  ONLY when exactly one row was claimed by the current attempt. D1 batch atomicity is
+  insufficient and zero-affected-rows is not a SQL error, so row-count claims are the
+  gate; check-then-mark permits prior-consumer replay. Concurrency/replay/crash tests
+  are mandatory for this path before any native session goes live.
+- SIWS format binding: Solana sign-in supports exactly one expected message format per
+  challenge (plain Wallet Standard SIWS vs offchain envelope); the server binds the
+  expected format to the issued challenge and rejects any mismatch.
 - CSRF: SameSite=Lax + strict Origin checks on mutations + unguessable session ids.
 - Logging redaction: no codes, challenges, session ids, address/email linkage in logs.
 - Input validation: EIP-55 checksum for EVM, base58 format for Solana, length limits;
@@ -98,7 +108,11 @@ every query carries user_id/owner predicates (existing D1 store pattern extends)
   mutation; synthetic fixtures only). Production D1 is never a test-write fallback.
 
 ## 6. Open items
-- WebAuthn server library for Workers runtime — Isa researching; fallback hand-rolled.
+- WebAuthn server library for Workers runtime: @simplewebauthn/server is the candidate
+  (claims Workers support) pending an exact Pages packaging/runtime spike on staging;
+  WebCrypto Ed25519 exists in the Workers runtime but is not package-compatibility
+  proof; fallback is minimal hand-rolled verification per the OWASP passkey sheet.
+- EVM SIWE verification approach on Workers — Isa research pending.
 - Email sending from Pages Functions (native OTP) needs a mail path: transactional
   email provider = keyed service = owner decision; interim: keep Access email-code as
   the email factor during dual-gate while native email challenge ships only on staging.
