@@ -8,6 +8,7 @@ import {
 } from '../portfolio/api-client';
 import { fmtTimestamp, feedTimeUTC } from './format-time';
 import { differsWhenRounded, fmtPrice, fmtUsd } from '../portfolio/format';
+import { AaveSection } from '../portfolio/aave-section';
 
 /**
  * v0.2 "Look up an address" - the on-demand single-address lookup the plan
@@ -78,8 +79,15 @@ export function AddressLookup() {
   // Show full precision whenever rounding would change a shown digit (Track rule).
   const exact =
     state.kind === 'ok' &&
-    (state.data.wallets.some((w) =>
-      w.assets.some((a) => differsWhenRounded(a.amount, a.price, a.value)),
+    (state.data.wallets.some(
+      (w) =>
+        w.assets.some((a) => differsWhenRounded(a.amount, a.price, a.value)) ||
+        (w.aave?.status === 'ok' &&
+          w.aave.positions.some(
+            (pos) =>
+              differsWhenRounded(pos.supplied, null, pos.suppliedValueUsd) ||
+              differsWhenRounded(pos.variableDebt, null, pos.variableDebtValueUsd),
+          )),
     ) ||
       (state.data.totals.recognizedPricedSubtotalUsd !== null &&
         fmtUsd(state.data.totals.recognizedPricedSubtotalUsd, true) !==
@@ -162,6 +170,7 @@ export function AddressLookup() {
               )}
             </tbody>
           </table>
+          {wallet.aave && <AaveSection section={wallet.aave} exact={exact} />}
           <p className="ov2-quiet">
             Recognized priced subtotal:{' '}
             {state.data.totals.recognizedPricedSubtotalUsd === null
