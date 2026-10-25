@@ -18,6 +18,8 @@
     "format:check": "prettier --check ."
   },
   "dependencies": {
+    "@noble/curves": "1.9.2",
+    "@noble/hashes": "1.7.1",
     "jose": "6.2.13",
     "next": "16.4.2",
     "react": "19.3.1",
