@@ -81,3 +81,59 @@ describe('requireEntitledSession (the real data gate)', () => {
     expect((r as { userId: string }).userId).toBe('u1');
   });
 });
+
+describe('requireEntitledSession hardening (reviewer 2026-10-25)', () => {
+  const setup = async () => {
+    const { db } = createSqliteD1();
+    const now = new Date().toISOString();
+    await db.prepare("INSERT INTO users (id, status, created_at, updated_at) VALUES ('u1','active',?,?)").bind(now, now).run();
+    await db.prepare("INSERT INTO auth_identities (id, user_id, kind, identifier, verified_at) VALUES ('i1','u1','email','Invited@X.co',?)").bind(now).run();
+    const s = await createSession(db, 'u1');
+    const req = () => new Request('https://app.test/x', { headers: { cookie: `${SESSION_COOKIE}=${s.id}` } });
+    return { db, req, now };
+  };
+  it('matches case-insensitively (mixed-case identity vs lowercase entitlement)', async () => {
+    const { db, req, now } = await setup();
+    await db.prepare("INSERT INTO entitlements (id, email, granted_by, created_at) VALUES ('e1','invited@x.co','owner',?)").bind(now).run();
+    const r = await requireEntitledSession(req(), db);
+    expect(r).not.toBeInstanceOf(Response);
+  });
+  it('matches ANY verified email identity, not only the latest', async () => {
+    const { db, req, now } = await setup();
+    await db.prepare("INSERT INTO auth_identities (id, user_id, kind, identifier, verified_at) VALUES ('i2','u1','email','second@x.co',?)").bind(now).run();
+    // entitlement names the OLDER identity; latest-only matching would 403
+    await db.prepare("INSERT INTO entitlements (id, email, granted_by, created_at) VALUES ('e1','invited@x.co','owner',?)").bind(now).run();
+    const r = await requireEntitledSession(req(), db);
+    expect(r).not.toBeInstanceOf(Response);
+  });
+  it('wallet path: verified wallet_evm identity matches ethereum entitlement case-insensitively', async () => {
+    const { db, req, now } = await setup();
+    await db.prepare("INSERT INTO auth_identities (id, user_id, kind, identifier, verified_at) VALUES ('w1','u1','wallet_evm','0xAbCDEF0000000000000000000000000000000001',?)").bind(now).run();
+    await db.prepare("INSERT INTO entitlements (id, wallet_chain, wallet_address, granted_by, created_at) VALUES ('e2','ethereum','0xabcdef0000000000000000000000000000000001','owner',?)").bind(now).run();
+    const r = await requireEntitledSession(req(), db);
+    expect(r).not.toBeInstanceOf(Response);
+  });
+  it('wallet negatives: wrong chain, wrong address, revoked all 403', async () => {
+    const { db, req, now } = await setup();
+    await db.prepare("INSERT INTO auth_identities (id, user_id, kind, identifier, verified_at) VALUES ('w1','u1','wallet_evm','0xabc1',?)").bind(now).run();
+    // wrong chain
+    await db.prepare("INSERT INTO entitlements (id, wallet_chain, wallet_address, granted_by, created_at) VALUES ('e2','solana','0xabc1','owner',?)").bind(now).run();
+    let r = await requireEntitledSession(req(), db);
+    expect((r as Response).status).toBe(403);
+    // wrong address, right chain
+    await db.prepare("UPDATE entitlements SET wallet_chain='ethereum', wallet_address='0xDEAD'").bind().run();
+    r = await requireEntitledSession(req(), db);
+    expect((r as Response).status).toBe(403);
+    // revoked match
+    await db.prepare("UPDATE entitlements SET wallet_address='0xabc1', revoked_at=?").bind(now).run();
+    r = await requireEntitledSession(req(), db);
+    expect((r as Response).status).toBe(403);
+  });
+  it('wallet identity does NOT match an email-only entitlement and vice versa', async () => {
+    const { db, req, now } = await setup();
+    await db.prepare("INSERT INTO auth_identities (id, user_id, kind, identifier, verified_at) VALUES ('w1','u1','wallet_evm','0xabc1',?)").bind(now).run();
+    await db.prepare("INSERT INTO entitlements (id, email, granted_by, created_at) VALUES ('e1','someone-else@x.co','owner',?)").bind(now).run();
+    const r = await requireEntitledSession(req(), db);
+    expect((r as Response).status).toBe(403);
+  });
+});

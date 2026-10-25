@@ -7,9 +7,10 @@
  *   an entitlement check and must never be described as one.
  * - requireEntitledSession: the real gate for ANY native-session-protected data route
  *   (reviewer 2026-10-25): composes the session guard with an explicit ACTIVE
- *   entitlement (entitlements row matching the user's verified email identity,
- *   revoked_at IS NULL). Any verified email can hold a session; only entitled
- *   identities may read data. No such route ships before this gate exists.
+ *   entitlement (entitlements row matching ANY of the user's verified identities
+ *   - email or chain+wallet - revoked_at IS NULL). Any verified identity can
+ *   hold a session; only entitled identities may read data. No such route ships
+ *   before this gate exists.
  */
 import { readLiveSession, type SessionRow } from './sessions';
 import type { ChallengeDb } from './challenges';
@@ -52,31 +53,41 @@ export async function requireLiveSession(
   return { userId: session.user_id, session };
 }
 
-/** The actual data gate: live session + active entitlement for the session user's
- *  verified email. Returns the identity or a 401/403 Response. */
+/** The actual data gate: live session + active entitlement for the session user.
+ *  Entitlement match = ANY verified identity of the user (reviewer 2026-10-25):
+ *  a verified email identity whose address matches entitlements.email
+ *  (case-insensitive both sides), OR a verified wallet identity matching
+ *  entitlements.wallet_chain + wallet_address (wallet_evm->ethereum,
+ *  wallet_solana->solana; address compared case-insensitively). Latest-email-only
+ *  matching is a hazard (adding an email flips the checked identity), so every
+ *  verified identity is considered. verified_at IS NOT NULL is required even
+ *  though the column is NOT NULL today, so a future pending identity cannot
+ *  match. Revoked rows never match. Returns the identity or a 401/403 Response. */
 export async function requireEntitledSession(
   req: Request,
   db: ChallengeDb,
 ): Promise<NativeIdentity | Response> {
   const base = await requireLiveSession(req, db);
   if (base instanceof Response) return base;
-  const identity = await db
-    .prepare(
-      `SELECT identifier FROM auth_identities
-        WHERE user_id = ? AND kind = 'email' ORDER BY verified_at DESC LIMIT 1`,
-    )
-    .bind(base.userId)
-    .first<{ identifier: string }>();
-  if (!identity)
-    return new Response(JSON.stringify({ error: 'no_verified_identity' }), {
-      status: 403, headers: { 'content-type': 'application/json' },
-    });
   const entitled = await db
     .prepare(
-      `SELECT id FROM entitlements
-        WHERE email = ? AND revoked_at IS NULL LIMIT 1`,
+      `SELECT e.id FROM entitlements e
+        WHERE e.revoked_at IS NULL AND (
+          EXISTS (SELECT 1 FROM auth_identities i
+                  WHERE i.user_id = ? AND i.kind = 'email'
+                    AND i.verified_at IS NOT NULL
+                    AND e.email IS NOT NULL
+                    AND LOWER(i.identifier) = LOWER(e.email))
+          OR EXISTS (SELECT 1 FROM auth_identities i
+                  WHERE i.user_id = ?
+                    AND i.verified_at IS NOT NULL
+                    AND ((i.kind = 'wallet_evm' AND e.wallet_chain = 'ethereum')
+                      OR (i.kind = 'wallet_solana' AND e.wallet_chain = 'solana'))
+                    AND e.wallet_address IS NOT NULL
+                    AND LOWER(i.identifier) = LOWER(e.wallet_address))
+        ) LIMIT 1`,
     )
-    .bind(identity.identifier)
+    .bind(base.userId, base.userId)
     .first<{ id: string }>();
   if (!entitled)
     return new Response(JSON.stringify({ error: 'not_entitled' }), {
