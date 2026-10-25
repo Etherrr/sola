@@ -62,7 +62,7 @@ test('beginner, experienced and demo entry points work', async ({ page, isMobile
   await expect(page.locator('#main').getByRole('status')).toContainText('Research hardware');
   await page.goto('/connect');
   await expect(page.locator('input')).toHaveCount(0);
-  await page.getByRole('link', { name: 'Open simulated portfolio' }).click();
+  await page.getByRole('link', { name: 'Open portfolio' }).click();
   await expect(page.locator('#main').getByText('$11,000.00', { exact: true })).toBeVisible();
   // Phones show the holdings as a list; larger screens show the table. Same data either way.
   await expect(

@@ -1,33 +1,35 @@
-import { PageIntro, ActionLink, SimulatedNotice } from '@/components/ui';
+import { PageIntro, ActionLink } from '@/components/ui';
 export const metadata = { title: 'Experienced user portal' };
 export default function Connect() {
   return (
     <div className="page-container narrow">
-      <SimulatedNotice />
       <PageIntro eyebrow="THE EXPERIENCED PATH" title="Straight to the perspective.">
         <p>
-          Skip the introduction and explore the sample portfolio. Experience does not depend on
-          connection status.
+          Skip the introduction and go straight to the live read-only view. Nothing here
+          connects a wallet, requests a signature, or moves funds.
         </p>
       </PageIntro>
       <div className="panel">
-        <h2>Public-address lookup</h2>
+        <h2>Live public-address lookup</h2>
         <p>
-          Planned for a later release. This preview does not accept addresses or query a blockchain.
-          A future address view would observe public activity without proving ownership.
+          Track observes public addresses directly. Ethereum covers ETH plus USDC, USDT,
+          DAI and WETH at the pasted address; Solana covers the SOL balance only. An
+          unread balance is shown as unavailable, never as zero. Observing an address
+          proves nothing about ownership.
         </p>
-        <span className="badge">NOT AVAILABLE IN v0.1</span>
+        <span className="badge">LIVE · READ-ONLY</span>
       </div>
       <div className="panel">
-        <h2>Wallet account discovery</h2>
+        <h2>Saved addresses, no wallet connection</h2>
         <p>
-          Planned for a later release, subject to compatibility and security review. Discovery and
-          signing are different permissions. Sola Lens does not request either in this preview.
+          Signed-in accounts save labeled public addresses per network and combine them
+          in one read-only portfolio view. Sola Lens never requests wallet discovery or
+          signatures; a separate demo fixture stays clearly labeled as invented.
         </p>
-        <span className="badge">NOT AVAILABLE IN v0.1</span>
+        <span className="badge">SAVED PER ACCOUNT</span>
       </div>
       <div className="actions">
-        <ActionLink href="/portfolio">Open simulated portfolio →</ActionLink>
+        <ActionLink href="/portfolio">Open portfolio →</ActionLink>
         <ActionLink href="/learn" secondary>
           Browse the lessons
         </ActionLink>
