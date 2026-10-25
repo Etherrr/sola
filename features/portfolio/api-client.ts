@@ -563,3 +563,81 @@ export async function fetchOverview(force: boolean, signal?: AbortSignal): Promi
     };
   return { kind: 'ok', data };
 }
+
+// --- v0.2 preview: the sixth/seventh/eighth approved browser requests. Same-origin only. ---
+/**
+ * GET /api/v1/portfolio/overview - the caller's own recorded spot-balance
+ * history (reviewed read route). Returns the raw Response; parsing and the
+ * honest-state contract live in features/portfolio-v2/what-changed.tsx.
+ */
+export async function overviewHistoryRequest(signal?: AbortSignal): Promise<Response> {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 12000);
+  const onAbort = () => ctl.abort();
+  signal?.addEventListener('abort', onAbort);
+  if (signal?.aborted) ctl.abort();
+  try {
+    return await fetch('/api/v1/portfolio/overview', {
+      method: 'GET',
+      credentials: 'same-origin',
+      cache: 'no-store',
+      headers: { accept: 'application/json' },
+      signal: ctl.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', onAbort);
+  }
+}
+
+/**
+ * POST /api/v1/auth/email/challenge - request a sign-in code. Message
+ * signature sign-in only; this is EMAIL code auth, never wallet signing.
+ * Returns the raw Response; error mapping lives in features/auth-v2.
+ */
+export async function authEmailChallenge(email: string, signal?: AbortSignal): Promise<Response> {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 12000);
+  const onAbort = () => ctl.abort();
+  signal?.addEventListener('abort', onAbort);
+  if (signal?.aborted) ctl.abort();
+  try {
+    return await fetch('/api/v1/auth/email/challenge', {
+      method: 'POST',
+      credentials: 'same-origin',
+      cache: 'no-store',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email }),
+      signal: ctl.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', onAbort);
+  }
+}
+
+/** POST /api/v1/auth/email/verify - redeem a sign-in code for a session cookie. */
+export async function authEmailVerify(
+  email: string,
+  code: string,
+  signal?: AbortSignal,
+): Promise<Response> {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 12000);
+  const onAbort = () => ctl.abort();
+  signal?.addEventListener('abort', onAbort);
+  if (signal?.aborted) ctl.abort();
+  try {
+    return await fetch('/api/v1/auth/email/verify', {
+      method: 'POST',
+      credentials: 'same-origin',
+      cache: 'no-store',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email, code }),
+      signal: ctl.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', onAbort);
+  }
+}

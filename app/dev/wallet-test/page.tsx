@@ -23,7 +23,7 @@ export default function WalletTest() {
         <p>
           Linking a wallet asks your wallet app to{' '}
           <strong>sign one short, domain-bound, expiring authentication message</strong> - a plain
-          personal_sign on EVM or signMessage on Solana. It never uses permit or typed-data
+          personal_sign on EVM or a message signature on Solana. It never uses permit or typed-data
           payloads. That
           specific Sola sign-in message is not a transaction and grants no spending approval - it
           only proves you control the wallet, so the preview can treat it as yours. Other apps can

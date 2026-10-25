@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { overviewHistoryRequest } from '../portfolio/api-client';
 
 /**
  * "What changed" section of the v0.2 Overview: the first UI consuming the
@@ -65,7 +66,7 @@ export function WhatChanged() {
   const [load, setLoad] = useState<Load>({ kind: 'loading' });
   useEffect(() => {
     let live = true;
-    fetch('/api/v1/portfolio/overview', { headers: { accept: 'application/json' } })
+    overviewHistoryRequest()
       .then(async (r) => {
         const body = (await r.json().catch(() => null)) as ApiBody | null;
         if (!live) return;
