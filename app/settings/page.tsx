@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { PageIntro } from '@/components/ui';
 import { PrivacySettings } from '@/features/onboarding/privacy-settings';
 export const metadata = { title: 'Privacy & settings' };

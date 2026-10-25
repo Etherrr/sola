@@ -124,12 +124,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </main>
           <footer className="app-foot">
             <p>
-              Sola Lens preview · Read-only. No financial advice, custody, or performance
-              guarantees. Demo figures are simulated, not market data; address lookups and markets
-              prices state their own mode. <Link href="/settings">Privacy &amp; local data</Link>
+              Preview · Read-only · No financial advice.{' '}
+              <Link href="/settings">Privacy &amp; local data</Link>
               {' · '}
               <a href="https://solacapitalpartners.com/" rel="noopener noreferrer">
-                Back to solacapitalpartners.com
+                solacapitalpartners.com
               </a>
             </p>
           </footer>

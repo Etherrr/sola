@@ -1,4 +1,5 @@
 import { WhatChanged } from '@/features/portfolio-v2/what-changed';
+import { AddressBook } from '@/features/portfolio-v2/address-book';
 export const metadata = { title: 'Overview (preview build)' };
 
 /** v0.2 Overview - concise and action-first (user steering 2026-10-25):
@@ -14,8 +15,9 @@ export default function OverviewV2() {
       <section className="panel">
         <h2>Holdings</h2>
         <p>
-          <em>No holdings loaded - connect an address to load them.</em>
+          <em>Holdings load for your watched addresses once observation runs record them.</em>
         </p>
+        <AddressBook />
         <WhatChanged />
       </section>
 

@@ -641,3 +641,83 @@ export async function authEmailVerify(
     signal?.removeEventListener('abort', onAbort);
   }
 }
+
+/**
+ * The tenth approved browser request: GET list + POST add on the native
+ * address book (watched addresses; reviewed handlers, per-user CRUD rates).
+ * Raw Response; parsing/labels live in features/portfolio-v2/address-book.tsx.
+ */
+export async function addressBookRequest(
+  method: 'GET' | 'POST',
+  body: unknown,
+  signal?: AbortSignal,
+): Promise<Response> {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 12000);
+  const onAbort = () => ctl.abort();
+  signal?.addEventListener('abort', onAbort);
+  if (signal?.aborted) ctl.abort();
+  try {
+    return await fetch('/api/v1/portfolio/addresses', {
+      method,
+      credentials: 'same-origin',
+      cache: 'no-store',
+      headers: body === undefined ? undefined : { 'content-type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal: ctl.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', onAbort);
+  }
+}
+
+/** Eleventh: POST rename on the native address book. */
+export async function addressRenameRequest(
+  body: unknown,
+  signal?: AbortSignal,
+): Promise<Response> {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 12000);
+  const onAbort = () => ctl.abort();
+  signal?.addEventListener('abort', onAbort);
+  if (signal?.aborted) ctl.abort();
+  try {
+    return await fetch('/api/v1/portfolio/addresses/rename', {
+      method: 'POST',
+      credentials: 'same-origin',
+      cache: 'no-store',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: ctl.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', onAbort);
+  }
+}
+
+/** Twelfth: POST remove (soft delete) on the native address book. */
+export async function addressRemoveRequest(
+  body: unknown,
+  signal?: AbortSignal,
+): Promise<Response> {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 12000);
+  const onAbort = () => ctl.abort();
+  signal?.addEventListener('abort', onAbort);
+  if (signal?.aborted) ctl.abort();
+  try {
+    return await fetch('/api/v1/portfolio/addresses/remove', {
+      method: 'POST',
+      credentials: 'same-origin',
+      cache: 'no-store',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: ctl.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', onAbort);
+  }
+}
