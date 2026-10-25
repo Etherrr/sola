@@ -10,6 +10,15 @@
  *   request's attempt id (the winning UPDATE writes it atomically).
  * - A crash after a successful claim burns the challenge; there is no un-consume.
  * - Zero affected rows is not a SQL error in D1: meta.changes is the gate.
+ *
+ * Nonce binding (reviewer 2026-10-25): for every verifier (email code, SIWE/SIWS
+ * signed message, WebAuthn clientDataJSON), the value the caller proves
+ * possession of IS the challenge secret, and claiming matches
+ * secret_hash = SHA-256(nonce). The signed message's embedded nonce and the
+ * stored challenge are therefore the same coupling - there is deliberately NO
+ * consume-by-subject path (claiming "the latest challenge for this subject"
+ * without the exact secret would decouple the cryptographic proof from the
+ * consumption and must never be introduced as a simplification).
  */
 
 export type ChallengeKind =
