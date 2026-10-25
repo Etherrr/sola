@@ -1244,6 +1244,206 @@ test('v2 address lookup: rate limit shows the retry wording, nothing substituted
   await expect(tool.getByRole('cell', { name: 'ETH' })).toHaveCount(0);
 });
 
+test('v2 address lookup: Aave V3 positions render separately, debt never netted', async ({
+  page,
+}) => {
+  await page.route('**/api/v1/auth/email/session', (r) =>
+    r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'ok', email: 'owner@example.com', fresh: true }),
+    }),
+  );
+  await page.route('**/api/v1/portfolio/addresses**', (r) => {
+    if (r.request().method() !== 'GET') return r.continue();
+    return r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'ok', addresses: [] }),
+    });
+  });
+  await page.route('**/api/v1/portfolio/overview**', (r) =>
+    r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'empty', newerPartial: false }),
+    }),
+  );
+  const resolveBody: unknown = {
+    schemaVersion: 1,
+    mode: 'mock',
+    simulated: true,
+    provider: 'fixture',
+    generatedAt: '2026-10-25T01:00:00Z',
+    observedAt: '2026-10-25T01:00:00Z',
+    wallets: [
+      {
+        address: '0xabc1230000000000000000000000000000000000',
+        partial: false,
+        warnings: [],
+        assets: [
+          {
+            assetId: 'eip155:1/native',
+            symbol: 'ETH',
+            decimals: 18,
+            amount: '1.5',
+            price: '3000',
+            value: '4500',
+          },
+        ],
+        aave: {
+          status: 'ok',
+          positions: [
+            {
+              underlyingAsset: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+              symbol: 'USDC',
+              decimals: 6,
+              supplied: '11392.069003',
+              variableDebt: '0',
+              suppliedValueUsd: '11390.54',
+              variableDebtValueUsd: '0',
+              priceSource: 'chainlink:USDC/USD',
+              priceObservedAt: '2026-10-23T11:58:00Z',
+              observedAt: '2026-10-21T02:13:20Z',
+              usageAsCollateralEnabled: true,
+              reserveNote: null,
+            },
+            {
+              underlyingAsset: '0x6b175474e89094c44da98b954eedeac495271d0f',
+              symbol: 'DAI',
+              decimals: 18,
+              supplied: '0',
+              variableDebt: '2500.5',
+              suppliedValueUsd: '0',
+              variableDebtValueUsd: '2500.5',
+              priceSource: 'chainlink:DAI/USD',
+              priceObservedAt: '2026-10-23T11:58:00Z',
+              observedAt: '2026-10-21T02:14:20Z',
+              usageAsCollateralEnabled: false,
+              reserveNote: 'This reserve is frozen on Aave.',
+            },
+          ],
+        },
+      },
+    ],
+    totals: {
+      recognizedPricedSubtotalUsd: '4500',
+      unpricedAssetCount: 0,
+      note: 'Subtotal covers only assets priced by verified feeds.',
+    },
+    partial: false,
+    warnings: [],
+  };
+  await page.route('**/api/v1/portfolio/resolve**', (r) =>
+    r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(resolveBody),
+    }),
+  );
+  await page.goto('/dev/overview-v2');
+  const main = page.locator('#main');
+  const tool = main.locator('.ab-lookup');
+  await tool.getByLabel('Address to look up').fill('0xAbC1230000000000000000000000000000000000');
+  await tool.getByRole('button', { name: 'Look up' }).click();
+  // The shared Aave section renders in the v2 lookup result with its own heading and scope copy.
+  const section = tool.getByRole('region', { name: 'Aave V3 positions (Ethereum)' });
+  await expect(
+    tool.getByRole('heading', { name: 'Aave V3 positions (Ethereum)' }),
+  ).toBeVisible();
+  await expect(
+    section.getByText(/Supplied and variable-debt balances on Aave V3 \(Ethereum\) only/),
+  ).toBeVisible();
+  // Supplied USDC carries its collateral note; DAI debt carries the frozen-reserve note.
+  await expect(section.getByRole('rowheader', { name: /USDC/ })).toContainText(
+    'usable as collateral',
+  );
+  await expect(section.getByRole('rowheader', { name: /DAI/ })).toContainText(
+    'This reserve is frozen on Aave.',
+  );
+  await expect(section.getByRole('cell', { name: /2,500\.5/ })).toBeVisible();
+  // The priced subtotal stays wallet balances only: Aave is never netted in.
+  await expect(tool.getByText('Recognized priced subtotal: $4,500')).toBeVisible();
+});
+
+test('v2 address lookup: an Aave-side failure is honest beside intact wallet balances', async ({
+  page,
+}) => {
+  await page.route('**/api/v1/auth/email/session', (r) =>
+    r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'ok', email: 'owner@example.com', fresh: true }),
+    }),
+  );
+  await page.route('**/api/v1/portfolio/addresses**', (r) => {
+    if (r.request().method() !== 'GET') return r.continue();
+    return r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'ok', addresses: [] }),
+    });
+  });
+  await page.route('**/api/v1/portfolio/overview**', (r) =>
+    r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'empty', newerPartial: false }),
+    }),
+  );
+  const resolveBody: unknown = {
+    schemaVersion: 1,
+    mode: 'mock',
+    simulated: true,
+    provider: 'fixture',
+    generatedAt: '2026-10-25T01:00:00Z',
+    observedAt: '2026-10-25T01:00:00Z',
+    wallets: [
+      {
+        address: '0xabc1230000000000000000000000000000000000',
+        partial: false,
+        warnings: [],
+        assets: [
+          {
+            assetId: 'eip155:1/native',
+            symbol: 'ETH',
+            decimals: 18,
+            amount: '1.5',
+            price: '3000',
+            value: '4500',
+          },
+        ],
+        aave: { status: 'unavailable', reason: 'rate_limited' },
+      },
+    ],
+    totals: {
+      recognizedPricedSubtotalUsd: '4500',
+      unpricedAssetCount: 0,
+      note: 'Subtotal covers only assets priced by verified feeds.',
+    },
+    partial: false,
+    warnings: [],
+  };
+  await page.route('**/api/v1/portfolio/resolve**', (r) =>
+    r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(resolveBody),
+    }),
+  );
+  await page.goto('/dev/overview-v2');
+  const tool = page.locator('#main .ab-lookup');
+  await tool.getByLabel('Address to look up').fill('0xAbC1230000000000000000000000000000000000');
+  await tool.getByRole('button', { name: 'Look up' }).click();
+  // Wallet balances still render; the Aave section says unavailable, nothing substituted.
+  await expect(tool.getByRole('cell', { name: 'ETH' })).toBeVisible();
+  const section = tool.getByRole('region', { name: 'Aave V3 positions (Ethereum)' });
+  await expect(
+    section.getByText(/Aave positions could not be read\. Nothing was substituted\./),
+  ).toBeVisible();
+  await expect(section.getByText(/rate limiting/)).toBeVisible();
+});
+
 test('v2 address lookup: Solana SOL-only footer; empty incomplete answer says unknown', async ({
   page,
 }) => {

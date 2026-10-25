@@ -4,11 +4,16 @@
  * stays available in a title attribute - source/time semantics unchanged
  * (the time shown is still the provider's own observation time).
  */
-/** Compact UTC feed-update time, matching the /track price presentation. */
+/** Compact UTC feed-update time, matching the /track price presentation. The
+ *  instant is normalized through Date so an offset-bearing ISO string is
+ *  converted, never sliced into a mislabeled wall time. */
 export function feedTimeUTC(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return iso.slice(0, 16).replace('T', ' ') + ' UTC';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(
+    d.getUTCHours(),
+  )}:${pad(d.getUTCMinutes())} UTC`;
 }
 
 export function fmtTimestamp(iso: string): string {
