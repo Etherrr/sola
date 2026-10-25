@@ -11,9 +11,11 @@ const sections = [
     id: 'defi',
     label: 'DeFi App',
     note: '',
+    // Plan line 54: Track removed as a disconnected primary menu item. The
+    // /track route still answers directly until its lookup is refactored
+    // into the address manager (plan line 218.2).
     items: [
       { href: '/portfolio', label: 'Overview', icon: '◧' },
-      { href: '/track', label: 'Track', icon: '⌕' },
       { href: '/markets', label: 'Markets', icon: '◷' },
     ],
   },
