@@ -11,11 +11,15 @@ export default function Settings() {
       <section className="panel">
         <h2>About this preview</h2>
         <p>
-          Cloudflare Access verifies your signed-in identity. Sola does not create passwords or save
-          address lists. Overview is a simulated sample. Track can read supported public balances
-          through PublicNode when this deployment enables live mode; its form discloses where the
-          address goes before lookup. Market data is not connected. There are no wallet connections
-          or transaction features. Page requests reach the app host.
+          Cloudflare Access verifies your signed-in identity; Sola creates no passwords. Your
+          account saves labeled public addresses per verified identity so the combined view works
+          across devices; you can rename or remove them at any time. Overview combines live
+          read-only balances for your saved addresses and keeps a separate clearly labeled invented
+          demo. Track reads supported public balances through PublicNode; its form discloses where
+          the address goes before lookup. Markets shows selected Solana DEX pools through
+          DexScreener; tokenized equities are on-chain tokens, not the underlying stocks. There are
+          no wallet connections, signatures or transaction features. Page requests reach the app
+          host.
         </p>
         <p>
           External links open third-party websites under their own terms. This app loads no external

@@ -30,6 +30,9 @@ export default function Connect() {
       </div>
       <div className="actions">
         <ActionLink href="/portfolio">Open portfolio →</ActionLink>
+        <ActionLink href="/onboarding" secondary>
+          Preview the future sign-in (prototype)
+        </ActionLink>
         <ActionLink href="/learn" secondary>
           Browse the lessons
         </ActionLink>

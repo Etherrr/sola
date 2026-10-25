@@ -233,5 +233,9 @@ unchanged no-wallet-connection/no-signature posture. Content-only; no behavior c
 
 No native auth scaffolding code (held until the architecture decision justifies it), no
 schema changes, no provider selection, no signing flows, no dashboard actions, no
-public-route changes. The only code delta in this branch is the `/connect` copy
-correction (section 7) and this document.
+public-route changes. Code deltas in this branch, all content/visual-only and reviewed
+as one delta: the `/connect` copy correction (section 7), the paired `/settings` copy
+correction (saved addresses, live combined view, connected markets disclosed honestly,
+with its copy-claims test updated to match), and the option-D visual prototype at
+`/onboarding` (every control disabled by markup; an e2e test asserts all controls stay
+disabled, the prototype banners stay present, and no POST is ever fired from the page).

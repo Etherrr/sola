@@ -148,12 +148,14 @@ describe('markets coverage and privacy claims', () => {
     expect(view).not.toMatch(/[Uu]pdated/);
     expect(view).toContain('wrapped SOL');
   });
-  it('settings disclose provider reads and Access identity without claiming saved account lists', () => {
+  it('settings disclose provider reads, Access identity and saved addresses honestly', () => {
     const settings = readFileSync('app/settings/page.tsx', 'utf8');
     expect(settings).toContain('Cloudflare Access verifies');
     expect(settings).toContain('PublicNode');
     expect(settings).not.toContain('no provider APIs');
-    expect(settings).toMatch(/save\s+address lists/);
+    expect(settings).not.toMatch(/does not create passwords or save\s+address lists/);
+    expect(settings).toMatch(/saves labeled public addresses/);
+    expect(settings).toContain('DexScreener');
   });
   it('balance observation and response completion have separate labels', () => {
     const form = readFileSync('features/portfolio/track-form.tsx', 'utf8');

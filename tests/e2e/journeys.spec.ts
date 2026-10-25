@@ -20,6 +20,7 @@ const routes = [
   '/learn/risks',
   '/learn/security-lab',
   '/settings',
+  '/onboarding',
 ];
 test.beforeEach(async ({ page }) => {
   // The intro plays on every load now; tests that are not about it opt out via reduced motion.
@@ -644,4 +645,25 @@ test('welcome animation visual evidence uses no account identity; reduced motion
     path: `output/playwright/welcome-reduced-${test.info().project.name}.png`,
     fullPage: true,
   });
+});
+
+test('onboarding prototype is clearly nonfunctional: every control disabled, nothing is sent', async ({
+  page,
+}) => {
+  const posts: string[] = [];
+  page.on('request', (r) => {
+    if (r.method() === 'POST') posts.push(r.url());
+  });
+  await page.goto('/onboarding');
+  await expect(page.locator('#main')).toContainText('VISUAL PROTOTYPE');
+  await expect(page.locator('#main')).toContainText('NO SESSION IS CREATED');
+  await expect(page.locator('#main')).toContainText('DECISION PENDING');
+  const controls = page.locator('#main input, #main button');
+  const count = await controls.count();
+  expect(count).toBeGreaterThanOrEqual(5);
+  for (let i = 0; i < count; i += 1) {
+    await expect(controls.nth(i)).toBeDisabled();
+  }
+  await page.waitForTimeout(500);
+  expect(posts).toEqual([]);
 });
