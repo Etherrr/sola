@@ -310,6 +310,17 @@ export function TrackForm({ mode = 'mock' }: { mode?: 'checking' | 'mock' | 'liv
                     tabIndex={0}
                     role="region"
                     aria-label="Wallet balances table, scrolls sideways when it is wider than the screen"
+                    onFocus={(e) => {
+                      // A table taller than the viewport can receive focus with its start hidden
+                      // above it; bring the start under the sticky bar instead. Deferred so the
+                      // browser's own focus scrolling settles first, then corrected instantly
+                      // (a corrective alignment, not a decorative transition).
+                      const el = e.currentTarget;
+                      window.setTimeout(() => {
+                        // After the browser's own focus scrolling settles, align the start.
+                        el.scrollIntoView({ block: 'start', behavior: 'auto' });
+                      }, 0);
+                    }}
                   >
                     <table className="track-table" role="table">
                       <caption>

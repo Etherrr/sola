@@ -26,7 +26,9 @@
   box-sizing: border-box;
 }
 html {
-  scroll-behavior: smooth;
+  /* No CSS-level smooth scrolling: it also animates the browser's own focus scrolling, which
+     can hide the start of a tall focused region behind the sticky bars. App scrolls choose
+     their behavior explicitly. */
 }
 body {
   margin: 0;
@@ -732,6 +734,8 @@ small {
 }
 .table-scroll {
   overflow-x: auto;
+  /* Keyboard focus on a result taller than the viewport must align its start under the bar. */
+  scroll-margin-top: calc(var(--topbar-h, 72px) + 8px);
 }
 table {
   width: 100%;
