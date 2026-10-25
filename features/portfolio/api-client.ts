@@ -269,3 +269,33 @@ export async function fetchDataMode(signal?: AbortSignal): Promise<DataMode> {
     return 'unknown';
   }
 }
+
+/**
+ * The fourth approved browser request: same-origin saved-addresses API (GET/POST/DELETE).
+ * Returns the raw Response; all parsing, mapping and error contracts live in
+ * accounts-client.ts. Never called without a verified-session UI state.
+ */
+export async function accountsRequest(
+  method: 'GET' | 'POST' | 'DELETE',
+  body: unknown,
+  signal?: AbortSignal,
+): Promise<Response> {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 12000);
+  const onAbort = () => ctl.abort();
+  signal?.addEventListener('abort', onAbort);
+  if (signal?.aborted) ctl.abort();
+  try {
+    return await fetch('/api/v1/portfolio/accounts', {
+      method,
+      credentials: 'same-origin',
+      cache: 'no-store',
+      headers: body === undefined ? undefined : { 'content-type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal: ctl.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', onAbort);
+  }
+}

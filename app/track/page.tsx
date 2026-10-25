@@ -1,9 +1,11 @@
 import { TrackApp } from '@/features/portfolio/track-intro';
+import { AccountsPanel } from '@/features/portfolio/accounts-panel';
 export const metadata = { title: 'Address lookup' };
 export default function Track() {
   return (
     <div className="page-container">
       <TrackApp />
+      <AccountsPanel />
       <details className="limits">
         <summary>What it does and does not do</summary>
         <ul>
