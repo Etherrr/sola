@@ -863,7 +863,7 @@ test.describe('/track Aave V3 positions section', () => {
     await expect(section.getByText(/no automatic retry/)).toBeVisible();
     await expect(section.getByRole('table')).toHaveCount(0);
     // The wallet balances from the same response still render.
-    await expect(main.getByRole('table', { name: /Wallet balances table/ })).toBeVisible();
+    await expect(main.getByRole('region', { name: /Wallet balances table/ })).toBeVisible();
     await expect(main.locator('.track-total')).toContainText('$3,000.00');
   });
 
