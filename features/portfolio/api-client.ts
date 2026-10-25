@@ -811,3 +811,47 @@ export async function passkeyLoginOptionsRequest(signal?: AbortSignal): Promise<
 export async function passkeyLoginVerifyRequest(challengeId: string, response: unknown, signal?: AbortSignal): Promise<Response> {
   return passkeyRequest('/api/v1/auth/passkey/login/verify', { challengeId, response }, signal);
 }
+
+/** Shared transport for the observation-consent and sync requests. One fetch
+ * site for all three; same-origin, no-store, JSON. */
+async function portfolioActionRequest(
+  path: string,
+  method: 'GET' | 'POST',
+  body: unknown,
+  signal?: AbortSignal,
+): Promise<Response> {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 30000);
+  const onAbort = () => ctl.abort();
+  signal?.addEventListener('abort', onAbort);
+  if (signal?.aborted) ctl.abort();
+  try {
+    return await fetch(path, {
+      method,
+      credentials: 'same-origin',
+      cache: 'no-store',
+      headers: { 'content-type': 'application/json' },
+      body: method === 'POST' ? JSON.stringify(body ?? {}) : undefined,
+      signal: ctl.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', onAbort);
+  }
+}
+
+/** Sixteenth fetch site: these three all run through portfolioActionRequest. */
+/** GET snapshot-consent status for the session user. */
+export async function snapshotConsentStatusRequest(signal?: AbortSignal): Promise<Response> {
+  return portfolioActionRequest('/api/v1/portfolio/snapshots/consent', 'GET', undefined, signal);
+}
+
+/** POST snapshot-consent change: grant or withdraw (withdraw deletes history). */
+export async function snapshotConsentChangeRequest(action: 'grant' | 'withdraw', signal?: AbortSignal): Promise<Response> {
+  return portfolioActionRequest('/api/v1/portfolio/snapshots/consent', 'POST', { action }, signal);
+}
+
+/** POST observation sync: record a live read of the session user's addresses. */
+export async function syncRequest(signal?: AbortSignal): Promise<Response> {
+  return portfolioActionRequest('/api/v1/portfolio/sync', 'POST', {}, signal);
+}

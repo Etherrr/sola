@@ -55,7 +55,44 @@ describe('overview history response mapping', () => {
       { status: 200, headers: { 'content-type': 'application/json' } },
     );
     expect(await mapOverviewResponse(res)).toEqual({
-      kind: 'ok', at: '2026-10-25T00:00:00Z', newerPartial: true, latest, prior: null,
+      kind: 'ok', at: '2026-10-25T00:00:00Z', newerPartial: true, latest, prior: null, networks: [],
     });
+  });
+  it('maps per-network slices with their own timestamps; Solana keeps its own baseline', async () => {
+    const ethLatest = [{ assetId: 'eth/native', network: 'ethereum', address: '0xAbC', kind: 'wallet_balance', amount: '2', observedAt: '2026-10-25T01:00:00Z' }];
+    const ethPrior = [{ assetId: 'eth/native', network: 'ethereum', address: '0xAbC', kind: 'wallet_balance', amount: '1', observedAt: '2026-10-25T00:00:00Z' }];
+    const solLatest = [{ assetId: 'sol/sol', network: 'solana', address: 'SoLaBC', kind: 'wallet_balance', amount: '3', observedAt: '2026-10-25T01:05:00Z' }];
+    const res = new Response(
+      JSON.stringify({
+        status: 'ok', scope: 'spot_balances_only', latestCompleteObservedAt: '2026-10-25T01:05:00Z', newerPartial: false,
+        latest: [...ethLatest, ...solLatest], prior: ethPrior,
+        networks: [
+          { network: 'ethereum', latestObservedAt: '2026-10-25T01:00:00Z', latest: ethLatest, prior: ethPrior },
+          { network: 'solana', latestObservedAt: '2026-10-25T01:05:00Z', latest: solLatest, prior: null },
+        ],
+      }),
+      { status: 200, headers: { 'content-type': 'application/json' } },
+    );
+    const r = await mapOverviewResponse(res);
+    if (r.kind !== 'ok') throw new Error('expected ok');
+    expect(r.networks).toHaveLength(2);
+    expect(r.networks[0]).toEqual({ network: 'ethereum', at: '2026-10-25T01:00:00Z', latest: ethLatest, prior: ethPrior });
+    // Solana first observation: its own prior is null even though ETH has one.
+    expect(r.networks[1]).toEqual({ network: 'solana', at: '2026-10-25T01:05:00Z', latest: solLatest, prior: null });
+  });
+  it('drops malformed network slices and keeps unknown-network rows out', async () => {
+    const res = new Response(
+      JSON.stringify({
+        status: 'ok', latestCompleteObservedAt: '2026-10-25T01:00:00Z', latest: [], prior: null,
+        networks: [
+          { network: 'bitcoin', latestObservedAt: '2026-10-25T01:00:00Z', latest: [], prior: null },
+          { network: 'ethereum' }, // missing latestObservedAt/latest
+        ],
+      }),
+      { status: 200, headers: { 'content-type': 'application/json' } },
+    );
+    const r = await mapOverviewResponse(res);
+    if (r.kind !== 'ok') throw new Error('expected ok');
+    expect(r.networks).toEqual([]);
   });
 });

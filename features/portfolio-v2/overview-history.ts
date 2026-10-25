@@ -20,6 +20,15 @@ export type ObservedAmount = {
   observedAt: string;
 };
 
+export type NetworkSlice = {
+  network: 'ethereum' | 'solana';
+  /** This network's own latest COMPLETE observation time - the only honest
+   *  baseline for its deltas (reviewer MEDIUM). */
+  at: string;
+  latest: ObservedAmount[];
+  prior: ObservedAmount[] | null;
+};
+
 export type OverviewResult =
   | { kind: 'signin' }
   | { kind: 'notinvited' }
@@ -32,6 +41,8 @@ export type OverviewResult =
       newerPartial: boolean;
       latest: ObservedAmount[];
       prior: ObservedAmount[] | null;
+      /** Per-network slices; Solana rows cover the SOL balance only. */
+      networks: NetworkSlice[];
     };
 
 /** Pure response mapping, exported for tests. */
@@ -53,14 +64,31 @@ export async function mapOverviewResponse(res: Response): Promise<OverviewResult
     b?.status === 'ok' &&
     typeof b.latestCompleteObservedAt === 'string' &&
     Array.isArray(b.latest)
-  )
+  ) {
+    const networks: NetworkSlice[] = Array.isArray(b.networks)
+      ? (b.networks as Array<Record<string, unknown>>)
+          .filter(
+            (n) =>
+              (n.network === 'ethereum' || n.network === 'solana') &&
+              typeof n.latestObservedAt === 'string' &&
+              Array.isArray(n.latest),
+          )
+          .map((n) => ({
+            network: n.network as 'ethereum' | 'solana',
+            at: n.latestObservedAt as string,
+            latest: n.latest as ObservedAmount[],
+            prior: Array.isArray(n.prior) ? (n.prior as ObservedAmount[]) : null,
+          }))
+      : [];
     return {
       kind: 'ok',
       at: b.latestCompleteObservedAt,
       newerPartial: b.newerPartial === true,
       latest: b.latest as ObservedAmount[],
       prior: Array.isArray(b.prior) ? (b.prior as ObservedAmount[]) : null,
+      networks,
     };
+  }
   return { kind: 'failed' };
 }
 

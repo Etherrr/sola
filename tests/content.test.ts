@@ -43,7 +43,7 @@ describe('learning and safety boundaries', () => {
       .filter((file) => /\.(ts|tsx)$/.test(file) && file !== API_CLIENT)
       .map((file) => readFileSync(file, 'utf8'))
       .join('\n');
-    // Exactly fifteen fetch call sites exist: the single-address lookup POST and its multi-address
+    // Exactly sixteen fetch call sites exist: the single-address lookup POST and its multi-address
     // variant (same resolve endpoint, same transport guarantees), the same-origin session GET,
     // the same-origin health GET, the same-origin saved-addresses API, the same-origin
     // markets overview GET, the v0.2 own-history overview GET, the two native email
@@ -51,8 +51,10 @@ describe('learning and safety boundaries', () => {
     // (list/add, rename, remove), the two native session requests
     // (info GET + logout POST), and ONE shared fetch inside passkeyRequest that the four
     // passkey requests (register options/verify, login options/verify) all funnel
-    // through - all through this one module.
-    expect(readFileSync(API_CLIENT, 'utf8').match(/fetch\s*\(/g)).toHaveLength(15);
+    // through, and ONE shared fetch inside portfolioActionRequest that the three
+    // observation requests (consent status, consent change, sync) funnel through -
+    // all through this one module.
+    expect(readFileSync(API_CLIENT, 'utf8').match(/fetch\s*\(/g)).toHaveLength(16);
     expect(readFileSync(API_CLIENT, 'utf8')).toMatch(/fetch\('\/api\/v1\/health'/);
     expect(readFileSync(API_CLIENT, 'utf8')).toMatch(/fetch\('\/api\/v1\/session'/);
     expect(readFileSync(API_CLIENT, 'utf8')).toMatch(/fetch\('\/api\/v1\/portfolio\/resolve'/);
@@ -70,6 +72,8 @@ describe('learning and safety boundaries', () => {
     expect(readFileSync(API_CLIENT, 'utf8')).toMatch(/\/api\/v1\/auth\/passkey\/register\/verify/);
     expect(readFileSync(API_CLIENT, 'utf8')).toMatch(/\/api\/v1\/auth\/passkey\/login\/options/);
     expect(readFileSync(API_CLIENT, 'utf8')).toMatch(/\/api\/v1\/auth\/passkey\/login\/verify/);
+    expect(readFileSync(API_CLIENT, 'utf8')).toMatch(/\/api\/v1\/portfolio\/snapshots\/consent/);
+    expect(readFileSync(API_CLIENT, 'utf8')).toMatch(/\/api\/v1\/portfolio\/sync/);
     expect(source).not.toMatch(
       /window\.(ethereum|solana)|eth_requestAccounts|signTransaction|signMessage|sendTransaction|fetch\s*\(/,
     );

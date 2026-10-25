@@ -1,4 +1,5 @@
 import { WhatChanged } from '@/features/portfolio-v2/what-changed';
+import { SnapshotConsent } from '@/features/portfolio-v2/snapshot-consent';
 import { AddressBook } from '@/features/portfolio-v2/address-book';
 import { HoldingsTable } from '@/features/portfolio-v2/holdings-table';
 export const metadata = { title: 'Overview (preview build)' };
@@ -17,6 +18,7 @@ export default function OverviewV2() {
         <h2>Holdings</h2>
         <HoldingsTable />
         <AddressBook />
+        <SnapshotConsent />
         <WhatChanged />
       </section>
 

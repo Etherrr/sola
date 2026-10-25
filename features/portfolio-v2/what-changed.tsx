@@ -1,6 +1,8 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { fetchOverview, type ObservedAmount } from './overview-history';
+import { fetchOverview, type NetworkSlice, type ObservedAmount } from './overview-history';
+import { diffNetwork, isZero, keyOf } from './network-diff';
+import { SYNCED_EVENT } from './snapshot-consent';
 
 /**
  * "What changed" section of the v0.2 Overview: the first UI consuming the
@@ -16,53 +18,31 @@ type Load =
   | { kind: 'notinvited' }
   | { kind: 'off' }
   | { kind: 'empty' }
-  | { kind: 'ok'; at: string; newerPartial: boolean; latest: ObservedAmount[]; prior: ObservedAmount[] | null }
+  | { kind: 'ok'; at: string; newerPartial: boolean; latest: ObservedAmount[]; prior: ObservedAmount[] | null; networks: NetworkSlice[] }
   | { kind: 'failed' };
 
-// Chain-aware identity key, same rule as the reviewed read model: EVM hex
-// compares case-insensitively, Solana base58 is case-sensitive - never
-// normalize Solana. Duplicates sum at ONE granularity on both sides.
-const keyOf = (o: ObservedAmount) =>
-  `${o.network}:${o.network === 'ethereum' ? o.address.toLowerCase() : o.address}:${o.assetId}:${o.kind}`;
-
-const isZero = (s: string) => {
-  const m = /^-?(\d+)(?:\.(\d+))?$/.exec(s);
-  return m !== null && BigInt((m[1] + (m[2] ?? '')).replace(/^0+(?=\d)/, '') || '0') === 0n;
-};
-const subDec = (a: string, b: string): string => {
-  const parse = (s: string) => {
-    const m = /^(-?)(\d+)(?:\.(\d+))?$/.exec(s)!;
-    return { neg: m[1] === '-', int: m[1] + m[2], frac: m[3] ?? '' };
-  };
-  const pa = parse(a), pb = parse(b);
-  const w = Math.max(pa.frac.length, pb.frac.length);
-  const toBig = (p: typeof pa) => {
-    const digits = (p.int + p.frac.padEnd(w, '0')).replace(/^0+(?=\d)/, '');
-    return BigInt(digits) * (p.neg ? -1n : 1n);
-  };
-  const d = toBig(pa) - toBig(pb);
-  const neg = d < 0n;
-  const abs = (neg ? -d : d).toString().padStart(w + 1, '0');
-  const int = w ? abs.slice(0, -w) : abs;
-  const frac = w ? abs.slice(-w).replace(/0+$/, '') : '';
-  return (neg ? '-' : '') + int + (frac ? '.' + frac : '');
-};
 const assetLabel = (assetId: string) => assetId.split('/').pop() ?? assetId;
 const short = (a: string) => (a.length > 16 ? `${a.slice(0, 8)}…${a.slice(-6)}` : a);
 
 export function WhatChanged() {
   const [load, setLoad] = useState<Load>({ kind: 'loading' });
+  const [round, setRound] = useState(0);
+  useEffect(() => {
+    const bump = () => setRound((n) => n + 1);
+    window.addEventListener(SYNCED_EVENT, bump);
+    return () => window.removeEventListener(SYNCED_EVENT, bump);
+  }, []);
   useEffect(() => {
     let live = true;
     fetchOverview().then((r) => {
       if (!live) return;
       if (r.kind === 'empty') setLoad({ kind: 'empty' });
       else if (r.kind === 'ok')
-        setLoad({ kind: 'ok', at: r.at, newerPartial: r.newerPartial, latest: r.latest, prior: r.prior });
+        setLoad({ kind: 'ok', at: r.at, newerPartial: r.newerPartial, latest: r.latest, prior: r.prior, networks: r.networks });
       else setLoad({ kind: r.kind });
     });
     return () => { live = false; };
-  }, []);
+  }, [round]);
 
   if (load.kind === 'loading') return <p><em>Loading recorded history…</em></p>;
   if (load.kind === 'signin')
@@ -86,40 +66,60 @@ export function WhatChanged() {
       </p>
     );
 
-  const { at: latestCompleteObservedAt, newerPartial, latest, prior } = load;
-  const priorByKey = new Map<string, string>();
-  if (prior) for (const o of prior) priorByKey.set(keyOf(o), o.amount);
-  const rows = latest
-    .map((o) => {
-      const prev = priorByKey.get(keyOf(o));
-      const delta = prev === undefined ? o.amount : subDec(o.amount, prev);
-      return { o, prev, delta };
-    })
-    .filter((r) => r.prev === undefined || !isZero(r.delta));
+  const { at: latestCompleteObservedAt, newerPartial, networks } = load;
+  // Per-network sections: each network's deltas use ONLY its own latest/prior
+  // complete observations (reviewer MEDIUM - no cross-network comparison).
+  // Absent-in-latest is stated explicitly as "not in latest observation",
+  // never silently dropped and never read as zero.
+  const sections: NetworkSlice[] =
+    networks.length > 0
+      ? networks
+      : [{ network: 'ethereum', at: latestCompleteObservedAt, latest: load.latest, prior: load.prior }];
   return (
     <div>
-      <p>
-        <em>
-          Latest complete observation: {latestCompleteObservedAt}. Spot balances only
-          {newerPartial
-            ? ' - a newer partial observation exists but is not a trustworthy baseline.'
-            : '.'}
-        </em>
-      </p>
-      {prior === null && (
-        <p>First recorded observation - there is no earlier complete observation to compare yet.</p>
+      {newerPartial && (
+        <p>
+          <em>A newer partial observation exists but is not a trustworthy baseline.</em>
+        </p>
       )}
-      {rows.length === 0 && prior !== null && <p>No change since the prior complete observation.</p>}
-      {rows.length > 0 && (
-        <ul>
-          {rows.map(({ o, prev, delta }) => (
-            <li key={keyOf(o)}>
-              {assetLabel(o.assetId)} ({o.network}, {short(o.address)}): {o.amount}
-              {prev === undefined ? ' - first seen' : ` (was ${prev}, ${isZero(delta) ? 'no change' : `${delta.startsWith('-') ? '' : '+'}${delta}`})`}
-            </li>
-          ))}
-        </ul>
-      )}
+      {sections.map((sec) => {
+        const { rows, removed } = diffNetwork(sec);
+        return (
+          <section key={sec.network}>
+            <p>
+              <em>
+                {sec.network === 'solana' ? 'Solana (SOL balance only)' : 'Ethereum'} - latest
+                complete observation: {sec.at}. Spot balances only.
+              </em>
+            </p>
+            {sec.prior === null && (
+              <p>First recorded observation - there is no earlier complete observation to compare yet.</p>
+            )}
+            {rows.length === 0 && removed.length === 0 && sec.prior !== null && (
+              <p>No change since the prior complete observation.</p>
+            )}
+            {rows.length > 0 && (
+              <ul>
+                {rows.map(({ o, prev, delta }) => (
+                  <li key={keyOf(o)}>
+                    {assetLabel(o.assetId)} ({short(o.address)}): {o.amount}
+                    {prev === undefined ? ' - first seen' : ` (was ${prev}, ${isZero(delta) ? 'no change' : `${delta.startsWith('-') ? '' : '+'}${delta}`})`}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {removed.length > 0 && (
+              <ul>
+                {removed.map((o) => (
+                  <li key={`removed-${keyOf(o)}`}>
+                    {assetLabel(o.assetId)} ({short(o.address)}): not in latest observation (was {o.amount})
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        );
+      })}
     </div>
   );
 }
