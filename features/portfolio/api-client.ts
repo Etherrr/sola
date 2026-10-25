@@ -721,3 +721,48 @@ export async function addressRemoveRequest(
     signal?.removeEventListener('abort', onAbort);
   }
 }
+
+/**
+ * Thirteenth approved browser request: GET the native session identity for the
+ * app shell (email + freshness), so the header can greet the NATIVE session
+ * instead of the Access profile when one is live. Raw Response; mapping lives
+ * in features/auth-v2/native-session.ts.
+ */
+export async function nativeSessionInfoRequest(signal?: AbortSignal): Promise<Response> {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 12000);
+  const onAbort = () => ctl.abort();
+  signal?.addEventListener('abort', onAbort);
+  if (signal?.aborted) ctl.abort();
+  try {
+    return await fetch('/api/v1/auth/email/session', {
+      method: 'GET',
+      credentials: 'same-origin',
+      cache: 'no-store',
+      signal: ctl.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', onAbort);
+  }
+}
+
+/** Fourteenth: POST native logout (ends the caller's own native session). */
+export async function nativeLogoutRequest(signal?: AbortSignal): Promise<Response> {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 12000);
+  const onAbort = () => ctl.abort();
+  signal?.addEventListener('abort', onAbort);
+  if (signal?.aborted) ctl.abort();
+  try {
+    return await fetch('/api/v1/auth/email/logout', {
+      method: 'POST',
+      credentials: 'same-origin',
+      cache: 'no-store',
+      signal: ctl.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', onAbort);
+  }
+}

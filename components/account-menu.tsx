@@ -2,6 +2,8 @@
 import Link from 'next/link';
 import { useEffect, useId, useRef, useState } from 'react';
 import { useSession } from '@/features/portfolio/session-context';
+import { useNativeSession } from '@/features/auth-v2/native-session';
+import { nativeLogoutRequest } from '@/features/portfolio/api-client';
 
 // Account control. It shows an identity only after a verified 200 from /api/v1/session. There is
 // no photo or display name source yet, so the avatar is the first letter of the verified email and
@@ -12,11 +14,17 @@ import { useSession } from '@/features/portfolio/session-context';
 // says so next to the button. The full navigation also discards this app's client state.
 export function AccountMenu() {
   const s = useSession();
+  const native = useNativeSession();
   const [open, setOpen] = useState(false);
   // Full navigation, not a client-side route: the Access edge clears the session cookie, and the
   // document swap discards every in-memory identity and saved-list state with it.
   const signOut = () => {
     window.location.assign('/cdn-cgi/access/logout');
+  };
+  // Native sign-out: end the native session, then reload so every client-side
+  // identity (including the Access one) is re-derived from the servers.
+  const nativeSignOut = () => {
+    nativeLogoutRequest().finally(() => window.location.reload());
   };
   const btn = useRef<HTMLButtonElement>(null);
   const root = useRef<HTMLDivElement>(null);
@@ -45,7 +53,11 @@ export function AccountMenu() {
       document.removeEventListener('keydown', onKey);
     };
   }, [open]);
-  const email = s.kind === 'verified' ? s.email : null;
+  // A live native session is the identity the app greets (main 2026-10-25:
+  // the native journey must reflect the native identity, not the Access
+  // profile). The Access email remains the fallback when native is off/none.
+  const nativeEmail = native.kind === 'ok' ? native.email : null;
+  const email = nativeEmail ?? (s.kind === 'verified' ? s.email : null);
   const label = email
     ? `Account: ${email}`
     : s.kind === 'rejected'
@@ -82,7 +94,11 @@ export function AccountMenu() {
       {open && (
         <div id={panelId} className="acct-panel" role="group" aria-label="Account">
           <p className="acct-status">
-            {email ? (
+            {nativeEmail ? (
+              <>
+                Signed in as <strong>{nativeEmail}</strong>
+              </>
+            ) : email ? (
               <>
                 Signed in via Cloudflare Access as <strong>{email}</strong>
               </>
@@ -99,13 +115,24 @@ export function AccountMenu() {
             Sola Capital Partners ↗
           </a>
           <div className="acct-signout">
-            <button type="button" className="acct-signout-btn" onClick={signOut}>
-              Sign out
-            </button>
-            <p className="acct-signout-note">
-              Ends this protected session and also signs you out of other apps protected by this
-              Cloudflare Access account.
-            </p>
+            {nativeEmail ? (
+              <>
+                <button type="button" className="acct-signout-btn" onClick={nativeSignOut}>
+                  Sign out
+                </button>
+                <p className="acct-signout-note">Ends this Sola sign-in on this device.</p>
+              </>
+            ) : (
+              <>
+                <button type="button" className="acct-signout-btn" onClick={signOut}>
+                  Sign out
+                </button>
+                <p className="acct-signout-note">
+                  Ends this protected session and also signs you out of other apps protected by this
+                  Cloudflare Access account.
+                </p>
+              </>
+            )}
           </div>
         </div>
       )}

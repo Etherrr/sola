@@ -43,13 +43,14 @@ describe('learning and safety boundaries', () => {
       .filter((file) => /\.(ts|tsx)$/.test(file) && file !== API_CLIENT)
       .map((file) => readFileSync(file, 'utf8'))
       .join('\n');
-    // Exactly twelve browser requests exist: the single-address lookup POST and its multi-address
+    // Exactly fourteen browser requests exist: the single-address lookup POST and its multi-address
     // variant (same resolve endpoint, same transport guarantees), the same-origin session GET,
     // the same-origin health GET, the same-origin saved-addresses API, the same-origin
     // markets overview GET, the v0.2 own-history overview GET, the two native email
-    // sign-in POSTs (challenge + verify), and the three native address-book requests
-    // (list/add, rename, remove) - all through this one module.
-    expect(readFileSync(API_CLIENT, 'utf8').match(/fetch\s*\(/g)).toHaveLength(12);
+    // sign-in POSTs (challenge + verify), the three native address-book requests
+    // (list/add, rename, remove), and the two native session requests
+    // (info GET + logout POST) - all through this one module.
+    expect(readFileSync(API_CLIENT, 'utf8').match(/fetch\s*\(/g)).toHaveLength(14);
     expect(readFileSync(API_CLIENT, 'utf8')).toMatch(/fetch\('\/api\/v1\/health'/);
     expect(readFileSync(API_CLIENT, 'utf8')).toMatch(/fetch\('\/api\/v1\/session'/);
     expect(readFileSync(API_CLIENT, 'utf8')).toMatch(/fetch\('\/api\/v1\/portfolio\/resolve'/);
@@ -61,6 +62,8 @@ describe('learning and safety boundaries', () => {
     expect(readFileSync(API_CLIENT, 'utf8')).toMatch(/\/api\/v1\/portfolio\/addresses/);
     expect(readFileSync(API_CLIENT, 'utf8')).toMatch(/\/api\/v1\/portfolio\/addresses\/rename/);
     expect(readFileSync(API_CLIENT, 'utf8')).toMatch(/\/api\/v1\/portfolio\/addresses\/remove/);
+    expect(readFileSync(API_CLIENT, 'utf8')).toMatch(/\/api\/v1\/auth\/email\/session/);
+    expect(readFileSync(API_CLIENT, 'utf8')).toMatch(/\/api\/v1\/auth\/email\/logout/);
     expect(source).not.toMatch(
       /window\.(ethereum|solana)|eth_requestAccounts|signTransaction|signMessage|sendTransaction|fetch\s*\(/,
     );
