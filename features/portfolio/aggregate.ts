@@ -34,7 +34,12 @@ export type AddressStatus = {
   /** The source's own observation time for this address; null when no data was read. */
   observedAt: string | null;
   unpricedAssets: number;
-  /** Sum of this address's priced values; null when no data was read (failed/duplicate). */
+  /**
+   * Sum of this address's priced values; null when nothing priced was observed:
+   * failed/duplicate, or an answer with no asset carrying a readable value (an unread
+   * balance is not a zero balance). An explicit '0' value IS an observation: a wallet
+   * actually read as zero keeps its real 0n and renders $0.00.
+   */
   pricedValueCents: bigint | null;
 };
 
@@ -110,6 +115,7 @@ export function aggregateAddresses(inputs: readonly AggregateInput[]): Aggregate
     const warnings = [...data.warnings];
     let unpriced = 0;
     let pricedSum = 0n;
+    let pricedObserved = 0;
     const seenAssets = new Set<string>();
     for (const wallet of data.wallets) {
       for (const asset of wallet.assets) {
@@ -120,7 +126,10 @@ export function aggregateAddresses(inputs: readonly AggregateInput[]): Aggregate
         seenAssets.add(asset.assetId);
         const cents = asset.value === null ? null : usdToCents(asset.value);
         if (cents === null) unpriced++;
-        else pricedSum += cents;
+        else {
+          pricedSum += cents;
+          pricedObserved++;
+        }
         const id = `${input.network}:${input.address}:${asset.assetId}`;
         positions.push({
           id,
@@ -145,7 +154,9 @@ export function aggregateAddresses(inputs: readonly AggregateInput[]): Aggregate
       warnings,
       observedAt: data.observedAt,
       unpricedAssets: unpriced,
-      pricedValueCents: pricedSum,
+      // No priced observation at all (empty answer, or every value unknown - typical for
+      // an unread balance) is null, never 0n: $0.00 would claim a known-empty wallet.
+      pricedValueCents: pricedObserved === 0 ? null : pricedSum,
     });
   }
 

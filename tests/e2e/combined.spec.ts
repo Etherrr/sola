@@ -56,8 +56,21 @@ const ETH_WALLETS = [
 ];
 const SOL_WALLETS = [wallet(SOL1, [asset('solana:mainnet/native', 'SOL', '20', '3000')])];
 
-/** Stubs resolve per network; records call counts. `failEthereum` answers 429 for ethereum. */
-async function stubResolve(page: Page, opts: { failEthereum?: boolean; failSolana?: boolean } = {}) {
+const SOL_UNREAD = [
+  wallet(SOL1, [], true, ['SOL balance could not be read; this is not a zero balance.']),
+];
+
+/** Stubs resolve per network; records call counts. `failEthereum` answers 429 for ethereum.
+ *  `ethWallets`/`solWallets` override the answered wallets (e.g. an unread or true-zero one). */
+async function stubResolve(
+  page: Page,
+  opts: {
+    failEthereum?: boolean;
+    failSolana?: boolean;
+    ethWallets?: unknown[];
+    solWallets?: unknown[];
+  } = {},
+) {
   const calls: string[] = [];
   await page.route('**/api/v1/portfolio/resolve', async (route) => {
     const body = JSON.parse(route.request().postData() ?? '{}') as { network: string; addresses: string[] };
@@ -65,11 +78,11 @@ async function stubResolve(page: Page, opts: { failEthereum?: boolean; failSolan
     if (body.network === 'ethereum') {
       if (opts.failEthereum)
         return json(route, 429, { error: { code: 'rate_limited', message: 'limited' }, requestId: 'r' });
-      return json(route, 200, { ...resolveBody(ETH_WALLETS, T2), network: 'ethereum' });
+      return json(route, 200, { ...resolveBody(opts.ethWallets ?? ETH_WALLETS, T2), network: 'ethereum' });
     }
     if (opts.failSolana)
       return json(route, 429, { error: { code: 'rate_limited', message: 'limited' }, requestId: 'r' });
-    return json(route, 200, { ...resolveBody(SOL_WALLETS, T1), network: 'solana', chainId: null });
+    return json(route, 200, { ...resolveBody(opts.solWallets ?? SOL_WALLETS, T1), network: 'solana', chainId: null });
   });
   return calls;
 }
@@ -192,6 +205,57 @@ test('when every network fails the badge claims no data mode', async ({ page }) 
   await expect(section.locator('.badge-warn')).toHaveCount(3);
   await expect(section.getByText('0 of 3')).toBeVisible();
   await expect(section.locator('.metric strong').first()).toHaveText('n/a'); // never $0.00 when nothing was read
+});
+
+test('a sole partial answer with an unread balance is n/a, never $0.00', async ({ page }) => {
+  // The warning says "not a zero balance"; the row and the combined total must agree.
+  await stubAccounts(page, [mkRow('solana', SOL1, 'Solar')]);
+  await stubResolve(page, { solWallets: SOL_UNREAD });
+  await page.goto('/portfolio');
+  const section = page.locator('#main .combined');
+  await section.getByRole('button', { name: 'Load saved addresses, combined' }).click();
+  await expect(section.getByText('COMBINED VIEW · LIVE READ-ONLY')).toBeVisible(); // a real answer contributed
+  await expect(section.locator('.metric strong').first()).toHaveText('n/a'); // never $0.00 for an unread balance
+  await expect(section.getByText('0 of 1')).toBeVisible();
+  await expect(section.locator('.badge-warn', { hasText: 'PARTIAL' })).toBeVisible();
+  const row = section.locator('tr', { hasText: 'Solar' });
+  await expect(row.getByRole('cell', { name: 'n/a' }).first()).toBeVisible();
+  await expect(row.getByText('$0.00')).toHaveCount(0);
+  await expect(section.getByText(/not a zero balance/).first()).toBeVisible();
+  await expect(section.getByText(/Incomplete: 0 unpriced/)).toBeVisible();
+});
+
+test('a known ETH subtotal stands while an unread SOL row is n/a', async ({ page }) => {
+  await stubAccounts(page, [mkRow('ethereum', ETH1, 'Cold wallet'), mkRow('solana', SOL1, 'Solar')]);
+  await stubResolve(page, { ethWallets: [ETH_WALLETS[0]], solWallets: SOL_UNREAD });
+  await page.goto('/portfolio');
+  const section = page.locator('#main .combined');
+  await section.getByRole('button', { name: 'Load saved addresses, combined' }).click();
+  await expect(section.locator('.metric strong').first()).toHaveText('$7,000.00'); // known subtotal stands
+  await expect(section.getByText(/Incomplete: 0 unpriced assets, 1 address partial or failed/)).toBeVisible();
+  const solRow = section.locator('tr', { hasText: 'Solar' });
+  await expect(solRow.getByRole('cell', { name: 'n/a' }).first()).toBeVisible();
+  await expect(solRow.getByText('$0.00')).toHaveCount(0);
+  const ethRow = section.locator('tr', { hasText: 'Cold wallet' });
+  await expect(ethRow.getByRole('cell', { name: '$7,000.00' })).toBeVisible();
+  await expect(section.getByText('1 of 2')).toBeVisible();
+});
+
+test('a wallet actually read as zero keeps its true $0.00', async ({ page }) => {
+  const zeroWallets = [
+    wallet(ETH1, [asset('eip155:1/native', 'ETH', '0', '0'), asset('eip155:1/erc20:usdc', 'USDC', '0', '0')]),
+  ];
+  await stubAccounts(page, [mkRow('ethereum', ETH1, 'Cold wallet')]);
+  await stubResolve(page, { ethWallets: zeroWallets });
+  await page.goto('/portfolio');
+  const section = page.locator('#main .combined');
+  await section.getByRole('button', { name: 'Load saved addresses, combined' }).click();
+  await expect(section.locator('.metric strong').first()).toHaveText('$0.00'); // true zero, fully read
+  await expect(section.getByText('1 of 1')).toBeVisible();
+  await expect(section.locator('.badge-loaded')).toHaveCount(1);
+  await expect(section.getByText(/Incomplete:/)).toHaveCount(0);
+  const row = section.locator('tr', { hasText: 'Cold wallet' });
+  await expect(row.getByRole('cell', { name: '$0.00' })).toBeVisible();
 });
 
 test('an unverified session never fetches and says so', async ({ page }) => {

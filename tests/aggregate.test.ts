@@ -182,3 +182,49 @@ describe('aggregateAddresses', () => {
     expect(r.positions[1].valueCents).toBe(24691357800n);
   });
 });
+
+describe('known zero vs no priced observation', () => {
+  it('an answer with no assets observed is null, never a $0.00 row (unread is not zero)', () => {
+    // Sole partial answer: the balance could not be read; the warning says "not a zero
+    // balance", so the row must not show $0.00.
+    const r = aggregateAddresses([
+      input('solana', SOL1, ok([wallet(SOL1, [], true)], '2026-10-24T10:00:00Z', true)),
+    ]);
+    expect(r.perAddress[0]).toMatchObject({ status: 'partial', pricedValueCents: null, unpricedAssets: 0 });
+    expect(r.positions).toHaveLength(0);
+    expect(r.incomplete).toBe(true);
+  });
+
+  it('an answer whose only assets have unknown values is null, not $0.00', () => {
+    const r = aggregateAddresses([
+      input('ethereum', ETH1, ok([wallet(ETH1, [asset('e:xyz', 'XYZ', '5', null)])], '2026-10-24T10:00:00Z')),
+    ]);
+    expect(r.perAddress[0].pricedValueCents).toBeNull();
+    expect(r.perAddress[0].unpricedAssets).toBe(1);
+    expect(r.incomplete).toBe(true);
+  });
+
+  it("an explicit '0' value is a real observation: the row keeps its true zero", () => {
+    const r = aggregateAddresses([
+      input('ethereum', ETH1, ok([wallet(ETH1, [
+        asset('e:eth', 'ETH', '0', '0'),
+        asset('e:usdc', 'USDC', '0', '0'),
+      ])], '2026-10-24T10:00:00Z')),
+    ]);
+    expect(r.perAddress[0]).toMatchObject({ status: 'ok', pricedValueCents: 0n, unpricedAssets: 0 });
+    expect(r.incomplete).toBe(false);
+  });
+
+  it('mixed: a known ETH value stands while the unread SOL row is null, with incomplete set', () => {
+    const r = aggregateAddresses([
+      input('ethereum', ETH1, ok([wallet(ETH1, [asset('e:eth', 'ETH', '2', '17312.09')])], '2026-10-24T10:00:00Z')),
+      input('solana', SOL1, ok([wallet(SOL1, [], true)], '2026-10-24T10:00:00Z', true)),
+    ]);
+    expect(r.perAddress[0]).toMatchObject({ status: 'ok', pricedValueCents: 1731209n });
+    expect(r.perAddress[1]).toMatchObject({ status: 'partial', pricedValueCents: null });
+    const s = summarize(r.positions);
+    expect(s.assets).toBe(1731209n); // known subtotal stands; nothing zero-filled for SOL
+    expect(r.incomplete).toBe(true);
+    expect(r.observedRange).toEqual({ earliest: '2026-10-24T10:00:00Z', latest: '2026-10-24T10:00:00Z' });
+  });
+});
