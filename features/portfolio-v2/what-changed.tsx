@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { overviewHistoryRequest } from '../portfolio/api-client';
+import { fetchOverview, type ObservedAmount } from './overview-history';
 
 /**
  * "What changed" section of the v0.2 Overview: the first UI consuming the
@@ -10,25 +10,13 @@ import { overviewHistoryRequest } from '../portfolio/api-client';
  * latest vs prior COMPLETE-run deltas, spot-balances-only scope labeled.
  */
 
-type ObservedAmount = {
-  assetId: string;
-  network: 'ethereum' | 'solana';
-  address: string;
-  kind: string;
-  amount: string;
-  observedAt: string;
-};
-type ApiBody =
-  | { status: 'empty'; reason: string; newerPartial: boolean }
-  | { status: 'ok'; scope: string; latestCompleteObservedAt: string; newerPartial: boolean; latest: ObservedAmount[]; prior: ObservedAmount[] | null }
-  | { error: string };
-
 type Load =
   | { kind: 'loading' }
   | { kind: 'signin' }
+  | { kind: 'notinvited' }
   | { kind: 'off' }
   | { kind: 'empty' }
-  | { kind: 'ok'; body: Extract<ApiBody, { status: 'ok' }> }
+  | { kind: 'ok'; at: string; newerPartial: boolean; latest: ObservedAmount[]; prior: ObservedAmount[] | null }
   | { kind: 'failed' };
 
 // Chain-aware identity key, same rule as the reviewed read model: EVM hex
@@ -66,16 +54,13 @@ export function WhatChanged() {
   const [load, setLoad] = useState<Load>({ kind: 'loading' });
   useEffect(() => {
     let live = true;
-    overviewHistoryRequest()
-      .then(async (r) => {
-        const body = (await r.json().catch(() => null)) as ApiBody | null;
-        if (!live) return;
-        if (r.status === 401 || r.status === 403) return setLoad({ kind: 'signin' });
-        if (r.status === 503) return setLoad({ kind: 'off' });
-        if (!r.ok || !body || !('status' in body)) return setLoad({ kind: 'failed' });
-        setLoad(body.status === 'empty' ? { kind: 'empty' } : { kind: 'ok', body });
-      })
-      .catch(() => live && setLoad({ kind: 'failed' }));
+    fetchOverview().then((r) => {
+      if (!live) return;
+      if (r.kind === 'empty') setLoad({ kind: 'empty' });
+      else if (r.kind === 'ok')
+        setLoad({ kind: 'ok', at: r.at, newerPartial: r.newerPartial, latest: r.latest, prior: r.prior });
+      else setLoad({ kind: r.kind });
+    });
     return () => { live = false; };
   }, []);
 
@@ -83,6 +68,10 @@ export function WhatChanged() {
   if (load.kind === 'signin')
     return (
       <p><em>Sign in to load your recorded history.</em></p>
+    );
+  if (load.kind === 'notinvited')
+    return (
+      <p><em>This preview is invite-only - this email is not on the list.</em></p>
     );
   if (load.kind === 'off')
     return <p><em>Recorded history is switched off on this deployment.</em></p>;
@@ -97,7 +86,7 @@ export function WhatChanged() {
       </p>
     );
 
-  const { latestCompleteObservedAt, newerPartial, latest, prior } = load.body;
+  const { at: latestCompleteObservedAt, newerPartial, latest, prior } = load;
   const priorByKey = new Map<string, string>();
   if (prior) for (const o of prior) priorByKey.set(keyOf(o), o.amount);
   const rows = latest

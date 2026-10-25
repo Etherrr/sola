@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { overviewHistoryRequest } from '../portfolio/api-client';
+import { fetchOverview, type ObservedAmount } from './overview-history';
 
 /**
  * v0.2 Holdings table: renders the caller's OWN latest COMPLETE recorded
@@ -11,22 +11,10 @@ import { overviewHistoryRequest } from '../portfolio/api-client';
  * what-changed.tsx (401 sign-in / 503 off / empty / failed).
  */
 
-type ObservedAmount = {
-  assetId: string;
-  network: 'ethereum' | 'solana';
-  address: string;
-  kind: string;
-  amount: string;
-  observedAt: string;
-};
-type ApiBody =
-  | { status: 'empty'; reason: string; newerPartial: boolean }
-  | { status: 'ok'; scope: string; latestCompleteObservedAt: string; newerPartial: boolean; latest: ObservedAmount[]; prior: ObservedAmount[] | null }
-  | { error: string };
-
 type Load =
   | { kind: 'loading' }
   | { kind: 'signin' }
+  | { kind: 'notinvited' }
   | { kind: 'off' }
   | { kind: 'empty'; newerPartial: boolean }
   | { kind: 'ok'; at: string; newerPartial: boolean; rows: ObservedAmount[] }
@@ -38,29 +26,23 @@ export function HoldingsTable() {
   const [load, setLoad] = useState<Load>({ kind: 'loading' });
 
   useEffect(() => {
-    const ctl = new AbortController();
-    overviewHistoryRequest(ctl.signal)
-      .then(async (res): Promise<Load> => {
-        if (res.status === 401) return { kind: 'signin' };
-        if (res.status === 503) return { kind: 'off' };
-        if (!res.ok) return { kind: 'failed' };
-        const body = (await res.json()) as ApiBody;
-        if ('error' in body) return { kind: 'failed' };
-        if (body.status === 'empty') return { kind: 'empty', newerPartial: body.newerPartial };
-        return {
-          kind: 'ok',
-          at: body.latestCompleteObservedAt,
-          newerPartial: body.newerPartial,
-          rows: body.latest,
-        };
-      })
-      .then(setLoad)
-      .catch(() => setLoad({ kind: 'failed' }));
-    return () => ctl.abort();
+    let live = true;
+    fetchOverview().then((r) => {
+      if (!live) return;
+      if (r.kind === 'empty') setLoad({ kind: 'empty', newerPartial: r.newerPartial });
+      else if (r.kind === 'ok')
+        setLoad({ kind: 'ok', at: r.at, newerPartial: r.newerPartial, rows: r.latest });
+      else setLoad({ kind: r.kind });
+    });
+    return () => {
+      live = false;
+    };
   }, []);
 
   if (load.kind === 'loading') return <p><em>Loading holdings…</em></p>;
   if (load.kind === 'signin') return <p><em>Sign in to load your recorded holdings.</em></p>;
+  if (load.kind === 'notinvited')
+    return <p><em>This preview is invite-only - this email is not on the list.</em></p>;
   if (load.kind === 'off') return <p><em>Holdings are off on this preview build.</em></p>;
   if (load.kind === 'failed') return <p><em>Holdings unavailable right now.</em></p>;
   if (load.kind === 'empty')
