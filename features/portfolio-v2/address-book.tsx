@@ -34,15 +34,17 @@ type Load =
 
 const short = (a: string) => (a.length > 12 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a);
 
-async function statusOf(res: Response): Promise<Load> {
+export async function statusOf(res: Response): Promise<Load> {
   if (res.status === 401) return { kind: 'signin' };
   if (res.status === 503) return { kind: 'off' };
   if (res.status === 429) {
+    // The limiter's body field is retryAfterSec (server/portfolio/addresses.ts);
+    // it sends no Retry-After header on these routes.
     let retryAfter: number | undefined;
     try {
-      retryAfter = (await res.clone().json())?.retryAfter;
-    } catch { /* header-only */ }
-    retryAfter ??= Number(res.headers.get('retry-after')) || undefined;
+      const b = await res.clone().json();
+      if (typeof b?.retryAfterSec === 'number') retryAfter = b.retryAfterSec;
+    } catch { /* body unreadable */ }
     return { kind: 'failed', retryAfter };
   }
   if (!res.ok) return { kind: 'failed' };
@@ -79,7 +81,11 @@ export function AddressBook() {
             : `Could not ${action}.`,
         ).catch(() => `Could not ${action}.`)
       : res.status === 429
-        ? Promise.resolve('Too many changes just now - wait a moment and retry.')
+        ? res.json().then((b) =>
+            typeof b?.retryAfterSec === 'number'
+              ? `Too many changes just now - retry in about ${b.retryAfterSec}s.`
+              : 'Too many changes just now - wait a moment and retry.',
+          ).catch(() => 'Too many changes just now - wait a moment and retry.')
         : res.status === 400
           ? res.json().then((b) =>
               b?.error === 'invalid_address'
