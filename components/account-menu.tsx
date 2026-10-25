@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { useSession } from '@/features/portfolio/session-context';
 import { useNativeSession } from '@/features/auth-v2/native-session';
 import { nativeLogoutRequest } from '@/features/portfolio/api-client';
+import { registerPasskey, passkeysSupported } from '../features/auth-v2/passkey-client';
 
 // Account control. It shows an identity only after a verified 200 from /api/v1/session. There is
 // no photo or display name source yet, so the avatar is the first letter of the verified email and
@@ -13,6 +14,14 @@ import { nativeLogoutRequest } from '@/features/portfolio/api-client';
 // logout - the revocation applies to every app protected by this Access account - so the control
 // says so next to the button. The full navigation also discards this app's client state.
 export function AccountMenu() {
+  const [passkeyNote, setPasskeyNote] = useState<string | null>(null);
+  const [passkeyBusy, setPasskeyBusy] = useState(false);
+  const setupPasskey = async () => {
+    setPasskeyBusy(true); setPasskeyNote(null);
+    const out = await registerPasskey();
+    setPasskeyNote(out.ok ? 'Passkey saved.' : out.message);
+    setPasskeyBusy(false);
+  };
   const s = useSession();
   const native = useNativeSession();
   const [open, setOpen] = useState(false);
@@ -125,6 +134,19 @@ export function AccountMenu() {
           <div className="acct-signout">
             {nativeEmail ? (
               <>
+                {passkeysSupported() && (
+                  <>
+                    <button
+                      type="button"
+                      className="acct-signout-btn"
+                      disabled={passkeyBusy}
+                      onClick={() => void setupPasskey()}
+                    >
+                      {passkeyBusy ? 'Working…' : 'Set up a passkey'}
+                    </button>
+                    {passkeyNote && <p className="acct-signout-note">{passkeyNote}</p>}
+                  </>
+                )}
                 <button type="button" className="acct-signout-btn" onClick={nativeSignOut}>
                   Sign out
                 </button>

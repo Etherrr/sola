@@ -766,3 +766,48 @@ export async function nativeLogoutRequest(signal?: AbortSignal): Promise<Respons
     signal?.removeEventListener('abort', onAbort);
   }
 }
+
+/** Shared transport for the four passkey (WebAuthn) requests. Same-origin POST
+ * with a JSON body; the browser ceremony itself happens in
+ * features/auth-v2/passkey-client.ts via navigator.credentials - this module
+ * only carries the HTTP leg. */
+async function passkeyRequest(path: string, body: unknown, signal?: AbortSignal): Promise<Response> {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 12000);
+  const onAbort = () => ctl.abort();
+  signal?.addEventListener('abort', onAbort);
+  if (signal?.aborted) ctl.abort();
+  try {
+    return await fetch(path, {
+      method: 'POST',
+      credentials: 'same-origin',
+      cache: 'no-store',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body ?? {}),
+      signal: ctl.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', onAbort);
+  }
+}
+
+/** Fifteenth: POST passkey registration options (session required server-side). */
+export async function passkeyRegisterOptionsRequest(signal?: AbortSignal): Promise<Response> {
+  return passkeyRequest('/api/v1/auth/passkey/register/options', {}, signal);
+}
+
+/** Sixteenth: POST passkey registration verification with the signed ceremony response. */
+export async function passkeyRegisterVerifyRequest(response: unknown, signal?: AbortSignal): Promise<Response> {
+  return passkeyRequest('/api/v1/auth/passkey/register/verify', { response }, signal);
+}
+
+/** Seventeenth: POST passkey sign-in options (rate-limited server-side). */
+export async function passkeyLoginOptionsRequest(signal?: AbortSignal): Promise<Response> {
+  return passkeyRequest('/api/v1/auth/passkey/login/options', {}, signal);
+}
+
+/** Eighteenth: POST passkey sign-in verification; the server sets the session cookie. */
+export async function passkeyLoginVerifyRequest(challengeId: string, response: unknown, signal?: AbortSignal): Promise<Response> {
+  return passkeyRequest('/api/v1/auth/passkey/login/verify', { challengeId, response }, signal);
+}

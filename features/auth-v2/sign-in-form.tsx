@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { authEmailChallenge, authEmailVerify } from '../portfolio/api-client';
+import { loginWithPasskey, passkeysSupported } from './passkey-client';
 
 /**
  * Functional native sign-in form (preview): email code challenge -> verify ->
@@ -12,7 +13,7 @@ import { authEmailChallenge, authEmailVerify } from '../portfolio/api-client';
 type Step =
   | { kind: 'email' }
   | { kind: 'code'; email: string; expiresAt: string }
-  | { kind: 'done'; email: string };
+  | { kind: 'done'; email: string | null };
 
 export function SignInForm() {
   const [step, setStep] = useState<Step>({ kind: 'email' });
@@ -62,11 +63,19 @@ export function SignInForm() {
     setBusy(false);
   };
 
+  const signInWithPasskey = async () => {
+    setBusy(true); setError(null);
+    const out = await loginWithPasskey();
+    if (out.ok) setStep({ kind: 'done', email: null });
+    else setError(out.message);
+    setBusy(false);
+  };
+
   if (step.kind === 'done')
     return (
       <div>
         <p>
-          <strong>Signed in as {step.email}.</strong>
+          <strong>{step.email ? `Signed in as ${step.email}.` : 'Signed in.'}</strong>
         </p>
         <p><a href="/dev/overview-v2">Continue</a></p>
       </div>
@@ -119,6 +128,16 @@ export function SignInForm() {
             onClick={() => { setStep({ kind: 'email' }); setError(null); }}
           >
             Use a different email
+          </button>
+        )}
+        {step.kind === 'email' && passkeysSupported() && (
+          <button
+            type="button"
+            className="button secondary"
+            disabled={busy}
+            onClick={() => void signInWithPasskey()}
+          >
+            Sign in with a passkey
           </button>
         )}
       </p>
