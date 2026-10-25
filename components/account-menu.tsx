@@ -92,6 +92,9 @@ export function AccountMenu() {
               'Identity not available right now. Nothing is guessed.'
             )}
           </p>
+          <Link href="/welcome" onClick={() => setOpen(false)}>
+            Start here - what this app does
+          </Link>
           <Link href="/settings" onClick={() => setOpen(false)}>
             Privacy &amp; local data
           </Link>

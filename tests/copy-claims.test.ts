@@ -192,3 +192,14 @@ describe('the orientation page keeps coverage claims honest', () => {
     expect(page).toContain('design preview');
   });
 });
+
+describe('the orientation page is discoverable from the shell', () => {
+  it('links /welcome from the main navigation and the account menu', () => {
+    const shell = readFileSync('components/app-shell.tsx', 'utf8');
+    const menu = readFileSync('components/account-menu.tsx', 'utf8');
+    expect(shell).toContain("href: '/welcome'");
+    expect(shell).toContain("label: 'Start here'");
+    expect(menu).toContain('href="/welcome"');
+    expect(menu).toContain('Start here - what this app does');
+  });
+});

@@ -1890,6 +1890,13 @@ code {
   .side-nav a[aria-current] {
     box-shadow: inset 0 3px 0 var(--gold);
   }
+  /* Six tabs need 352px (6 x 56px min-width + 16px padding). Below that the orientation tab
+     hides; the orientation stays reachable from the account menu on narrow screens. */
+  @media (max-width: 351px) {
+    .side-nav a.nav-start-here {
+      display: none;
+    }
+  }
   .topbar {
     padding: 8px 14px;
     gap: 10px;

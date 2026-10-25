@@ -435,10 +435,11 @@ test.describe('entrance', () => {
     if (!isMobile) {
       await btn.click();
       await expect(btn).toHaveAttribute('aria-expanded', 'true');
-      await page.keyboard.press('Tab');
-      await page.keyboard.press('Tab');
-      await page.keyboard.press('Tab');
-      await page.keyboard.press('Tab');
+      // Tab through every panel item; focus leaving the control must close it. The count is not
+      // hard-coded so adding a panel link does not silently break the expectation.
+      for (let i = 0; i < 8 && (await btn.getAttribute('aria-expanded')) === 'true'; i += 1) {
+        await page.keyboard.press('Tab');
+      }
       await expect(btn).toHaveAttribute('aria-expanded', 'false');
       expect(
         await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
@@ -685,4 +686,68 @@ test('orientation page is honest, inert and sends nothing', async ({ page }) => 
   await expect(page.locator('#main button')).toHaveCount(0);
   await page.waitForTimeout(500);
   expect(posts).toEqual([]);
+});
+
+test('orientation is discoverable from the shell nav and the account menu', async ({ page }) => {
+  await page.goto('/welcome');
+  const nav = page.locator('nav[aria-label="Main"]');
+  const navLink = nav.getByRole('link', { name: 'Start here' });
+  await expect(navLink).toHaveAttribute('href', '/welcome/');
+  await expect(navLink).toHaveAttribute('aria-current', 'page');
+  // Every nav item is keyboard-reachable in DOM order, not only reachable by pointer.
+  const names = ['Overview', 'Track', 'Markets', 'Start here', 'Education', 'Settings'];
+  await nav.getByRole('link', { name: 'Overview' }).focus();
+  await expect(nav.getByRole('link', { name: 'Overview' })).toBeFocused();
+  for (const name of names.slice(1)) {
+    await page.keyboard.press('Tab');
+    await expect(nav.getByRole('link', { name })).toBeFocused();
+  }
+  await page.goto('/settings');
+  await page.getByRole('button', { name: /^Account/ }).click();
+  const menuLink = page.getByRole('link', { name: 'Start here - what this app does' });
+  await expect(menuLink).toHaveAttribute('href', '/welcome/');
+  // Every account-menu item is keyboard-reachable in DOM order: orientation, privacy, the
+  // external site link and sign out. Tabbing starts from the menu button that has focus.
+  const menu = page.getByRole('group', { name: 'Account' });
+  await page.keyboard.press('Tab');
+  await expect(menuLink).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(menu.getByRole('link', { name: 'Privacy & local data' })).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(menu.getByRole('link', { name: /Sola Capital Partners/ })).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(menu.getByRole('button', { name: 'Sign out' })).toBeFocused();
+  // Keyboard activation of the orientation link, not only pointer.
+  await page.keyboard.press('Shift+Tab');
+  await page.keyboard.press('Shift+Tab');
+  await page.keyboard.press('Shift+Tab');
+  await expect(menuLink).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/\/welcome/);
+  await expect(page.locator('#main')).toContainText('What this app does, honestly.');
+});
+
+test('at 320px the tab bar shows five fitting tabs and the orientation stays in the account menu', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 700 });
+  await page.goto('/settings');
+  const nav = page.locator('nav[aria-label="Main"]');
+  await expect(nav.getByRole('link', { name: 'Start here' })).toBeHidden();
+  // The bar is position:fixed, so document scrollWidth cannot catch a cutoff; measure the last
+  // tab's box against the viewport instead.
+  const visible = ['Overview', 'Track', 'Markets', 'Education', 'Settings'];
+  for (const name of visible) {
+    const box = await nav.getByRole('link', { name }).boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(320);
+  }
+  // The orientation remains one tap away inside the account menu.
+  await page.getByRole('button', { name: /^Account/ }).click();
+  const menuLink = page.getByRole('link', { name: 'Start here - what this app does' });
+  await expect(menuLink).toBeVisible();
+  await menuLink.click();
+  await expect(page).toHaveURL(/\/welcome/);
+  await expect(page.locator('#main')).toContainText('What this app does, honestly.');
 });
