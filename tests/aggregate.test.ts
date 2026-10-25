@@ -50,6 +50,15 @@ describe('usdToCents', () => {
     expect(usdToCents('0.00000001')).toBe(0n); // truncates below a micro-dollar, rounds to 0
     expect(usdToCents('2500.00')).toBe(250000n);
   });
+  it('truncates past 6 decimals BEFORE the half-up round (the 7th digit never rounds up)', () => {
+    // 1.0050001 -> truncate to 1.005000 (100.5000 cents) -> 101; the trailing 1 plays no role.
+    expect(usdToCents('1.0050001')).toBe(101n);
+    // 1.0049999 -> truncate to 1.004999 (100.4999 cents) -> 100; without truncation the
+    // full value 100.49999 would still round to 100 - the pin is that NO 7th-digit
+    // carry can flip the cent (e.g. 1.004999999 would mathematically still be 100).
+    expect(usdToCents('1.0049999')).toBe(100n);
+    expect(usdToCents('0.0000009')).toBe(0n); // sub-micro truncates to zero, never rounds to 1
+  });
   it('rejects non-decimals and negatives', () => {
     expect(usdToCents('abc')).toBeNull();
     expect(usdToCents('-5')).toBeNull();
