@@ -113,6 +113,14 @@ every query carries user_id/owner predicates (existing D1 store pattern extends)
 4. Rollback: copy-not-move means tracked_addresses stays intact; reverting is removing
    the claim affordance. Data deletion of legacy rows is a separate, later,
    owner-approved operation.
+5. Claim window (explicit, not "claimable forever"): after the customer-facing Access
+   policy is removed from the app host, the Access application RETAINS a narrow policy
+   protecting only the claim route family (/claim/* and its API) for a defined window
+   of 90 days post-cutover. Claims inside the window follow step 2. After the window,
+   the Access policy is removed and remaining unclaimed legacy rows require an
+   owner-assisted claim: the owner verifies the requester controls the legacy Access
+   identity out-of-band (reply from the verified mailbox on file) and approves each
+   assisted claim individually.
 4. Cutover: after QA (invited new user, returning user, wallet-verified, two-account
    isolation, expired session, provider timeout), remove the customer-facing Access
    policy on the app host; keep Access on preview/staging hosts and admin. Documented
@@ -123,7 +131,29 @@ every query carries user_id/owner predicates (existing D1 store pattern extends)
   isolated preview D1 database bound only for preview (separation verified before any
   mutation; synthetic fixtures only). Production D1 is never a test-write fallback.
 
-## 6. Open items
+## 7. Native email verification dependency (blocking for the email path)
+
+The claim flow and the plan's email-first path both require NATIVELY verified email,
+and the retained Access email-code factor is a staging bridge only — it does not
+satisfy the native design. Delivery-provider research (2026-10-25):
+- Cloudflare Email Sending (Beta): arbitrary-recipient sending requires the Workers
+  PAID plan; on Workers Free only pre-verified destination addresses in the account
+  can receive mail. Native customer OTP to arbitrary users is therefore NOT available
+  free-tier via Cloudflare. (developers.cloudflare.com/email-service/)
+- Third-party transactional free tiers (e.g. Resend ~3k/mo) work from Pages Functions
+  via plain HTTPS, but mean an external keyed provider, an API secret in Pages vars,
+  and DNS (SPF/DKIM) changes on the sending domain — an owner decision.
+- No-Agent-Mail rule honored: Instinct's own mail sender is not a substitute.
+Consequence: the email-first path and email-verified claim stay DESIGN-BLOCKED until
+the owner picks (a) Workers Paid for native Email Sending, (b) an external free-tier
+sender with DNS changes, or (c) wallet/passkey-first account creation with email
+deferred. Wallet sign-in (SIWE/SIWS) and passkey creation need no email and are NOT
+blocked; the migration's claim flow can run its matching-email default using the
+Access mailbox as the continuity anchor only where the native account is wallet-based
+and explicitly claims the Access email as a watched contact — otherwise it waits for
+the email decision.
+
+## 8. Open items
 - WebAuthn server library for Workers runtime: @simplewebauthn/server is the candidate
   (claims Workers support) pending an exact Pages packaging/runtime spike on staging;
   WebCrypto Ed25519 exists in the Workers runtime but is not package-compatibility

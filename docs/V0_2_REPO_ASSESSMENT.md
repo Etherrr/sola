@@ -64,7 +64,9 @@ Verified 2026-10-25 by direct code inspection + `vitest` 394/394 (29 files).
    without a keyed third-party provider; runtime library qualification is pending (Isa).
 2. Access removal must be last: replacement entitlement enforcement server-side first,
    migration rehearsed, rollback documented (plan §10 Phase B.5).
-3. `localStorage` usage in the client account layer needs audit before the canonical
-   address list moves server-side (plan §4 mandatory controls).
+3. `localStorage` is used only in `features/onboarding/progress-provider.tsx`
+   (learning-progress persistence), NOT in the account/portfolio layer — the canonical
+   address list is already D1-backed. When native auth lands, progress persistence moves
+   server-side for signed-in users (plan §4: no localStorage for canonical account data).
 4. Demo/live coexistence is a code change only (no data migration): the simulated
    dashboard is a component, not stored data.
