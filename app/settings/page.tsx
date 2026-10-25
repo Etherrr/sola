@@ -19,7 +19,10 @@ export default function Settings() {
           answers rate limiting, once through Solana's public RPC endpoint; its form discloses
           where the address goes before lookup. Markets shows selected Solana DEX pools through
           DexScreener; tokenized equities are on-chain tokens, not the underlying stocks. There are
-          no wallet connections, signatures or transaction features. Page requests reach the app
+          no wallet connections, signatures or transaction features. Balance history recording
+          stays off until you turn it on from Overview; Refresh then reads your saved addresses
+          through public chain nodes and stores the snapshot under your account, kept until you
+          delete it - withdrawing deletes the recorded history. Page requests reach the app
           host.
         </p>
         <p>

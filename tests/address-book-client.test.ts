@@ -51,11 +51,13 @@ describe('overview history response mapping', () => {
   it('passes through the ok payload with the complete-observation label fields', async () => {
     const latest = [{ assetId: 'eth/native', network: 'ethereum', address: '0xAbC', kind: 'native', amount: '1.5', observedAt: '2026-10-25T00:00:00Z' }];
     const res = new Response(
-      JSON.stringify({ status: 'ok', scope: 'spot_balances_only', latestCompleteObservedAt: '2026-10-25T00:00:00Z', newerPartial: true, latest, prior: null }),
+      JSON.stringify({ status: 'ok', scope: 'spot_balances_only', latestCompleteObservedAt: '2026-10-25T00:00:00Z', newerPartial: true, latest, prior: null,
+        networks: [{ network: 'ethereum', latestObservedAt: '2026-10-25T00:00:00Z', latest, prior: null }] }),
       { status: 200, headers: { 'content-type': 'application/json' } },
     );
     expect(await mapOverviewResponse(res)).toEqual({
-      kind: 'ok', at: '2026-10-25T00:00:00Z', newerPartial: true, latest, prior: null, networks: [],
+      kind: 'ok', at: '2026-10-25T00:00:00Z', newerPartial: true, latest, prior: null,
+      networks: [{ network: 'ethereum', at: '2026-10-25T00:00:00Z', latest, prior: null }],
     });
   });
   it('maps per-network slices with their own timestamps; Solana keeps its own baseline', async () => {
@@ -80,19 +82,23 @@ describe('overview history response mapping', () => {
     // Solana first observation: its own prior is null even though ETH has one.
     expect(r.networks[1]).toEqual({ network: 'solana', at: '2026-10-25T01:05:00Z', latest: solLatest, prior: null });
   });
-  it('drops malformed network slices and keeps unknown-network rows out', async () => {
-    const res = new Response(
+  it('fails honestly on a missing or malformed networks[] - never silently falls back to merged rows', async () => {
+    const malformed = new Response(
       JSON.stringify({
         status: 'ok', latestCompleteObservedAt: '2026-10-25T01:00:00Z', latest: [], prior: null,
         networks: [
           { network: 'bitcoin', latestObservedAt: '2026-10-25T01:00:00Z', latest: [], prior: null },
-          { network: 'ethereum' }, // missing latestObservedAt/latest
         ],
       }),
       { status: 200, headers: { 'content-type': 'application/json' } },
     );
-    const r = await mapOverviewResponse(res);
-    if (r.kind !== 'ok') throw new Error('expected ok');
-    expect(r.networks).toEqual([]);
+    expect(await mapOverviewResponse(malformed)).toEqual({ kind: 'failed' });
+    const missing = new Response(
+      JSON.stringify({
+        status: 'ok', latestCompleteObservedAt: '2026-10-25T01:00:00Z', latest: [], prior: null,
+      }),
+      { status: 200, headers: { 'content-type': 'application/json' } },
+    );
+    expect(await mapOverviewResponse(missing)).toEqual({ kind: 'failed' });
   });
 });

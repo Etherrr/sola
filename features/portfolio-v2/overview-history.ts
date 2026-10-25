@@ -65,21 +65,28 @@ export async function mapOverviewResponse(res: Response): Promise<OverviewResult
     typeof b.latestCompleteObservedAt === 'string' &&
     Array.isArray(b.latest)
   ) {
-    const networks: NetworkSlice[] = Array.isArray(b.networks)
-      ? (b.networks as Array<Record<string, unknown>>)
-          .filter(
-            (n) =>
-              (n.network === 'ethereum' || n.network === 'solana') &&
-              typeof n.latestObservedAt === 'string' &&
-              Array.isArray(n.latest),
-          )
-          .map((n) => ({
-            network: n.network as 'ethereum' | 'solana',
-            at: n.latestObservedAt as string,
-            latest: n.latest as ObservedAmount[],
-            prior: Array.isArray(n.prior) ? (n.prior as ObservedAmount[]) : null,
-          }))
-      : [];
+    // Per-network slices are the only honest delta baseline. A missing or
+    // malformed networks[] is a broken payload: FAIL rather than silently
+    // falling back to merged rows (reviewer requirement).
+    if (!Array.isArray(b.networks)) return { kind: 'failed' };
+    const rawSlices = b.networks as Array<Record<string, unknown>>;
+    if (
+      rawSlices.some(
+        (n) =>
+          !n ||
+          (n.network !== 'ethereum' && n.network !== 'solana') ||
+          typeof n.latestObservedAt !== 'string' ||
+          !Array.isArray(n.latest) ||
+          (n.prior !== null && n.prior !== undefined && !Array.isArray(n.prior)),
+      )
+    )
+      return { kind: 'failed' };
+    const networks: NetworkSlice[] = rawSlices.map((n) => ({
+      network: n.network as 'ethereum' | 'solana',
+      at: n.latestObservedAt as string,
+      latest: n.latest as ObservedAmount[],
+      prior: Array.isArray(n.prior) ? (n.prior as ObservedAmount[]) : null,
+    }));
     return {
       kind: 'ok',
       at: b.latestCompleteObservedAt,

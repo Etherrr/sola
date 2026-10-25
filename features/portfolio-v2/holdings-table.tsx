@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { fetchOverview, type ObservedAmount } from './overview-history';
+import { fetchOverview, type NetworkSlice, type ObservedAmount } from './overview-history';
 
 /**
  * v0.2 Holdings table: renders the caller's OWN latest COMPLETE recorded
@@ -17,7 +17,7 @@ type Load =
   | { kind: 'notinvited' }
   | { kind: 'off' }
   | { kind: 'empty'; newerPartial: boolean }
-  | { kind: 'ok'; at: string; newerPartial: boolean; rows: ObservedAmount[] }
+  | { kind: 'ok'; at: string; newerPartial: boolean; rows: ObservedAmount[]; networks: NetworkSlice[] }
   | { kind: 'failed' };
 
 const short = (a: string) => (a.length > 12 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a);
@@ -31,7 +31,7 @@ export function HoldingsTable() {
       if (!live) return;
       if (r.kind === 'empty') setLoad({ kind: 'empty', newerPartial: r.newerPartial });
       else if (r.kind === 'ok')
-        setLoad({ kind: 'ok', at: r.at, newerPartial: r.newerPartial, rows: r.latest });
+        setLoad({ kind: 'ok', at: r.at, newerPartial: r.newerPartial, rows: r.latest, networks: r.networks });
       else setLoad({ kind: r.kind });
     });
     return () => {
@@ -71,8 +71,14 @@ export function HoldingsTable() {
         </tbody>
       </table>
       <p><em>
-        Spot balances only, from the latest complete observation at{' '}
-        {new Date(load.at).toLocaleString()}.
+        Spot balances only.
+        {load.networks.map((n) => (
+          <span key={n.network}>
+            {' '}
+            {n.network === 'ethereum' ? 'Ethereum' : 'Solana (SOL balance only)'} as of{' '}
+            {new Date(n.at).toLocaleString()}.
+          </span>
+        ))}
         {load.newerPartial ? ' A newer observation is still partial.' : ''}
       </em></p>
     </>

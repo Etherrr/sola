@@ -66,15 +66,14 @@ export function WhatChanged() {
       </p>
     );
 
-  const { at: latestCompleteObservedAt, newerPartial, networks } = load;
+  const { newerPartial, networks } = load;
   // Per-network sections: each network's deltas use ONLY its own latest/prior
   // complete observations (reviewer MEDIUM - no cross-network comparison).
   // Absent-in-latest is stated explicitly as "not in latest observation",
   // never silently dropped and never read as zero.
-  const sections: NetworkSlice[] =
-    networks.length > 0
-      ? networks
-      : [{ network: 'ethereum', at: latestCompleteObservedAt, latest: load.latest, prior: load.prior }];
+  // No merged fallback: sections come only from real per-network slices
+  // (reviewer requirement - a fabricated ethereum section would lie).
+  const sections: NetworkSlice[] = networks;
   return (
     <div>
       {newerPartial && (

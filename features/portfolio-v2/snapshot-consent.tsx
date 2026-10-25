@@ -84,7 +84,7 @@ export function SnapshotConsent() {
       {state.consented ? (
         <>
           <p>
-            <em>Balance history: recording on. Records when you refresh; only you can see it.</em>
+            <em>Balance history: recording on. Records when you refresh. Stored under your account, kept until you delete it.</em>
           </p>
           <p className="actions">
             <button type="button" className="button primary" disabled={busy} onClick={() => void refresh()}>
@@ -98,7 +98,7 @@ export function SnapshotConsent() {
       ) : (
         <>
           <p>
-            <em>Balance history: off. Records your balances when you refresh. Withdraw anytime - recorded history is deleted.</em>
+            <em>Balance history: off. Records your balances when you refresh. Stored under your account, kept until you delete it. Withdraw anytime - recorded history is deleted.</em>
           </p>
           <p className="actions">
             <button
@@ -112,6 +112,9 @@ export function SnapshotConsent() {
           </p>
         </>
       )}
+      <p>
+        <em>Refresh reads your saved addresses through public chain nodes.</em>
+      </p>
       {note && <p role="alert"><em>{note}</em></p>}
     </div>
   );
