@@ -18,7 +18,8 @@ import {
 const json = (status: number, body: unknown, headers?: HeadersInit): Response =>
   new Response(JSON.stringify(body), {
     status,
-    headers: { 'content-type': 'application/json', ...headers },
+    // Consent state is session-private; never cached (reviewer, 0f49162 note a).
+    headers: { 'content-type': 'application/json', 'cache-control': 'no-store', ...headers },
   });
 
 const CONSENT_WINDOWS: LimitWindow[] = [{ limit: 20, windowMs: 600_000 }];
