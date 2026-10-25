@@ -179,14 +179,21 @@ export async function handlePasskeyRegisterVerify(
     counter: reg.credential.counter,
     transports: reg.credential.transports,
   };
-  const r = await db
-    .prepare(
-      `INSERT INTO auth_identities (id, user_id, kind, identifier, verified_at, metadata)
-       VALUES (?, ?, 'passkey', ?, ?, ?)`,
-    )
-    .bind(crypto.randomUUID(), user, reg.credential.id, new Date().toISOString(), JSON.stringify(meta))
-    .run();
-  if (!r.success) return json(409, { error: 'credential_exists', requestId });
+  // Duplicate credential id: D1 throws on the UNIQUE(kind, identifier)
+  // constraint rather than returning success:false - catch it so a replayed
+  // registration gets a safe 409 instead of a 500. The challenge stays
+  // consumed (claim happened above), which is fail-closed and correct.
+  try {
+    await db
+      .prepare(
+        `INSERT INTO auth_identities (id, user_id, kind, identifier, verified_at, metadata)
+         VALUES (?, ?, 'passkey', ?, ?, ?)`,
+      )
+      .bind(crypto.randomUUID(), user, reg.credential.id, new Date().toISOString(), JSON.stringify(meta))
+      .run();
+  } catch {
+    return json(409, { error: 'credential_exists', requestId });
+  }
   return json(200, { status: 'ok', credentialId: reg.credential.id, requestId });
 }
 

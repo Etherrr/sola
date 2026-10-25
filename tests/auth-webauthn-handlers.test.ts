@@ -90,6 +90,20 @@ describe('passkey registration (session-gated)', () => {
     // replay: same challenge already consumed
     expect((await handlePasskeyRegisterVerify(post(body, cookie), env, deps)).status).toBe(401);
   });
+  it('duplicate credential id returns safe 409, not 500 (D1 UNIQUE throw caught)', async () => {
+    const cookie = await makeUser();
+    // pre-existing credential with the same id (any user)
+    const now = new Date().toISOString();
+    await db
+      .prepare("INSERT INTO auth_identities (id, user_id, kind, identifier, verified_at, metadata) VALUES ('x','u1','passkey','cred-1',?,'{}')")
+      .bind(now)
+      .run();
+    await handlePasskeyRegisterOptions(post({}, cookie), env, deps);
+    const r = await handlePasskeyRegisterVerify(
+      post({ response: responseWithChallenge(lastOptionsChallenge) }, cookie), env, deps);
+    expect(r.status).toBe(409);
+    expect((await r.json() as { error: string }).error).toBe('credential_exists');
+  });
   it('a challenge issued to one user cannot be claimed by another', async () => {
     const cookie = await makeUser();
     await handlePasskeyRegisterOptions(post({}, cookie), env, deps);
