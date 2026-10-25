@@ -25,6 +25,8 @@ export interface NativeAuthEnv {
   /** Resend API key (Pages secret) and verified from-address; the only deployed sender. */
   NATIVE_AUTH_RESEND_API_KEY?: string;
   NATIVE_AUTH_EMAIL_FROM?: string;
+  /** EVM chain id policy for SIWE sign-in (default '1' = mainnet). */
+  NATIVE_AUTH_EVM_CHAIN_ID?: string;
   PORTFOLIO_ACCOUNTS_DB?: ChallengeDb;
 }
 

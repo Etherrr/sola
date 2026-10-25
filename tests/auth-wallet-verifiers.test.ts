@@ -103,3 +103,29 @@ describe('SIWS verifier (single bound format, ed25519, case-sensitive address)',
     expect(verifySiwsMessage(msg, new Uint8Array(63), siwsExpected, NOW)).toEqual({ ok: false, error: 'bad_signature' });
   });
 });
+
+// Cross-implementation fixtures (reviewer 2026-10-25): the signatures below were
+// produced by INDEPENDENT implementations (ethers v6 for EVM, tweetnacl for Solana),
+// not by the noble code under test. Embedded as constants; generation is dev-only.
+describe('cross-implementation fixtures (ethers / tweetnacl)', () => {
+  const b64 = (s: string) => Buffer.from(s, 'base64').toString('utf8');
+  const b64bytes = (s: string) => new Uint8Array(Buffer.from(s, 'base64'));
+  it('ethers-signed SIWE message verifies (EOA ecrecover cross-check)', () => {
+    const msg = b64('cHJldmlldy50ZXN0IHdhbnRzIHlvdSB0byBzaWduIGluIHdpdGggeW91ciBFdGhlcmV1bSBhY2NvdW50OgoweDcwOTk3OTcwQzUxODEyZGMzQTAxMEM3ZDAxYjUwZTBkMTdkYzc5QzgKClNpZ24gaW4gdG8gU29sYS4KClVSSTogaHR0cHM6Ly9wcmV2aWV3LnRlc3Qvc2lnbmluClZlcnNpb246IDEKQ2hhaW4gSUQ6IDEKTm9uY2U6IEVUSEVSU0ZJWFRVUkUxCklzc3VlZCBBdDogMjAyNi0xMC0yNVQxNTowMDowMC4wMDBaCkV4cGlyYXRpb24gVGltZTogMjAyNi0xMC0yNVQxNToxMDowMC4wMDBa');
+    const sig = '0xce0c74dd64571475371c7b44c89aa77cba457e289211e1d3348467af8d06ad57653ef387206b524eb442bcef940092f9e4b4f6526c17679b6d41cc08eb9bb0be1c';
+    const r = verifySiweMessage(msg, sig, {
+      domain: 'preview.test', uri: 'https://preview.test/signin', nonce: 'ETHERSFIXTURE1',
+      chainId: 1, address: '0x70997970C51812dc3A010C7d01b50e0d17dc79C8',
+    }, NOW);
+    expect(r.ok).toBe(true);
+  });
+  it('tweetnacl-signed SIWS message verifies (ed25519 cross-check)', () => {
+    const msg = b64('cHJldmlldy50ZXN0IHdhbnRzIHlvdSB0byBzaWduIGluIHdpdGggeW91ciBTb2xhbmEgYWNjb3VudDoKR21hRHJwcEJDN1A1QVJLVjhnM2RqaXdQODl2ejFqTEsyM1YyR0JqdUFFR0IKClNpZ24gaW4gdG8gU29sYS4KClVSSTogaHR0cHM6Ly9wcmV2aWV3LnRlc3Qvc2lnbmluCk5vbmNlOiBOQUNMRklYVFVSRTEKSXNzdWVkIEF0OiAyMDI2LTEwLTI1VDE1OjAwOjAwLjAwMFoKRXhwaXJhdGlvbiBUaW1lOiAyMDI2LTEwLTI1VDE1OjEwOjAwLjAwMFo=');
+    const sig = b64bytes('+R1U/kfUOwlN3RrLoMVrTU3L9JYssk9jN5odXtS0O8TnXJtJPzD/Cm7slKtZlGg43jxSv+w/VUh84Vk4Ep0zBg==');
+    const r = verifySiwsMessage(msg, sig, {
+      domain: 'preview.test', uri: 'https://preview.test/signin', nonce: 'NACLFIXTURE1',
+      address: 'GmaDrppBC7P5ARKV8g3djiwP89vz1jLK23V2GBjuAEGB',
+    }, NOW);
+    expect(r.ok).toBe(true);
+  });
+});
