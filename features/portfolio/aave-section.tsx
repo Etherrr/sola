@@ -30,7 +30,7 @@ export function AaveSection({ section, exact }: { section: ApiAaveSection; exact
       ) : (
         <>
           <div
-            className="table-scroll"
+            className="table-scroll aave-scroll"
             tabIndex={0}
             role="region"
             aria-label="Aave V3 positions table, scrolls sideways when it is wider than the screen"
@@ -42,7 +42,7 @@ export function AaveSection({ section, exact }: { section: ApiAaveSection; exact
               }, 0);
             }}
           >
-            <table className="track-table" role="table">
+            <table className="aave-table" role="table">
               <caption>
                 Aave V3 positions (Ethereum). Balances at each reserve&apos;s stored index time;
                 USD values only from this app&apos;s own verified feeds.

@@ -3313,3 +3313,42 @@ html {
     margin-bottom: 2px;
   }
 }
+
+/* Aave positions carry two amounts per row, so on phones the section keeps its labeled table
+   and pans sideways inside its focusable scroll region instead of stacking into the wallet
+   card grid (which would merge the two amounts). */
+.aave-table {
+  table-layout: fixed;
+  width: 100%;
+}
+.aave-table thead th:nth-child(1) {
+  width: 30%;
+}
+.aave-table thead th:nth-child(2) {
+  width: 20%;
+}
+.aave-table thead th:nth-child(3) {
+  width: 20%;
+}
+.aave-table thead th:nth-child(4) {
+  width: 30%;
+}
+.aave-table td,
+.aave-table th {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+/* The caption inherits nowrap from the global table rule; a long caption line would force the
+   table wider than its scroll region at every viewport. */
+.aave-table caption {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 640px) {
+  .app .track-output .aave-scroll {
+    overflow-x: auto;
+  }
+  .aave-table {
+    min-width: 34rem;
+  }
+}
