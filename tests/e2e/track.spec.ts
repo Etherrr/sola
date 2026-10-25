@@ -43,8 +43,8 @@ const mock = (page: Page, status: number, body: unknown, ct = 'application/json'
   );
 
 test.beforeEach(async ({ page }) => {
-  // The welcome screen has its own tests; skip it here.
-  await page.addInitScript(() => window.sessionStorage.setItem('sola-welcomed', '1'));
+  // The intro plays on every load now; tests that are not about it opt out via reduced motion.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   // The static test server has no API; answer the health and session checks so they are not console errors.
   await page.route('**/api/v1/health', (r) =>
     r.fulfill({

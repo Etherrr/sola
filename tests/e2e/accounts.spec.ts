@@ -68,7 +68,7 @@ async function stubSession(page: Page, verified: boolean) {
 }
 
 test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => window.sessionStorage.setItem('sola-welcomed', '1'));
+  await page.emulateMedia({ reducedMotion: 'reduce' }); // intro plays every load; opt out here
   await page.route('**/api/v1/health', (r) =>
     r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ status: 'ok', mode: 'mock', requestId: 'r' }) }),
   );

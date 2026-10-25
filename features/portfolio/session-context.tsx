@@ -22,12 +22,19 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     const onVisible = () => {
       if (document.visibilityState === 'visible') c.run();
     };
+    // A back/forward restore from the bfcache can repaint the page without a visibility change:
+    // revalidate so an identity revoked while the page was frozen never repaints saved data.
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) c.run();
+    };
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('online', onVisible);
     window.addEventListener('focus', onVisible);
+    window.addEventListener('pageshow', onPageShow);
     return () => {
       window.removeEventListener('online', onVisible);
       window.removeEventListener('focus', onVisible);
+      window.removeEventListener('pageshow', onPageShow);
       c.dispose();
       checker.current = null;
       document.removeEventListener('visibilitychange', onVisible);

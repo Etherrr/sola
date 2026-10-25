@@ -4,10 +4,9 @@ import { useEffect, useState } from 'react';
 import { AccountMenu } from './account-menu';
 import { useSession } from '@/features/portfolio/session-context';
 
-const KEY = 'sola-welcomed';
-// The one entrance. Two real destinations. The intro (panels sliding apart) plays once per
-// browser session and never when the user prefers reduced motion. It gates nothing: Cloudflare
-// Access has already authenticated the visitor before this page loads.
+// The one entrance. Two real destinations. The intro (panels sliding apart) plays on every
+// load and never when the user prefers reduced motion. It gates nothing: Cloudflare Access has
+// already authenticated the visitor before this page loads. Nothing is stored to remember it.
 export function Entrance() {
   const session = useSession();
   const email = session.kind === 'verified' ? session.email : null;
@@ -16,16 +15,9 @@ export function Entrance() {
   const curtain = intro && !curtainDone;
   useEffect(() => {
     const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    let play: boolean;
-    try {
-      play = sessionStorage.getItem(KEY) !== '1';
-      sessionStorage.setItem(KEY, '1');
-    } catch {
-      play = false; // storage blocked: skip the animation rather than repeat it
-    }
     // Reads browser-only state after hydration, so server HTML and first paint always match.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (play && !calm) setIntro(true);
+    if (!calm) setIntro(true);
   }, []);
   // Remove the curtain after the animation so it can never linger over the page.
   useEffect(() => {

@@ -65,7 +65,7 @@ async function proxy(page: Page) {
 
 test.beforeEach(async ({ page }) => {
   delayAccountsGetMs = 0;
-  await page.addInitScript(() => window.sessionStorage.setItem('sola-welcomed', '1'));
+  await page.emulateMedia({ reducedMotion: 'reduce' }); // intro plays every load; opt out here
 });
 
 async function addViaUi(page: Page, address: string, label: string) {

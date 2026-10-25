@@ -11,11 +11,6 @@ export function PrivacySettings() {
         identity. Track sends pasted public addresses to the lookup service, and to PublicNode when
         live mode is enabled. The app does not persist these addresses or use analytics.
       </p>
-      <p>
-        Separately, the entrance animation keeps one flag, <code>sola-welcomed</code>, in this
-        browser&apos;s session storage so it shows once per session. It is cleared when you close
-        the tab and holds nothing about you.
-      </p>
       <label className="answer">
         <input type="checkbox" checked={enabled} onChange={toggle} />
         Save lesson progress on this browser

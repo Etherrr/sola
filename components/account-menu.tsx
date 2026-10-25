@@ -5,12 +5,19 @@ import { useSession } from '@/features/portfolio/session-context';
 
 // Account control. It shows an identity only after a verified 200 from /api/v1/session. There is
 // no photo or display name source yet, so the avatar is the first letter of the verified email and
-// the greeting is the email itself, not a name guessed from it. No sign-out item on purpose: the
-// documented Access logout (/cdn-cgi/access/logout) ends the user's session for every Access app on
-// the team domain, so it is not an app-only control and needs an explicit decision and a clear label.
+// the greeting is the email itself, not a name guessed from it. Sign out goes to the documented
+// Access logout (/cdn-cgi/access/logout on the app host): the edge clears the session cookie and
+// issued tokens stop being accepted seconds later. Cloudflare does not offer a per-application
+// logout - the revocation applies to every app protected by this Access account - so the control
+// says so next to the button. The full navigation also discards this app's client state.
 export function AccountMenu() {
   const s = useSession();
   const [open, setOpen] = useState(false);
+  // Full navigation, not a client-side route: the Access edge clears the session cookie, and the
+  // document swap discards every in-memory identity and saved-list state with it.
+  const signOut = () => {
+    window.location.assign('/cdn-cgi/access/logout');
+  };
   const btn = useRef<HTMLButtonElement>(null);
   const root = useRef<HTMLDivElement>(null);
   const panelId = useId();
@@ -91,6 +98,15 @@ export function AccountMenu() {
           <a href="https://solacapitalpartners.com/" rel="noopener noreferrer">
             Sola Capital Partners ↗
           </a>
+          <div className="acct-signout">
+            <button type="button" className="acct-signout-btn" onClick={signOut}>
+              Sign out
+            </button>
+            <p className="acct-signout-note">
+              Ends this protected session and also signs you out of other apps protected by this
+              Cloudflare Access account.
+            </p>
+          </div>
         </div>
       )}
     </div>

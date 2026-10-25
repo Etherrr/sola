@@ -22,8 +22,8 @@ const routes = [
   '/settings',
 ];
 test.beforeEach(async ({ page }) => {
-  // The welcome screen has its own tests; skip it elsewhere.
-  await page.addInitScript(() => window.sessionStorage.setItem('sola-welcomed', '1'));
+  // The intro plays on every load now; tests that are not about it opt out via reduced motion.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
 });
 test('all routes render, remain responsive, and pass WCAG automated checks', async ({ page }) => {
   test.setTimeout(120_000);
@@ -244,16 +244,10 @@ test('security decision lab: every outcome, keyboard use, retry, axe on revealed
 });
 
 test.describe('entrance', () => {
-  test('two real entrances, account control, no inputs, and the intro plays once', async ({
+  test('two real entrances, account control, no inputs, and the intro plays on every load', async ({
     page,
   }) => {
-    // Clear the flag only on the first navigation so the reload sees the stored flag.
-    await page.addInitScript(() => {
-      if (!window.sessionStorage.getItem('__t')) {
-        window.sessionStorage.removeItem('sola-welcomed');
-        window.sessionStorage.setItem('__t', '1');
-      }
-    });
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
     await page.route('**/api/v1/session', (r) =>
       r.fulfill({
         status: 200,
@@ -278,8 +272,11 @@ test.describe('entrance', () => {
     await expect(page.getByRole('link', { name: /^DeFi App/ })).toBeVisible();
     await expect(page.locator('input')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Account: jun@example.com' })).toBeVisible();
+    // The intro plays again on a fresh load - nothing is stored to suppress it.
     await page.reload();
-    await expect(page.locator('.entrance')).not.toHaveClass(/intro/);
+    await expect(page.locator('.entrance')).toHaveClass(/intro/);
+    await expect(page.locator('.entrance-curtain')).toHaveCount(1);
+    await expect(page.locator('.entrance-curtain')).toHaveCount(0, { timeout: 5000 });
     await page.getByRole('link', { name: /^DeFi App/ }).click();
     await expect(page).toHaveURL(/\/portfolio\/?$/);
   });
@@ -445,8 +442,6 @@ test.describe('entrance', () => {
     }
   });
   test('reduced motion: no intro and no animation', async ({ page }) => {
-    await page.addInitScript(() => window.sessionStorage.removeItem('sola-welcomed'));
-    await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.goto('/');
     await expect(page.locator('.entrance')).not.toHaveClass(/intro/);
     await expect(page.locator('.entrance-curtain')).toHaveCount(0);
@@ -479,6 +474,35 @@ test.describe('entrance', () => {
     }
     await page.locator('.entrance-main').click({ position: { x: 4, y: 500 } });
     await expect(btn).toHaveAttribute('aria-expanded', 'false');
+  });
+  test('sign out navigates to the Access logout with the honest scope note', async ({ page }) => {
+    await page.route('**/api/v1/session', (r) =>
+      r.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          status: 'ok',
+          via: 'cloudflare-access',
+          identity: { email: 'jun@example.com' },
+          expiresAt: '2099-01-01T00:00:00.000Z',
+        }),
+      }),
+    );
+    // Intercept the edge logout so the test never performs a real sign-out.
+    let logoutHit = false;
+    await page.route('**/cdn-cgi/access/logout', (r) => {
+      logoutHit = true;
+      r.fulfill({ status: 200, contentType: 'text/html', body: '<title>signed out</title>' });
+    });
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Account: jun@example.com' }).click();
+    // The scope disclosure sits next to the button: Access has no per-application logout.
+    await expect(
+      page.getByText(/also signs you out of other apps protected by this Cloudflare Access account/),
+    ).toBeVisible();
+    await page.getByRole('button', { name: 'Sign out' }).click();
+    await page.waitForURL('**/cdn-cgi/access/logout**');
+    expect(logoutHit).toBe(true);
   });
 });
 test('the top-bar network selector and the track form share one selection', async ({ page }) => {
@@ -595,7 +619,7 @@ test.describe('session status', () => {
 test('welcome animation visual evidence uses no account identity; reduced motion skips it', async ({
   page,
 }) => {
-  await page.addInitScript(() => window.sessionStorage.removeItem('sola-welcomed'));
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
   await page.route('**/api/v1/session', (r) =>
     r.fulfill({
       status: 200,
