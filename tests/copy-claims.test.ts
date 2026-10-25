@@ -300,3 +300,27 @@ describe('the Aave V3 section copy stays inside its approved scope', () => {
     expect(intro).toContain('no stable debt, health factor or APY; other DeFi positions are not read');
   });
 });
+
+describe('v0.2 combined read: reset notices and narrower storage wording (reviewer)', () => {
+  const ctx = readFileSync('features/portfolio-v2/combined-context.tsx', 'utf8');
+  const combined = readFileSync('features/portfolio-v2/combined-balances.tsx', 'utf8');
+  it('a reset after change or sync is explained, never silent', () => {
+    expect(ctx).toContain('Saved addresses changed - the earlier combination was cleared.');
+    expect(ctx).toContain('A sync ran - the earlier combination was cleared.');
+  });
+  it('the pre-click disclosure is scoped to balances, not a blanket nothing-stored claim', () => {
+    expect(combined).toContain('your balances are not saved by this action');
+    expect(combined).not.toContain('Nothing is stored by this action');
+    expect(combined.replace(/\s+/g, ' ')).toContain('sends your saved addresses to third-party blockchain data providers');
+  });
+  it('a partial address count explains the partial status', () => {
+    expect(combined).toContain('partial (some sources did not answer)');
+  });
+  it('the allocation panel adds no second request', () => {
+    const alloc = readFileSync('features/portfolio-v2/allocation.tsx', 'utf8');
+    expect(alloc).not.toContain('lookupAddresses');
+    expect(alloc).not.toContain('addressBookRequest');
+    expect(alloc).toContain('Load combined balances above');
+    expect(alloc).toContain('never zero');
+  });
+});

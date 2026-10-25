@@ -1,133 +1,23 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
-import { lookupAddresses, addressBookRequest } from '../portfolio/api-client';
-import { aggregateAddresses } from '../portfolio/aggregate';
-import {
-  combinedInputs,
-  combinedMode,
-  combinedProviders,
-  networksWithAccounts,
-  type NetworkResults,
-} from '../portfolio/combined-load';
 import { money, summarize } from '../portfolio/model';
-import type { SavedAccount } from '../portfolio/accounts-client';
 import { fmtTimestamp } from './format-time';
-import { ADDRESSES_CHANGED_EVENT } from './address-book';
-import { SYNCED_EVENT } from './snapshot-consent';
+import { useCombined } from './combined-context';
 
 /**
  * v0.2 "All saved addresses" - the combined multi-address read the plan keeps
- * from /track. Explicit user action only: nothing loads automatically. Reuses
- * the reviewed pure pipeline (per-network resolve -> per-address narrowing ->
- * aggregateAddresses): a duplicate is never a second holding, an unpriced
- * asset is unknown never zero, a failed address is named, and every source
- * keeps its own observation time. Watched addresses are observed, not proven
- * to be yours.
+ * from /track. Explicit user action only: nothing loads automatically. State
+ * lives in CombinedProvider so the Allocation panel derives from the SAME
+ * single request set. Reuses the reviewed pure pipeline (per-network resolve
+ * -> per-address narrowing -> aggregateAddresses): a duplicate is never a
+ * second holding, an unpriced asset is unknown never zero, a failed address is
+ * named, and every source keeps its own observation time. Watched addresses
+ * are observed, not proven to be yours.
  */
-
-type Entry = {
-  network: 'ethereum' | 'solana';
-  address: string;
-  label: string;
-};
-
-type Phase =
-  | { kind: 'idle' }
-  | { kind: 'loading' }
-  | { kind: 'empty' }
-  | { kind: 'failed'; message: string }
-  | {
-      kind: 'ready';
-      result: ReturnType<typeof aggregateAddresses>;
-      mode: 'live' | 'mock' | 'none';
-      providers: string[];
-      totalSaved: number;
-      loadedAt: string;
-    };
 
 const short = (a: string) => (a.length > 12 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a);
 
 export function CombinedBalances() {
-  const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
-  const generation = useRef(0);
-
-  // An address add/rename/remove, a sync, or a recording withdrawal invalidates
-  // any shown combination: drop back to idle and bump the generation so an
-  // in-flight response from before the change can never paint stale figures.
-  useEffect(() => {
-    const reset = () => {
-      generation.current++;
-      setPhase({ kind: 'idle' });
-    };
-    window.addEventListener(ADDRESSES_CHANGED_EVENT, reset);
-    window.addEventListener(SYNCED_EVENT, reset);
-    return () => {
-      window.removeEventListener(ADDRESSES_CHANGED_EVENT, reset);
-      window.removeEventListener(SYNCED_EVENT, reset);
-    };
-  }, []);
-
-  async function onLoad() {
-    if (phase.kind === 'loading') return;
-    const g = ++generation.current;
-    setPhase({ kind: 'loading' });
-    let res: Response;
-    try {
-      res = await addressBookRequest('GET', undefined);
-    } catch {
-      if (generation.current === g)
-        setPhase({ kind: 'failed', message: 'Saved addresses could not be read. Nothing was substituted.' });
-      return;
-    }
-    if (generation.current !== g) return;
-    if (res.status === 401) {
-      setPhase({ kind: 'failed', message: 'Sign in to load your saved addresses.' });
-      return;
-    }
-    if (res.status === 503) {
-      setPhase({ kind: 'failed', message: 'Saved addresses are switched off on this build. Nothing was read.' });
-      return;
-    }
-    if (!res.ok) {
-      setPhase({ kind: 'failed', message: 'Saved addresses could not be read. Nothing was substituted.' });
-      return;
-    }
-    const body = (await res.json()) as { status?: string; addresses?: Entry[] };
-    if (body.status !== 'ok' || !Array.isArray(body.addresses)) {
-      setPhase({ kind: 'failed', message: 'Saved addresses could not be read. Nothing was substituted.' });
-      return;
-    }
-    if (body.addresses.length === 0) {
-      setPhase({ kind: 'empty' });
-      return;
-    }
-    const accounts: SavedAccount[] = body.addresses.map((a) => ({
-      network: a.network,
-      address: a.address,
-      label: a.label,
-      createdAt: '',
-      updatedAt: '',
-    }));
-    const networks = networksWithAccounts(accounts);
-    const results: NetworkResults = {};
-    await Promise.all(
-      networks.map(async (n) => {
-        results[n] = await lookupAddresses(
-          n,
-          accounts.filter((a) => a.network === n).map((a) => a.address),
-        );
-      }),
-    );
-    if (generation.current !== g) return;
-    setPhase({
-      kind: 'ready',
-      result: aggregateAddresses(combinedInputs(accounts, results)),
-      mode: combinedMode(results),
-      providers: combinedProviders(results),
-      totalSaved: accounts.length,
-      loadedAt: new Date().toISOString(),
-    });
-  }
+  const { phase, load } = useCombined();
 
   const ready = phase.kind === 'ready' ? phase : null;
   const totals = ready ? summarize(ready.result.positions) : null;
@@ -143,6 +33,9 @@ export function CombinedBalances() {
   const loadedCount = ready
     ? ready.result.perAddress.filter((a) => a.status === 'ok' || a.status === 'partial').length
     : 0;
+  const partialCount = ready
+    ? ready.result.perAddress.filter((a) => a.status === 'partial').length
+    : 0;
   const hasSolana = ready
     ? ready.result.perAddress.some((a) => a.network === 'solana')
     : false;
@@ -153,11 +46,11 @@ export function CombinedBalances() {
       {phase.kind === 'idle' ? (
         <>
           <p className="ov2-quiet">
-            Loading sends your saved addresses to third-party blockchain data providers.
-            Nothing is stored by this action. On your request only - nothing loads
-            automatically.
+            On your request only. Loading sends your saved addresses to third-party blockchain
+            data providers; your balances are not saved by this action.
           </p>
-          <button type="button" className="button primary" onClick={() => void onLoad()}>
+          {phase.notice ? <p className="ov2-quiet">{phase.notice}</p> : null}
+          <button type="button" className="button primary" onClick={load}>
             Load combined balances
           </button>
         </>
@@ -168,7 +61,7 @@ export function CombinedBalances() {
       {phase.kind === 'failed' ? (
         <>
           <p><em>{phase.message}</em></p>
-          <button type="button" className="button secondary" onClick={() => void onLoad()}>
+          <button type="button" className="button secondary" onClick={load}>
             Try again
           </button>
         </>
@@ -176,7 +69,7 @@ export function CombinedBalances() {
       {phase.kind === 'empty' ? (
         <>
           <p className="ov2-quiet">No saved addresses yet. Add one above, then load.</p>
-          <button type="button" className="button primary" onClick={() => void onLoad()}>
+          <button type="button" className="button primary" onClick={load}>
             Load combined balances
           </button>
         </>
@@ -202,6 +95,9 @@ export function CombinedBalances() {
               </strong>
               <small>
                 {contributing} with a priced value
+                {partialCount > 0
+                  ? ` · ${partialCount} partial (some sources did not answer)`
+                  : ''}
               </small>
             </div>
             <div className="metric">
@@ -268,7 +164,7 @@ export function CombinedBalances() {
           ) : null}
           <p className="ov2-quiet">
             Priced values cover only assets with verified-feed prices; anything else is unknown,
-            never zero. Each address counted once; a duplicate is never a second holding.
+            never zero. Each address counted once.
             {hasSolana ? ' Solana lookups show the SOL balance only.' : ''}
             {ready.providers.length > 0 ? ` Sources: ${ready.providers.join(', ')}.` : ''}{' '}
             Loaded at your request at {fmtTimestamp(ready.loadedAt)} - the request time, not an
@@ -278,7 +174,7 @@ export function CombinedBalances() {
             type="button"
             className="button secondary"
             disabled={phase.kind === 'loading'}
-            onClick={() => void onLoad()}
+            onClick={load}
           >
             Refresh now
           </button>

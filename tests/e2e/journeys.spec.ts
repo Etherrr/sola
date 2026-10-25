@@ -2111,3 +2111,331 @@ test('at 320px the tab bar shows four fitting tabs and the account menu stays on
   expect(box!.x).toBeGreaterThanOrEqual(0);
   expect(box!.x + box!.width).toBeLessThanOrEqual(320);
 });
+
+test('v2 allocation derives from the same combined read - no extra provider request', async ({
+  page,
+}) => {
+  await page.route('**/api/v1/auth/email/session', (r) =>
+    r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'ok', email: 'owner@example.com', fresh: true }),
+    }),
+  );
+  await page.route('**/api/v1/portfolio/overview**', (r) =>
+    r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'empty', newerPartial: false }),
+    }),
+  );
+  await page.route('**/api/v1/portfolio/addresses**', (r) => {
+    if (r.request().method() !== 'GET') return r.continue();
+    return r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        status: 'ok',
+        addresses: [
+          {
+            network: 'ethereum',
+            address: '0xabc1230000000000000000000000000000000000',
+            label: 'Main',
+            verification: 'watched',
+            createdAt: '2026-10-25T00:00:00Z',
+            lastObservedAt: null,
+          },
+          {
+            network: 'solana',
+            address: 'SoLanaVaultAddress111111111111111111111111',
+            label: 'Vault',
+            verification: 'watched',
+            createdAt: '2026-10-25T00:00:00Z',
+            lastObservedAt: null,
+          },
+        ],
+      }),
+    });
+  });
+  let resolveCalls = 0;
+  await page.route('**/api/v1/portfolio/resolve**', (r) => {
+    resolveCalls++;
+    const network = JSON.parse(r.request().postData() ?? '{}').network;
+    const wallet =
+      network === 'solana'
+        ? {
+            address: 'SoLanaVaultAddress111111111111111111111111',
+            partial: false,
+            warnings: [],
+            assets: [
+              {
+                assetId: 'solana:mainnet/native',
+                symbol: 'SOL',
+                decimals: 9,
+                amount: '10',
+                price: null,
+                value: null,
+              },
+            ],
+          }
+        : {
+            address: '0xabc1230000000000000000000000000000000000',
+            partial: false,
+            warnings: [],
+            assets: [
+              {
+                assetId: 'eip155:1/native',
+                symbol: 'ETH',
+                decimals: 18,
+                amount: '1.5',
+                price: '3000',
+                value: '4500',
+              },
+            ],
+          };
+    return r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        schemaVersion: 1,
+        mode: 'mock',
+        simulated: true,
+        provider: 'fixture',
+        generatedAt: '2026-10-25T01:00:00Z',
+        observedAt: '2026-10-25T01:00:00Z',
+        wallets: [wallet],
+        totals: {
+          recognizedPricedSubtotalUsd: network === 'solana' ? null : '4500',
+          unpricedAssetCount: network === 'solana' ? 1 : 0,
+          note: 'Subtotal covers only assets priced by verified feeds.',
+        },
+        partial: false,
+        warnings: [],
+      }),
+    });
+  });
+  await page.goto('/dev/overview-v2');
+  const main = page.locator('#main');
+  const block = main.locator('.ov2-combined');
+  const alloc = main.locator('.ov2-allocation');
+  // Idle: allocation points at the same single action; no figures anywhere.
+  await expect(alloc.getByText(/Load combined balances above/)).toBeVisible();
+  await expect(alloc.getByText('$4,500.00')).toHaveCount(0);
+  await block.getByRole('button', { name: 'Load combined balances' }).click();
+  // The same read fills the breakdown: chain donut, holding rows, coverage.
+  await expect(alloc.getByText('$4,500.00')).toBeVisible();
+  await expect(alloc.getByRole('img', { name: 'Allocation: Ethereum 100 percent' })).toBeVisible();
+  await expect(alloc.getByText('ETH', { exact: true })).toBeVisible();
+  await expect(alloc.getByText(/Coverage: 2 of 2 addresses loaded/)).toBeVisible();
+  await expect(alloc.getByText(/1 unpriced asset unknown/)).toBeVisible();
+  await expect(alloc.getByText(/never zero/)).toBeVisible();
+  await expect(alloc.getByRole('link', { name: 'Manage addresses' })).toHaveAttribute(
+    'href',
+    '#ov2-addresses',
+  );
+  // Allocation sent nothing itself: exactly one resolve per network, from the load.
+  expect(resolveCalls).toBe(2);
+});
+
+test('v2 combined balances: a delayed response released after a change never paints stale figures', async ({
+  page,
+}) => {
+  await page.route('**/api/v1/auth/email/session', (r) =>
+    r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'ok', email: 'owner@example.com', fresh: true }),
+    }),
+  );
+  await page.route('**/api/v1/portfolio/overview**', (r) =>
+    r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'empty', newerPartial: false }),
+    }),
+  );
+  await page.route('**/api/v1/portfolio/addresses**', (r) => {
+    if (r.request().method() === 'POST') {
+      return r.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ status: 'ok' }),
+      });
+    }
+    if (r.request().method() !== 'GET') return r.continue();
+    return r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        status: 'ok',
+        addresses: [
+          {
+            network: 'ethereum',
+            address: '0xabc1230000000000000000000000000000000000',
+            label: 'Main',
+            verification: 'watched',
+            createdAt: '2026-10-25T00:00:00Z',
+            lastObservedAt: null,
+          },
+        ],
+      }),
+    });
+  });
+  // The resolve answer is held until the test releases it.
+  let releaseResolve: (() => void) | null = null;
+  await page.route('**/api/v1/portfolio/resolve**', async (r) => {
+    await new Promise<void>((done) => {
+      releaseResolve = done;
+    });
+    return r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        schemaVersion: 1,
+        mode: 'mock',
+        simulated: true,
+        provider: 'fixture',
+        generatedAt: '2026-10-25T01:00:00Z',
+        observedAt: '2026-10-25T01:00:00Z',
+        wallets: [
+          {
+            address: '0xabc1230000000000000000000000000000000000',
+            partial: false,
+            warnings: [],
+            assets: [
+              {
+                assetId: 'eip155:1/native',
+                symbol: 'ETH',
+                decimals: 18,
+                amount: '1.5',
+                price: '3000',
+                value: '4500',
+              },
+            ],
+          },
+        ],
+        totals: {
+          recognizedPricedSubtotalUsd: '4500',
+          unpricedAssetCount: 0,
+          note: 'Subtotal covers only assets priced by verified feeds.',
+        },
+        partial: false,
+        warnings: [],
+      }),
+    });
+  });
+  await page.goto('/dev/overview-v2');
+  const main = page.locator('#main');
+  const block = main.locator('.ov2-combined');
+  await block.getByRole('button', { name: 'Load combined balances' }).click();
+  await expect(block.getByText('Reading saved addresses and balances…')).toBeVisible();
+  // While the resolve answer is in flight, the user adds an address.
+  await page.getByLabel('Address', { exact: true }).fill('0xdef4560000000000000000000000000000000000');
+  await page.getByLabel('Label', { exact: true }).fill('Second');
+  await page.getByRole('button', { name: 'Add address' }).click();
+  // The combination resets with a named reason, not silently.
+  await expect(
+    block.getByText('Saved addresses changed - the earlier combination was cleared.'),
+  ).toBeVisible();
+  await expect(block.getByRole('button', { name: 'Load combined balances' })).toBeVisible();
+  // Release the stale in-flight answer: its figures must never paint.
+  releaseResolve!();
+  await expect(block.getByText('Combined priced value')).toHaveCount(0);
+  await expect(block.getByText('$4,500.00')).toHaveCount(0);
+  await expect(
+    block.getByText('Saved addresses changed - the earlier combination was cleared.'),
+  ).toBeVisible();
+});
+
+test('v2 combined balances: a partial address counts as loaded and explains itself', async ({
+  page,
+}) => {
+  await page.route('**/api/v1/auth/email/session', (r) =>
+    r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'ok', email: 'owner@example.com', fresh: true }),
+    }),
+  );
+  await page.route('**/api/v1/portfolio/overview**', (r) =>
+    r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'empty', newerPartial: false }),
+    }),
+  );
+  await page.route('**/api/v1/portfolio/addresses**', (r) => {
+    if (r.request().method() !== 'GET') return r.continue();
+    return r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        status: 'ok',
+        addresses: [
+          {
+            network: 'ethereum',
+            address: '0xabc1230000000000000000000000000000000000',
+            label: 'Main',
+            verification: 'watched',
+            createdAt: '2026-10-25T00:00:00Z',
+            lastObservedAt: null,
+          },
+        ],
+      }),
+    });
+  });
+  await page.route('**/api/v1/portfolio/resolve**', (r) =>
+    r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        schemaVersion: 1,
+        mode: 'mock',
+        simulated: true,
+        provider: 'fixture',
+        generatedAt: '2026-10-25T01:00:00Z',
+        observedAt: '2026-10-25T01:00:00Z',
+        wallets: [
+          {
+            address: '0xabc1230000000000000000000000000000000000',
+            partial: true,
+            warnings: ['Aave V3 read failed: rate limited.'],
+            assets: [
+              {
+                assetId: 'eip155:1/native',
+                symbol: 'ETH',
+                decimals: 18,
+                amount: '1.5',
+                price: '3000',
+                value: '4500',
+              },
+            ],
+          },
+        ],
+        totals: {
+          recognizedPricedSubtotalUsd: '4500',
+          unpricedAssetCount: 0,
+          note: 'Subtotal covers only assets priced by verified feeds.',
+        },
+        partial: true,
+        warnings: ['Aave V3 read failed: rate limited.'],
+      }),
+    }),
+  );
+  await page.goto('/dev/overview-v2');
+  const main = page.locator('#main');
+  const block = main.locator('.ov2-combined');
+  await block.getByRole('button', { name: 'Load combined balances' }).click();
+  // Partial counts toward loaded, and the count explains the partial status.
+  await expect(block.getByText('1 of 1', { exact: true })).toBeVisible();
+  await expect(
+    block.getByText('1 with a priced value · 1 partial (some sources did not answer)'),
+  ).toBeVisible();
+  await expect(block.locator('.badge-warn').first()).toHaveText('PARTIAL');
+  await expect(block.getByText('Main: Aave V3 read failed: rate limited.')).toBeVisible();
+  // Allocation coverage explains the same partial status.
+  const alloc = main.locator('.ov2-allocation');
+  await expect(
+    alloc.getByText(/Coverage: 1 of 1 address loaded \(1 partial - some sources did not answer\)/),
+  ).toBeVisible();
+});
