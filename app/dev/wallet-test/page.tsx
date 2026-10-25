@@ -29,6 +29,9 @@ export default function WalletTest() {
         <pre
           style={{
             whiteSpace: 'pre-wrap',
+            overflowWrap: 'anywhere',
+            wordBreak: 'break-word',
+            maxWidth: '100%',
             background: 'rgba(255,255,255,0.05)',
             padding: '1rem',
             borderRadius: '0.5rem',
