@@ -25,8 +25,14 @@ import type { ChallengeDb } from '../auth/challenges';
 import type { ObservedAmount } from './read-model';
 
 export type HistorySlice = {
-  /** Latest distinct observation time, null when no history exists. */
+  /** Latest distinct COMPLETE-run observation time, null when no complete
+   *  history exists. Callers must label this "latest COMPLETE observation"
+   *  when newerPartial is true - a newer partial run exists but is not a
+   *  trustworthy baseline. */
   latestObservedAt: string | null;
+  /** TRUE when partial-run observations exist that are NEWER than the latest
+   *  complete one (or when only partial history exists). */
+  newerPartial: boolean;
   /** Amounts at the prior distinct observation, null when none exists. */
   prior: ObservedAmount[] | null;
   /** Amounts at the latest observation (empty when no history). */
@@ -46,7 +52,21 @@ export async function loadBalanceHistory(db: ChallengeDb, userId: string): Promi
     )
     .bind(userId)
     .all<{ t: string }>();
-  if (times.results.length === 0) return { latestObservedAt: null, prior: null, latest: [] };
+  // Any partial-run observation newer than the latest COMPLETE one (or any
+  // partial at all when nothing complete exists) forces the honest label.
+  const partialNewer = await db
+    .prepare(
+      `SELECT 1 AS ok FROM balance_snapshots bs
+         JOIN portfolios pf ON pf.id = bs.portfolio_id
+         JOIN sync_runs sr ON sr.id = bs.sync_run_id
+        WHERE pf.user_id = ? AND sr.completeness = 'partial'
+          AND bs.observed_at > COALESCE(?, '')
+        LIMIT 1`,
+    )
+    .bind(userId, times.results.length ? times.results[0].t : null)
+    .first<{ ok: number }>();
+  const newerPartial = partialNewer !== null;
+  if (times.results.length === 0) return { latestObservedAt: null, newerPartial, prior: null, latest: [] };
   const latestObservedAt = times.results[0].t;
   const load = async (t: string): Promise<ObservedAmount[]> =>
     (
@@ -65,5 +85,5 @@ export async function loadBalanceHistory(db: ChallengeDb, userId: string): Promi
     ).results;
   const latest = await load(latestObservedAt);
   const prior = times.results.length === 2 ? await load(times.results[1].t) : null;
-  return { latestObservedAt, prior, latest };
+  return { latestObservedAt, newerPartial, prior, latest };
 }

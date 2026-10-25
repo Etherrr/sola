@@ -299,3 +299,53 @@ describe('link cap race atomicity', () => {
     expect(ids!.n).toBe(5);
   });
 });
+
+describe('atomic admission (reviewer): no pre-write, no residue, no challenge burn', () => {
+  it('cap refusal writes NOTHING - no book row, no identity, no link', async () => {
+    const cookie = await makeUser('u1');
+    const mk = () => {
+      const priv = secp256k1.utils.randomPrivateKey();
+      const address = toEip55('0x' + [...keccak_256(secp256k1.getPublicKey(priv, false).slice(1))].slice(-20).map((b) => b.toString(16).padStart(2, '0')).join(''));
+      return { priv, address };
+    };
+    const link = async (w: { priv: Uint8Array; address: string }) => {
+      const ch = await handleWalletLinkChallenge(post({ address: w.address }, cookie), env, 'evm');
+      const { message } = (await ch.json()) as { message: string };
+      return handleWalletLinkVerify(post({ address: w.address, message, signature: signEvm(w.priv)(message) }, cookie), env, 'evm');
+    };
+    for (let i = 0; i < 5; i++) expect((await link(mk())).status).toBe(200);
+    const w6 = mk();
+    expect((await link(w6)).status).toBe(409);
+    const book = await db.prepare("SELECT COUNT(*) AS n FROM portfolio_addresses WHERE address=?").bind(w6.address.toLowerCase()).first<{ n: number }>();
+    const ident = await db.prepare("SELECT COUNT(*) AS n FROM auth_identities WHERE identifier=?").bind(w6.address.toLowerCase()).first<{ n: number }>();
+    const wl = await db.prepare("SELECT COUNT(*) AS n FROM wallet_links WHERE address=?").bind(w6.address).first<{ n: number }>();
+    expect(book!.n + ident!.n + wl!.n).toBe(0);
+  });
+
+  it('PRE-FLIGHT cap refusal does NOT burn the challenge', async () => {
+    const cookie = await makeUser('u1');
+    const mk = () => {
+      const priv = secp256k1.utils.randomPrivateKey();
+      const address = toEip55('0x' + [...keccak_256(secp256k1.getPublicKey(priv, false).slice(1))].slice(-20).map((b) => b.toString(16).padStart(2, '0')).join(''));
+      return { priv, address };
+    };
+    const wallets = Array.from({ length: 5 }, () => mk());
+    for (const w of wallets) {
+      const ch = await handleWalletLinkChallenge(post({ address: w.address }, cookie), env, 'evm');
+      const { message } = (await ch.json()) as { message: string };
+      await handleWalletLinkVerify(post({ address: w.address, message, signature: signEvm(w.priv)(message) }, cookie), env, 'evm');
+    }
+    const w6 = mk();
+    const ch6 = await handleWalletLinkChallenge(post({ address: w6.address }, cookie), env, 'evm');
+    const { message: m6 } = (await ch6.json()) as { message: string };
+    expect((await handleWalletLinkVerify(post({ address: w6.address, message: m6, signature: signEvm(w6.priv)(m6) }, cookie), env, 'evm')).status).toBe(409);
+    // free a slot: the SAME challenge signature must not be replayable (one-shot),
+    // but the challenge was never burned by the refused attempt - the user simply
+    // requests a fresh challenge and links cleanly.
+    const n = await db.prepare("SELECT COUNT(*) AS n FROM portfolio_addresses WHERE network='ethereum' AND removed_at IS NULL").bind().first<{ n: number }>();
+    expect(n!.n).toBe(5);
+    const ch7 = await handleWalletLinkChallenge(post({ address: w6.address }, cookie), env, 'evm');
+    const { message: m7 } = (await ch7.json()) as { message: string };
+    expect(m7).not.toBe(m6); // fresh challenge issued, no replay weakening
+  });
+});

@@ -31,11 +31,16 @@ const obs = (amount: string, observedAt: string): Extract<ProviderResult, { ok: 
   }],
 });
 const net = () => 'ethereum' as const;
+const obsPartial = (amount: string, observedAt: string): Extract<ProviderResult, { ok: true }> => {
+  const r = obs(amount, observedAt);
+  r.wallets[0].partial = true; // marks the sync_run completeness='partial'
+  return r;
+};
 
 describe('loadBalanceHistory', () => {
   it('no history => honest empty state', async () => {
     const h = await loadBalanceHistory(db, 'u1');
-    expect(h).toEqual({ latestObservedAt: null, prior: null, latest: [] });
+    expect(h).toEqual({ latestObservedAt: null, newerPartial: false, prior: null, latest: [] });
   });
 
   it('one observation => prior is null (never a fabricated zero baseline)', async () => {
@@ -61,17 +66,11 @@ describe('loadBalanceHistory', () => {
     await grantSnapshotConsent(db, 'u1');
     await recordObservation(db, 'u1', obs('1.5', '2026-10-25T11:00:00Z'), net);
     const h = await loadBalanceHistory(db, 'u2');
-    expect(h).toEqual({ latestObservedAt: null, prior: null, latest: [] });
+    expect(h).toEqual({ latestObservedAt: null, newerPartial: false, prior: null, latest: [] });
   });
 });
 
 describe('complete-runs-only baselines (reviewer)', () => {
-  const obsPartial = (amount: string, observedAt: string): Extract<ProviderResult, { ok: true }> => {
-    const r = obs(amount, observedAt);
-    r.wallets[0].partial = true; // marks the sync_run completeness='partial'
-    return r;
-  };
-
   it('a PARTIAL prior run is never a baseline: missing assets do not read as new/gain', async () => {
     await grantSnapshotConsent(db, 'u1');
     // complete run with ETH, then a PARTIAL run (Solana-only scenario), then a full run
@@ -83,6 +82,7 @@ describe('complete-runs-only baselines (reviewer)', () => {
     expect(h.latestObservedAt).toBe('2026-10-25T12:00:00Z');
     expect(h.prior).toHaveLength(1);
     expect(h.prior![0].observedAt).toBe('2026-10-25T10:00:00Z');
+    expect(h.newerPartial).toBe(false); // 11:00 partial is NOT newer than 12:00 complete
   });
 
   it('ONLY partial history exists => unknown, never a zero baseline', async () => {
@@ -90,7 +90,17 @@ describe('complete-runs-only baselines (reviewer)', () => {
     await recordObservation(db, 'u1', obsPartial('1.5', '2026-10-25T11:00:00Z'), net);
     const h = await loadBalanceHistory(db, 'u1');
     expect(h.latestObservedAt).toBeNull();
+    expect(h.newerPartial).toBe(true); // partial exists but is not a baseline
     expect(h.prior).toBeNull();
     expect(h.latest).toEqual([]);
   });
 });
+
+  it('a newer PARTIAL run forces the "latest COMPLETE" labeling flag', async () => {
+    await grantSnapshotConsent(db, 'u1');
+    await recordObservation(db, 'u1', obs('1.5', '2026-10-25T10:00:00Z'), net);
+    await recordObservation(db, 'u1', obsPartial('1.6', '2026-10-25T12:00:00Z'), net);
+    const h = await loadBalanceHistory(db, 'u1');
+    expect(h.latestObservedAt).toBe('2026-10-25T10:00:00Z'); // still the complete one
+    expect(h.newerPartial).toBe(true); // UI must say "latest COMPLETE observation"
+  });

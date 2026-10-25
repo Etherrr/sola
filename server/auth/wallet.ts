@@ -379,6 +379,32 @@ export async function handleWalletLinkVerify(
     return json(401, { error: 'invalid_signature', reason: verdict.error, requestId });
   }
 
+  // HARMLESS PRE-FLIGHT (reviewer 2026-10-25): refuse an obviously-capped link
+  // BEFORE claiming the challenge so the user doesn't burn a fresh signature
+  // for nothing. Read-only and advisory - the atomic batch below is the
+  // authoritative admission; a race past this check simply burns one challenge
+  // honestly (never an unsafe pre-proof write).
+  const preflightCount = await db
+    .prepare(
+      `SELECT COUNT(*) AS n FROM portfolio_addresses pa
+        JOIN portfolios pf ON pf.id = pa.portfolio_id
+        WHERE pf.user_id = ? AND pa.network = ? AND pa.removed_at IS NULL`,
+    )
+    .bind(userId, linkChainOf(chain))
+    .first<{ n: number }>();
+  if ((preflightCount?.n ?? 0) >= MAX_ADDRESSES_PER_NETWORK) {
+    const already = await db
+      .prepare(
+        `SELECT 1 AS ok FROM portfolio_addresses pa
+          JOIN portfolios pf ON pf.id = pa.portfolio_id
+          WHERE pf.user_id = ? AND pa.network = ? AND pa.address = ? AND pa.removed_at IS NULL`,
+      )
+      .bind(userId, linkChainOf(chain), canonicalOf(linkChainOf(chain), addr.display))
+      .first<{ ok: number }>();
+    if (!already)
+      return json(409, { error: 'too_many_addresses', max: MAX_ADDRESSES_PER_NETWORK, requestId });
+  }
+
   const attemptId = crypto.randomUUID();
   const won = await claimChallenge(db, kind, subject, nonce, attemptId);
   if (!won) {
@@ -410,21 +436,22 @@ export async function handleWalletLinkVerify(
   const portfolioId = await ensurePortfolio(db, userId, now);
   const canonical = canonicalOf(linkChainOf(chain), addr.display);
   const shortLabel = `${addr.display.slice(0, 6)}-${addr.display.slice(-4)}`;
-  // CAP POLICY + ATOMICITY (reviewer 2026-10-25): ONE conditional upsert
-  // statement - the EXISTS arm lets an already-listed address through (never
-  // consumes a new slot), the COUNT arm admits a brand-new row only below the
-  // cap, and SQLite's writer serialization makes the count race-free. This
-  // runs BEFORE the identity/link writes so a cap refusal leaves nothing
-  // behind; if the identity/link batch later fails, the book row is reverted
-  // to its exact prior state.
-  const priorBook = await db
-    .prepare(
-      `SELECT verification, removed_at FROM portfolio_addresses
-        WHERE portfolio_id = ? AND network = ? AND address = ?`,
-    )
-    .bind(portfolioId, linkChainOf(chain), canonical)
-    .first<{ verification: string; removed_at: string | null }>();
-  await db
+  const batch = (db as unknown as { batch: (stmts: unknown[]) => Promise<unknown[]> }).batch.bind(db);
+
+  // ATOMIC ADMISSION (reviewer 2026-10-25): everything happens in ONE D1
+  // batch - no pre-write of a verified row, no manual revert (which could
+  // clobber a concurrent remove/re-verify or leave residue):
+  //   1. book upsert, admitted ONLY when the row already exists (no new slot)
+  //      or the network is below the cap (count evaluated in-statement);
+  //   2. identity + wallet_links inserts, each GATED on the exact active
+  //      verified book row this batch just admitted.
+  // If the cap refused the upsert, the gates fail, NOTHING is written, and the
+  // post-batch check maps it to a 409 - zero residue by construction. A
+  // cross-account identity race hits UNIQUE(kind, identifier) and rolls the
+  // WHOLE batch back.
+  const ACTIVE_BOOK = `SELECT 1 FROM portfolio_addresses
+    WHERE portfolio_id = ? AND network = ? AND address = ? AND verification = 'verified' AND removed_at IS NULL`;
+  const bookUpsert = db
     .prepare(
       `INSERT INTO portfolio_addresses (portfolio_id, network, address, label, verification, created_at)
        SELECT ?, ?, ?, ?, 'verified', ?
@@ -439,72 +466,67 @@ export async function handleWalletLinkVerify(
       portfolioId, linkChainOf(chain), canonical, shortLabel, now,
       portfolioId, linkChainOf(chain), canonical,
       portfolioId, linkChainOf(chain), MAX_ADDRESSES_PER_NETWORK,
-    )
-    .run();
-  const bookRow = await db
-    .prepare(
-      `SELECT verification, removed_at FROM portfolio_addresses
-        WHERE portfolio_id = ? AND network = ? AND address = ?`,
-    )
-    .bind(portfolioId, linkChainOf(chain), canonical)
-    .first<{ verification: string; removed_at: string | null }>();
-  if (!bookRow)
-    return json(409, { error: 'too_many_addresses', max: MAX_ADDRESSES_PER_NETWORK, requestId });
-  /** Restore the book row's exact prior state when the link itself fails. */
-  const revertBook = async (): Promise<void> => {
-    if (!priorBook)
-      await db.prepare(`DELETE FROM portfolio_addresses WHERE portfolio_id = ? AND network = ? AND address = ?`)
-        .bind(portfolioId, linkChainOf(chain), canonical).run();
-    else
-      await db.prepare(`UPDATE portfolio_addresses SET verification = ?, removed_at = ? WHERE portfolio_id = ? AND network = ? AND address = ?`)
-        .bind(priorBook.verification, priorBook.removed_at, portfolioId, linkChainOf(chain), canonical).run();
-  };
-  const batch = (db as unknown as { batch: (stmts: unknown[]) => Promise<unknown[]> }).batch.bind(db);
+    );
+  const bookRowNow = async () =>
+    db
+      .prepare(
+        `SELECT verification, removed_at FROM portfolio_addresses
+          WHERE portfolio_id = ? AND network = ? AND address = ?`,
+      )
+      .bind(portfolioId, linkChainOf(chain), canonical)
+      .first<{ verification: string; removed_at: string | null }>();
 
   if (existing) {
-    // Same account: idempotent - but REPAIR a partial earlier write (identity
-    // without its wallet_links row) instead of skipping it forever. The book
-    // row was already verified by the conditional upsert above.
+    // Same account: idempotent - REPAIR a partial earlier write (identity
+    // without its wallet_links row, or either without the verified book row)
+    // with the same single atomic batch.
     const link = await db
       .prepare(`SELECT rowid FROM wallet_links WHERE chain = ? AND address = ? AND user_id = ?`)
       .bind(linkChainOf(chain), addr.display, userId)
       .first<{ rowid: number }>();
-    if (!link) {
-      try {
-        await batch([db.prepare(
-          `INSERT INTO wallet_links (chain, address, user_id, verified_at, challenge_id)
-           VALUES (?, ?, ?, ?, ?)`,
-        ).bind(linkChainOf(chain), addr.display, userId, now, challenge?.id ?? '')]);
-      } catch (e) {
-        await revertBook();
-        throw e;
-      }
-      return json(200, { status: 'ok', linked: 'repaired', requestId });
-    }
-    return json(200, { status: 'ok', linked: 'already', requestId });
+    const book = await bookRowNow();
+    const bookOk = book && book.verification === 'verified' && book.removed_at === null;
+    if (link && bookOk) return json(200, { status: 'ok', linked: 'already', requestId });
+    const linkInsert = db
+      .prepare(
+        `INSERT INTO wallet_links (chain, address, user_id, verified_at, challenge_id)
+         SELECT ?, ?, ?, ?, ? WHERE EXISTS (${ACTIVE_BOOK})`,
+      )
+      .bind(linkChainOf(chain), addr.display, userId, now, challenge?.id ?? '', portfolioId, linkChainOf(chain), canonical);
+    const stmts: unknown[] = [bookUpsert];
+    if (!link) stmts.push(linkInsert);
+    await batch(stmts);
+    const after = await bookRowNow();
+    if (!after || after.verification !== 'verified' || after.removed_at !== null)
+      return json(409, { error: 'too_many_addresses', max: MAX_ADDRESSES_PER_NETWORK, requestId });
+    return json(200, { status: 'ok', linked: 'repaired', requestId });
   }
 
-  // identity + wallet_links commit ATOMICALLY (the book row was written by the
-  // conditional upsert above and is REVERTED if this batch fails). A
-  // concurrent linker loses the UNIQUE race: only that constraint conflict
-  // maps to a safe 409; any other DB failure propagates as a real error.
-  const stmts: unknown[] = [];
-  stmts.push(
-    db.prepare(
+  const identityId = crypto.randomUUID();
+  const identityInsert = db
+    .prepare(
       `INSERT INTO auth_identities (id, user_id, kind, identifier, verified_at)
-       VALUES (?, ?, ?, ?, ?)`,
-    ).bind(crypto.randomUUID(), userId, identityKind, addr.subject, now),
-    db.prepare(
+       SELECT ?, ?, ?, ?, ? WHERE EXISTS (${ACTIVE_BOOK})`,
+    )
+    .bind(identityId, userId, identityKind, addr.subject, now, portfolioId, linkChainOf(chain), canonical);
+  const linkInsert = db
+    .prepare(
       `INSERT INTO wallet_links (chain, address, user_id, verified_at, challenge_id)
-       VALUES (?, ?, ?, ?, ?)`,
-    ).bind(linkChainOf(chain), addr.display, userId, now, challenge?.id ?? ''),
-  );
+       SELECT ?, ?, ?, ?, ? WHERE EXISTS (${ACTIVE_BOOK})`,
+    )
+    .bind(linkChainOf(chain), addr.display, userId, now, challenge?.id ?? '', portfolioId, linkChainOf(chain), canonical);
   try {
-    await batch(stmts);
+    await batch([bookUpsert, identityInsert, linkInsert]);
   } catch (e) {
-    await revertBook();
+    // UNIQUE(kind, identifier) rolls back the ENTIRE batch - zero residue.
     if (isUniqueViolation(e)) return json(409, { error: 'wallet_linked_elsewhere', requestId });
     throw e;
   }
+  const admitted = await db
+    .prepare(`SELECT 1 AS ok FROM auth_identities WHERE kind = ? AND identifier = ?`)
+    .bind(identityKind, addr.subject)
+    .first<{ ok: number }>();
+  if (!admitted)
+    return json(409, { error: 'too_many_addresses', max: MAX_ADDRESSES_PER_NETWORK, requestId });
   return json(200, { status: 'ok', linked: 'added', requestId });
 }
