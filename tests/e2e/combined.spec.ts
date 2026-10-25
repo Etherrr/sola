@@ -10,7 +10,9 @@ test('combined view renders aggregate totals, per-address status and observation
   const section = page.locator('.combined');
   await expect(section.getByRole('heading', { name: 'Saved addresses, combined' })).toBeVisible();
   // Honest framing: simulated aggregation, invented samples, never live.
-  await expect(section.getByText('COMBINED VIEW · SIMULATED AGGREGATION')).toBeVisible();
+  // Hydration can transiently mount a duplicate subtree; wait until exactly one remains.
+  await expect(section.getByText('COMBINED VIEW · SIMULATED AGGREGATION')).toHaveCount(1);
+  await expect(section.getByText('COMBINED VIEW · SIMULATED AGGREGATION').first()).toBeVisible();
   await expect(section.getByText(/not your wallet, not live data/)).toBeVisible();
   // Combined total: 4500 + 2500 + 750 + 3000 USD = $10,750.00; the unpriced DEMO adds nothing.
   await expect(section.getByText('$10,750.00')).toBeVisible();

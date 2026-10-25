@@ -41,8 +41,8 @@ export function CombinedWallets() {
           {result.incomplete ? (
             <small className="warn-text">
               Incomplete: {totalUnpriced} unpriced {totalUnpriced === 1 ? 'asset' : 'assets'},{' '}
-              {unavailable} {unavailable === 1 ? 'address' : 'addresses'} partial or failed -
-              excluded from this figure
+              {unavailable} {unavailable === 1 ? 'address' : 'addresses'} partial or failed.
+              Known priced holdings are included; only unknown or unavailable value is excluded.
             </small>
           ) : null}
         </div>
@@ -79,7 +79,7 @@ export function CombinedWallets() {
         <tbody>
           {result.perAddress.map((a) => (
             <tr key={`${a.network}:${a.address}`}>
-              <td>
+              <td data-label="Address">
                 <details className="addr">
                   <summary>
                     {a.label ?? short(a.address)}{' '}
@@ -88,21 +88,21 @@ export function CombinedWallets() {
                   <code className="fine">{a.address}</code>
                 </details>
               </td>
-              <td>{a.network === 'ethereum' ? 'Ethereum' : 'Solana'}</td>
-              <td>
+              <td data-label="Network">{a.network === 'ethereum' ? 'Ethereum' : 'Solana'}</td>
+              <td data-label="Status">
                 {a.status === 'ok' ? (
                   <span className="badge badge-loaded">LOADED</span>
                 ) : (
                   <span className="badge badge-warn">{a.status.toUpperCase()}</span>
                 )}
               </td>
-              <td>
+              <td data-label="Priced value">
                 {a.pricedValueCents === null ? 'n/a' : money(a.pricedValueCents)}
                 {a.unpricedAssets > 0 ? (
                   <span className="fine muted"> + {a.unpricedAssets} unknown</span>
                 ) : null}
               </td>
-              <td>{clock(a.observedAt)}</td>
+              <td data-label="Observed">{clock(a.observedAt)}</td>
             </tr>
           ))}
         </tbody>
