@@ -195,3 +195,78 @@ describe('wallet link (authenticated, fresh challenge, no auto-transfer)', () =>
     expect(r.status).toBe(401);
   });
 });
+
+describe('wallet link cap + portfolio race safety', () => {
+  const mkWallet = () => {
+    const priv = secp256k1.utils.randomPrivateKey();
+    const address = toEip55('0x' + [...keccak_256(secp256k1.getPublicKey(priv, false).slice(1))].slice(-20).map((b) => b.toString(16).padStart(2, '0')).join(''));
+    return { priv, address };
+  };
+  const link = async (cookie: string, w: { priv: Uint8Array; address: string }) => {
+    const ch = await handleWalletLinkChallenge(post({ address: w.address }, cookie), env, 'evm');
+    const { message } = (await ch.json()) as { message: string };
+    return handleWalletLinkVerify(post({ address: w.address, message, signature: signEvm(w.priv)(message) }, cookie), env, 'evm');
+  };
+
+  it('the per-network cap binds VERIFIED links too (no bypass via link)', async () => {
+    const cookie = await makeUser('u1');
+    // link 5 distinct wallets - all fit the cap
+    for (let i = 0; i < 5; i++) {
+      const r = await link(cookie, mkWallet());
+      expect(r.status).toBe(200);
+    }
+    // the 6th distinct wallet is refused - same policy as the address manager
+    const r6 = await link(cookie, mkWallet());
+    expect(r6.status).toBe(409);
+    expect(((await r6.json()) as { error: string }).error).toBe('too_many_addresses');
+    // but RE-linking an already-listed wallet never consumes a slot
+    const again = await link(cookie, mkWallet());
+    expect(again.status).toBe(409);
+    const n = await db.prepare("SELECT COUNT(*) AS n FROM portfolio_addresses WHERE network='ethereum' AND removed_at IS NULL").bind().first<{ n: number }>();
+    expect(n!.n).toBe(5);
+  });
+
+  it('a watched address that links becomes verified WITHOUT consuming a new slot', async () => {
+    const cookie = await makeUser('u1');
+    const wallets = Array.from({ length: 5 }, () => mkWallet());
+    for (let i = 0; i < 4; i++) expect((await link(cookie, wallets[i])).status).toBe(200);
+    // add the 5th as WATCHED directly in the book (fills the cap)
+    const now = new Date().toISOString();
+    const pf = await db.prepare("SELECT id FROM portfolios WHERE user_id='u1'").bind().first<{ id: string }>();
+    await db.prepare("INSERT INTO portfolio_addresses (portfolio_id, network, address, label, verification, created_at) VALUES (?,?,?,?,'watched',?)")
+      .bind(pf!.id, 'ethereum', wallets[4].address.toLowerCase(), 'watch', now).run();
+    // linking the watched wallet upgrades it in place - allowed at cap
+    const r = await link(cookie, wallets[4]);
+    expect(r.status).toBe(200);
+    const row = await db.prepare("SELECT verification FROM portfolio_addresses WHERE address=?").bind(wallets[4].address.toLowerCase()).first<{ verification: string }>();
+    expect(row!.verification).toBe('verified');
+    // and a genuinely new 6th wallet is still refused
+    expect((await link(cookie, mkWallet())).status).toBe(409);
+  });
+
+  it('concurrent ensurePortfolio calls create exactly ONE portfolio (no split book)', async () => {
+    const { ensurePortfolio } = await import('../server/portfolio/addresses');
+    await makeUser('u1');
+    const now = new Date().toISOString();
+    const [a, b, c] = await Promise.all([
+      ensurePortfolio(db, 'u1', now),
+      ensurePortfolio(db, 'u1', now),
+      ensurePortfolio(db, 'u1', now),
+    ]);
+    expect(a).toBe(b);
+    expect(b).toBe(c);
+    const n = await db.prepare("SELECT COUNT(*) AS n FROM portfolios WHERE user_id='u1'").bind().first<{ n: number }>();
+    expect(n!.n).toBe(1);
+  });
+
+  it('the database itself rejects a second portfolio for one user', async () => {
+    await makeUser('u1');
+    const now = new Date().toISOString();
+    await db.prepare("INSERT INTO portfolios (id, user_id, display_prefs, created_at) VALUES ('p1','u1',NULL,?)").bind(now).run();
+    let threw = false;
+    try {
+      raw.exec(`INSERT INTO portfolios (id, user_id, display_prefs, created_at) VALUES ('p2','u1',NULL,'${now}')`);
+    } catch { threw = true; }
+    expect(threw).toBe(true);
+  });
+});

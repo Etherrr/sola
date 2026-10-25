@@ -23,7 +23,7 @@ import { requireSameOrigin } from './guards';
 import { createD1Limiter } from '../accounts/d1-limiter';
 import type { LimitWindow } from '../accounts/limiter';
 import { readSessionCookie, SESSION_COOKIE, type NativeAuthEnv } from './email';
-import { canonicalOf } from '../portfolio/addresses';
+import { canonicalOf, ensurePortfolio, MAX_ADDRESSES_PER_NETWORK } from '../portfolio/addresses';
 import {
   buildSiweMessage,
   isValidEvmAddress,
@@ -405,13 +405,32 @@ export async function handleWalletLinkVerify(
   // in the address book (reviewer 2026-10-25): the link upserts the
   // portfolio_addresses row ATOMICALLY with the identity/wallet_links writes,
   // so the Addresses & Wallets view reconciles with sign-in state.
-  const portfolio = await db
-    .prepare(`SELECT id FROM portfolios WHERE user_id = ?`)
-    .bind(userId)
-    .first<{ id: string }>();
-  const portfolioId = portfolio?.id ?? crypto.randomUUID();
+  // One portfolio per user is enforced by the UNIQUE index (migration 0003);
+  // ensurePortfolio is a race-safe upsert+select, never check-then-insert.
+  const portfolioId = await ensurePortfolio(db, userId, now);
   const canonical = canonicalOf(linkChainOf(chain), addr.display);
   const shortLabel = `${addr.display.slice(0, 6)}-${addr.display.slice(-4)}`;
+  // CAP POLICY (shared with the address manager): a link that would CREATE a
+  // new address-book row respects the same per-network cap; upserting an
+  // already-listed address never consumes a slot.
+  const bookRow = await db
+    .prepare(
+      `SELECT verification, removed_at FROM portfolio_addresses
+        WHERE portfolio_id = ? AND network = ? AND address = ?`,
+    )
+    .bind(portfolioId, linkChainOf(chain), canonical)
+    .first<{ verification: string; removed_at: string | null }>();
+  if (!bookRow) {
+    const count = await db
+      .prepare(
+        `SELECT COUNT(*) AS n FROM portfolio_addresses
+          WHERE portfolio_id = ? AND network = ? AND removed_at IS NULL`,
+      )
+      .bind(portfolioId, linkChainOf(chain))
+      .first<{ n: number }>();
+    if ((count?.n ?? 0) >= MAX_ADDRESSES_PER_NETWORK)
+      return json(409, { error: 'too_many_addresses', max: MAX_ADDRESSES_PER_NETWORK, requestId });
+  }
   const addressUpsert = db
     .prepare(
       `INSERT INTO portfolio_addresses (portfolio_id, network, address, label, verification, created_at)
@@ -430,18 +449,9 @@ export async function handleWalletLinkVerify(
       .prepare(`SELECT rowid FROM wallet_links WHERE chain = ? AND address = ? AND user_id = ?`)
       .bind(linkChainOf(chain), addr.display, userId)
       .first<{ rowid: number }>();
-    const bookRow = await db
-      .prepare(
-        `SELECT verification, removed_at FROM portfolio_addresses
-          WHERE portfolio_id = ? AND network = ? AND address = ?`,
-      )
-      .bind(portfolioId, linkChainOf(chain), canonical)
-      .first<{ verification: string; removed_at: string | null }>();
     const bookNeedsRepair = !bookRow || bookRow.verification !== 'verified' || bookRow.removed_at !== null;
     if (!link || bookNeedsRepair) {
       const stmts: unknown[] = [];
-      if (!portfolio)
-        stmts.push(db.prepare(`INSERT INTO portfolios (id, user_id, display_prefs, created_at) VALUES (?, ?, NULL, ?)`).bind(portfolioId, userId, now));
       if (!link)
         stmts.push(db.prepare(
           `INSERT INTO wallet_links (chain, address, user_id, verified_at, challenge_id)
@@ -458,8 +468,6 @@ export async function handleWalletLinkVerify(
   // A concurrent linker loses the UNIQUE race: only that constraint conflict
   // maps to a safe 409; any other DB failure propagates as a real error.
   const stmts: unknown[] = [];
-  if (!portfolio)
-    stmts.push(db.prepare(`INSERT INTO portfolios (id, user_id, display_prefs, created_at) VALUES (?, ?, NULL, ?)`).bind(portfolioId, userId, now));
   stmts.push(
     db.prepare(
       `INSERT INTO auth_identities (id, user_id, kind, identifier, verified_at)

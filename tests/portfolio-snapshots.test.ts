@@ -115,3 +115,84 @@ describe('snapshot recording', () => {
     expect(r).toEqual({ recorded: false, reason: 'no_consent' });
   });
 });
+
+describe('consent grant/withdraw writers and race safety', () => {
+  it('grantSnapshotConsent is idempotent and revives after withdrawal', async () => {
+    const { grantSnapshotConsent, withdrawSnapshotConsent } = await import('../server/portfolio/snapshots');
+    expect(await hasSnapshotConsent(db, 'u1')).toBe(false);
+    await grantSnapshotConsent(db, 'u1');
+    await grantSnapshotConsent(db, 'u1'); // idempotent
+    expect(await hasSnapshotConsent(db, 'u1')).toBe(true);
+    await withdrawSnapshotConsent(db, 'u1');
+    expect(await hasSnapshotConsent(db, 'u1')).toBe(false);
+    await grantSnapshotConsent(db, 'u1'); // re-grant revives
+    expect(await hasSnapshotConsent(db, 'u1')).toBe(true);
+    const n = await db.prepare("SELECT COUNT(*) AS n FROM privacy_consents WHERE user_id='u1'").bind().first<{ n: number }>();
+    expect(n!.n).toBe(1); // never parallel rows for the same version
+  });
+
+  it('withdrawal wipes content and blocks ALL further recording', async () => {
+    const { grantSnapshotConsent, withdrawSnapshotConsent } = await import('../server/portfolio/snapshots');
+    await grantSnapshotConsent(db, 'u1');
+    await recordObservation(db, 'u1', result(), net);
+    let n = await db.prepare('SELECT COUNT(*) AS n FROM balance_snapshots').bind().first<{ n: number }>();
+    expect(n!.n).toBe(1);
+    const w = await withdrawSnapshotConsent(db, 'u1');
+    expect(w.balances).toBe(1);
+    n = await db.prepare('SELECT COUNT(*) AS n FROM balance_snapshots').bind().first<{ n: number }>();
+    expect(n!.n).toBe(0);
+    // recording after withdrawal is refused
+    const r = await recordObservation(db, 'u1', result(), net);
+    expect(r).toEqual({ recorded: false, reason: 'no_consent' });
+    n = await db.prepare('SELECT COUNT(*) AS n FROM balance_snapshots').bind().first<{ n: number }>();
+    expect(n!.n).toBe(0);
+  });
+
+  it('race: consent withdrawn mid-observation leaves ZERO surviving rows', async () => {
+    const { grantSnapshotConsent, withdrawSnapshotConsent } = await import('../server/portfolio/snapshots');
+    await grantSnapshotConsent(db, 'u1');
+    // build a result with several wallets so the writer awaits between inserts
+    const big = result();
+    big.wallets = Array.from({ length: 5 }, (_, i) => ({ ...result().wallets[0], address: `0x${i}ABC` }));
+    // revoke consent concurrently: withdraw while recordObservation is mid-flight
+    const rec = recordObservation(db, 'u1', big, net);
+    await withdrawSnapshotConsent(db, 'u1');
+    await rec;
+    const b = await db.prepare('SELECT COUNT(*) AS n FROM balance_snapshots').bind().first<{ n: number }>();
+    const p = await db.prepare('SELECT COUNT(*) AS n FROM position_snapshots').bind().first<{ n: number }>();
+    const pr = await db.prepare('SELECT COUNT(*) AS n FROM price_observations').bind().first<{ n: number }>();
+    expect(b!.n + p!.n + pr!.n).toBe(0);
+  });
+
+  it('concurrent redelivery: two parallel identical observations insert no duplicates', async () => {
+    const { grantSnapshotConsent } = await import('../server/portfolio/snapshots');
+    await grantSnapshotConsent(db, 'u1');
+    const [r1, r2] = await Promise.all([
+      recordObservation(db, 'u1', result(), net),
+      recordObservation(db, 'u1', result(), net),
+    ]);
+    expect(r1.recorded && r2.recorded).toBe(true);
+    const b = await db.prepare('SELECT COUNT(*) AS n FROM balance_snapshots').bind().first<{ n: number }>();
+    const p = await db.prepare('SELECT COUNT(*) AS n FROM position_snapshots').bind().first<{ n: number }>();
+    expect(b!.n).toBe(1);
+    expect(p!.n).toBe(1);
+  });
+
+  it('Solana case-distinct addresses keep DISTINCT history (no lowercase collapse)', async () => {
+    const { grantSnapshotConsent } = await import('../server/portfolio/snapshots');
+    await grantSnapshotConsent(db, 'u1');
+    const a = 'SoLanaMixedCaseAddr1111111111111111111111';
+    const b = 'SolanaMixedCaseAddr1111111111111111111111'; // differs only in case
+    const r1 = result();
+    r1.wallets = [{ ...result().wallets[0], address: a, aave: undefined }];
+    const r2 = result();
+    r2.wallets = [{ ...result().wallets[0], address: b, aave: undefined }];
+    const sol = () => 'solana' as const;
+    await recordObservation(db, 'u1', r1, sol);
+    await recordObservation(db, 'u1', r2, sol);
+    const n = await db.prepare("SELECT COUNT(*) AS n FROM balance_snapshots WHERE network='solana'").bind().first<{ n: number }>();
+    expect(n!.n).toBe(2); // distinct identities, distinct rows
+    const addrs = await db.prepare("SELECT address FROM balance_snapshots WHERE network='solana' ORDER BY address").bind().all<{ address: string }>();
+    expect(addrs.results.map((x) => x.address).sort()).toEqual([a, b].sort()); // stored EXACT, never lowercased
+  });
+});

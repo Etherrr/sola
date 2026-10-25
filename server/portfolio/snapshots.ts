@@ -5,19 +5,31 @@
  * Rules (architecture §1/§7):
  * - NOTHING is recorded without an active privacy_consents row of kind
  *   'portfolio_snapshots' (explicit consent; withdrawals stop recording).
+ * - CONSENT IS ENFORCED INSIDE EVERY WRITE: each content insert is an atomic
+ *   INSERT ... SELECT ... WHERE EXISTS(<active consent>), so a consent check
+ *   and its write can never be split by a concurrent withdrawal. Withdrawal
+ *   revokes FIRST, then deletes: a racing insert either lands before the
+ *   revoke (and is deleted) or after it (and is refused by the conditional
+ *   insert). No post-withdrawal history can survive.
  * - Snapshots are value-only observations - never P&L, never backfilled with
  *   fabricated history, never UPDATEd once written.
- * - Idempotent: a redelivered identical observation (same portfolio, asset,
- *   amount, observation time) maps to the same deterministic row id and is
- *   skipped - duplicates never double-count history.
+ * - Idempotent + concurrency-safe: ids are deterministic content hashes and
+ *   every insert is ON CONFLICT(id) DO NOTHING; a redelivered or concurrently
+ *   delivered identical observation is skipped, never duplicated, never an
+ *   error. Address identity inside the hash is the central chain-aware
+ *   addressKey (EVM case-insensitive, Solana base58 EXACT) so case-distinct
+ *   Solana addresses keep distinct history.
  * - A partial provider failure records what arrived with its sync_run status;
  *   it never erases or overwrites previously stored history.
  */
 import type { ChallengeDb } from '../auth/challenges';
-import { fromWalletResult, isZero } from './domain';
+import { addressKey, fromWalletResult, isZero } from './domain';
 import type { ProviderResult } from './provider';
 
 export const SNAPSHOT_CONSENT_KIND = 'portfolio_snapshots';
+
+const ACTIVE_CONSENT = `SELECT 1 FROM privacy_consents
+   WHERE user_id = ? AND kind = '${SNAPSHOT_CONSENT_KIND}' AND revoked_at IS NULL`;
 
 const toHex = (b: ArrayBuffer): string =>
   [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, '0')).join('');
@@ -36,118 +48,49 @@ export async function hasSnapshotConsent(db: ChallengeDb, userId: string): Promi
   return row !== null;
 }
 
-export type RecordOutcome =
-  | { recorded: true; syncRunId: string; balances: number; positions: number; prices: number; skippedDuplicates: number }
-  | { recorded: false; reason: 'no_consent' | 'no_portfolio' | 'provider_error' };
-
-/** Record one provider result as snapshots for the user's portfolio. Records
- *  NOTHING when consent is absent, the user has no portfolio, or the provider
- *  failed (a failed run writes no partial garbage). */
-export async function recordObservation(
+/** Consent GRANT writer (plan: history recording starts only after explicit
+ *  consent). Idempotent: re-granting while active just refreshes the timestamp;
+ *  re-granting after a withdrawal revives the (user, kind, version) row with a
+ *  fresh consented_at - the PRIMARY KEY leaves no room for parallel rows. */
+export async function grantSnapshotConsent(
   db: ChallengeDb,
   userId: string,
-  result: Extract<ProviderResult, { ok: true }>,
-  networkOf: (address: string) => 'ethereum' | 'solana',
-): Promise<RecordOutcome> {
-  if (!(await hasSnapshotConsent(db, userId))) return { recorded: false, reason: 'no_consent' };
-  const portfolio = await db
-    .prepare(`SELECT id FROM portfolios WHERE user_id = ?`)
-    .bind(userId)
-    .first<{ id: string }>();
-  if (!portfolio) return { recorded: false, reason: 'no_portfolio' };
-
+  version = 'v1',
+): Promise<void> {
   const now = new Date().toISOString();
-  const anyPartial = result.wallets.some((w) => w.partial || (w.aave && w.aave.status !== 'ok'));
-  const syncRunId = crypto.randomUUID();
   const r = await db
     .prepare(
-      `INSERT INTO sync_runs (id, user_id, requested_at, started_at, completed_at, provider, status, error, completeness)
-       VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
+      `INSERT INTO privacy_consents (user_id, kind, version, consented_at, revoked_at)
+       VALUES (?, ?, ?, ?, NULL)
+       ON CONFLICT(user_id, kind, version)
+       DO UPDATE SET revoked_at = NULL, consented_at = excluded.consented_at`,
     )
-    .bind(syncRunId, userId, now, now, now, result.provider, anyPartial ? 'partial' : 'live', anyPartial ? 'partial' : 'complete')
+    .bind(userId, SNAPSHOT_CONSENT_KIND, version, now)
     .run();
-  if (!r.success) throw new Error('sync_run_insert_failed');
-
-  let balances = 0;
-  let positions = 0;
-  let prices = 0;
-  let skipped = 0;
-  const seenPrices = new Set<string>();
-
-  for (const w of result.wallets) {
-    const network = networkOf(w.address);
-    for (const p of fromWalletResult(network, w, result.observedAt)) {
-      if (isZero(p.amount)) continue;
-      const id = await sha256([portfolio.id, p.kind, p.protocol ?? '', p.asset.assetId, p.address.toLowerCase(), p.amount, p.observedAt].join('|'));
-      const exists = await db
-        .prepare(
-          p.kind === 'wallet_balance'
-            ? `SELECT 1 AS ok FROM balance_snapshots WHERE id = ?`
-            : `SELECT 1 AS ok FROM position_snapshots WHERE id = ?`,
-        )
-        .bind(id)
-        .first<{ ok: number }>();
-      if (exists) {
-        skipped += 1;
-        continue;
-      }
-      if (p.kind === 'wallet_balance') {
-        await db
-          .prepare(
-            `INSERT INTO balance_snapshots (id, sync_run_id, portfolio_id, network, address, asset_id, amount, observed_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          )
-          .bind(id, syncRunId, portfolio.id, p.network, p.address, p.asset.assetId, p.amount, p.observedAt)
-          .run();
-        balances += 1;
-      } else {
-        await db
-          .prepare(
-            `INSERT INTO position_snapshots (id, sync_run_id, portfolio_id, protocol, network, address, position, observed_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          )
-          .bind(
-            id,
-            syncRunId,
-            portfolio.id,
-            p.protocol,
-            p.network,
-            p.address,
-            JSON.stringify({ kind: p.kind, asset: p.asset, amount: p.amount, valueUsd: p.valueUsd }),
-            p.observedAt,
-          )
-          .run();
-        positions += 1;
-      }
-      // price observations: one per distinct asset+quote per run
-      if (p.price) {
-        const pk = [p.asset.assetId, p.price.usd, p.price.observedAt].join('|');
-        if (!seenPrices.has(pk)) {
-          seenPrices.add(pk);
-          const priceId = await sha256(['price', ...pk].join('|'));
-          const px = await db
-            .prepare(`SELECT 1 AS ok FROM price_observations WHERE id = ?`)
-            .bind(priceId)
-            .first<{ ok: number }>();
-          if (!px) {
-            await db
-              .prepare(
-                `INSERT INTO price_observations (id, sync_run_id, asset_id, usd, source, price_observed_at)
-                 VALUES (?, ?, ?, ?, ?, ?)`,
-              )
-              .bind(priceId, syncRunId, p.asset.assetId, p.price.usd, p.price.source, p.price.observedAt)
-              .run();
-            prices += 1;
-          }
-        }
-      }
-    }
-  }
-  return { recorded: true, syncRunId, balances, positions, prices, skippedDuplicates: skipped };
+  if (!r.success) throw new Error('consent_grant_failed');
 }
 
-/** Consent withdrawal: delete ALL snapshot history for the user's portfolios.
- *  Sync runs stay as audit metadata (no balance content). */
+/** Consent WITHDRAWAL: revoke FIRST, then delete ALL snapshot history for the
+ *  user's portfolios. Revoke-first ordering plus consent-conditional inserts
+ *  guarantees no row can be written after the delete. Sync runs stay as audit
+ *  metadata (no balance content). */
+export async function withdrawSnapshotConsent(
+  db: ChallengeDb,
+  userId: string,
+): Promise<{ balances: number; positions: number; prices: number }> {
+  const now = new Date().toISOString();
+  await db
+    .prepare(
+      `UPDATE privacy_consents SET revoked_at = ?
+        WHERE user_id = ? AND kind = ? AND revoked_at IS NULL`,
+    )
+    .bind(now, userId, SNAPSHOT_CONSENT_KIND)
+    .run();
+  return deleteSnapshots(db, userId);
+}
+
+/** Delete all snapshot CONTENT for the user's portfolios (consent must already
+ *  be revoked when this is called as part of withdrawal). */
 export async function deleteSnapshots(db: ChallengeDb, userId: string): Promise<{ balances: number; positions: number; prices: number }> {
   const portfolios = await db
     .prepare(`SELECT id FROM portfolios WHERE user_id = ?`)
@@ -164,4 +107,113 @@ export async function deleteSnapshots(db: ChallengeDb, userId: string): Promise<
     .bind(userId)
     .run()).meta?.changes ?? 0;
   return { balances: b, positions: p, prices: pr };
+}
+
+export type RecordOutcome =
+  | { recorded: true; syncRunId: string; balances: number; positions: number; prices: number; skippedDuplicates: number }
+  | { recorded: false; reason: 'no_consent' | 'no_portfolio' | 'provider_error' };
+
+/** Record one provider result as snapshots for the user's portfolio. Records
+ *  NOTHING when consent is absent (checked atomically inside every insert),
+ *  the user has no portfolio, or the provider failed. */
+export async function recordObservation(
+  db: ChallengeDb,
+  userId: string,
+  result: Extract<ProviderResult, { ok: true }>,
+  networkOf: (address: string) => 'ethereum' | 'solana',
+): Promise<RecordOutcome> {
+  const portfolio = await db
+    .prepare(`SELECT id FROM portfolios WHERE user_id = ?`)
+    .bind(userId)
+    .first<{ id: string }>();
+  if (!portfolio) return { recorded: false, reason: 'no_portfolio' };
+
+  const now = new Date().toISOString();
+  const anyPartial = result.wallets.some((w) => w.partial || (w.aave && w.aave.status !== 'ok'));
+  const syncRunId = crypto.randomUUID();
+  // The sync_run insert is itself consent-conditional: if consent is absent or
+  // withdrawn at this exact point, NO run (and therefore no content) appears.
+  const r = await db
+    .prepare(
+      `INSERT INTO sync_runs (id, user_id, requested_at, started_at, completed_at, provider, status, error, completeness)
+       SELECT ?, ?, ?, ?, ?, ?, ?, NULL, ?
+       WHERE EXISTS (${ACTIVE_CONSENT})`,
+    )
+    .bind(syncRunId, userId, now, now, now, result.provider, anyPartial ? 'partial' : 'live', anyPartial ? 'partial' : 'complete', userId)
+    .run();
+  if (!r.success) throw new Error('sync_run_insert_failed');
+  if ((r.meta?.changes ?? 0) === 0) return { recorded: false, reason: 'no_consent' };
+
+  let balances = 0;
+  let positions = 0;
+  let prices = 0;
+  let skipped = 0;
+  const seenPrices = new Set<string>();
+
+  for (const w of result.wallets) {
+    const network = networkOf(w.address);
+    for (const p of fromWalletResult(network, w, result.observedAt)) {
+      if (isZero(p.amount)) continue;
+      const id = await sha256(
+        [portfolio.id, p.kind, p.protocol ?? '', p.asset.assetId, addressKey(p.network, p.address), p.amount, p.observedAt].join('|'),
+      );
+      if (p.kind === 'wallet_balance') {
+        const ins = await db
+          .prepare(
+            `INSERT INTO balance_snapshots (id, sync_run_id, portfolio_id, network, address, asset_id, amount, observed_at)
+             SELECT ?, ?, ?, ?, ?, ?, ?, ?
+             WHERE EXISTS (${ACTIVE_CONSENT})
+             ON CONFLICT(id) DO NOTHING`,
+          )
+          .bind(id, syncRunId, portfolio.id, p.network, p.address, p.asset.assetId, p.amount, p.observedAt, userId)
+          .run();
+        if ((ins.meta?.changes ?? 0) === 1) balances += 1;
+        else skipped += 1;
+      } else {
+        const ins = await db
+          .prepare(
+            `INSERT INTO position_snapshots (id, sync_run_id, portfolio_id, protocol, network, address, position, observed_at)
+             SELECT ?, ?, ?, ?, ?, ?, ?, ?
+             WHERE EXISTS (${ACTIVE_CONSENT})
+             ON CONFLICT(id) DO NOTHING`,
+          )
+          .bind(
+            id,
+            syncRunId,
+            portfolio.id,
+            p.protocol,
+            p.network,
+            p.address,
+            JSON.stringify({ kind: p.kind, asset: p.asset, amount: p.amount, valueUsd: p.valueUsd }),
+            p.observedAt,
+            userId,
+          )
+          .run();
+        if ((ins.meta?.changes ?? 0) === 1) positions += 1;
+        else skipped += 1;
+      }
+      // price observations: one per distinct asset+quote per run
+      if (p.price) {
+        const pk = [p.asset.assetId, p.price.usd, p.price.observedAt].join('|');
+        if (!seenPrices.has(pk)) {
+          seenPrices.add(pk);
+          const priceId = await sha256(['price', ...pk].join('|'));
+          const ins = await db
+            .prepare(
+              `INSERT INTO price_observations (id, sync_run_id, asset_id, usd, source, price_observed_at)
+               SELECT ?, ?, ?, ?, ?, ?
+               WHERE EXISTS (${ACTIVE_CONSENT})
+               ON CONFLICT(id) DO NOTHING`,
+            )
+            .bind(priceId, syncRunId, p.asset.assetId, p.price.usd, p.price.source, p.price.observedAt, userId)
+            .run();
+          if ((ins.meta?.changes ?? 0) === 1) prices += 1;
+        }
+      }
+    }
+  }
+  // Honest tail: if consent was withdrawn mid-run, the conditional inserts
+  // refused everything - report that truthfully instead of "all skipped".
+  if (!(await hasSnapshotConsent(db, userId))) return { recorded: false, reason: 'no_consent' };
+  return { recorded: true, syncRunId, balances, positions, prices, skippedDuplicates: skipped };
 }

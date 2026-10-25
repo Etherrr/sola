@@ -31,6 +31,11 @@ export type AddressEntry = {
   lastObservedAt: string | null;
 };
 
+/** CAP POLICY (reviewer 2026-10-25, explicit and consistent): the cap counts
+ *  TOTAL ACTIVE addresses per network - watched AND verified rows alike,
+ *  soft-deleted rows excluded. It is enforced BOTH here (manual add) and in
+ *  the wallet-link writer (verified link); an upsert of an already-listed
+ *  address never consumes a new slot. */
 export const MAX_ADDRESSES_PER_NETWORK = 5;
 export const MAX_LABEL_LEN = 40;
 const CONTROL = /[\p{Cc}\p{Cf}]/u;
@@ -73,19 +78,27 @@ async function entitledUser(req: Request, db: ChallengeDb, fresh: boolean): Prom
   return id.userId;
 }
 
-async function ensurePortfolio(db: ChallengeDb, userId: string, now: string): Promise<string> {
-  const existing = await db
+/** One portfolio per user, race-safe: the UNIQUE(user_id) index (migration
+ *  0003) is the arbiter - concurrent creators both attempt the insert, the
+ *  loser's ON CONFLICT DO NOTHING discards its id, and everyone SELECTs the
+ *  single surviving row. Exported for the wallet-link writer, which must never
+ *  split identity/link/address across two portfolios. */
+export async function ensurePortfolio(db: ChallengeDb, userId: string, now: string): Promise<string> {
+  const r = await db
+    .prepare(
+      `INSERT INTO portfolios (id, user_id, display_prefs, created_at)
+       VALUES (?, ?, NULL, ?)
+       ON CONFLICT(user_id) DO NOTHING`,
+    )
+    .bind(crypto.randomUUID(), userId, now)
+    .run();
+  if (!r.success) throw new Error('portfolio_insert_failed');
+  const row = await db
     .prepare(`SELECT id FROM portfolios WHERE user_id = ?`)
     .bind(userId)
     .first<{ id: string }>();
-  if (existing) return existing.id;
-  const id = crypto.randomUUID();
-  const r = await db
-    .prepare(`INSERT INTO portfolios (id, user_id, display_prefs, created_at) VALUES (?, ?, NULL, ?)`)
-    .bind(id, userId, now)
-    .run();
-  if (!r.success) throw new Error('portfolio_insert_failed');
-  return id;
+  if (!row) throw new Error('portfolio_lookup_failed');
+  return row.id;
 }
 
 const ADDRESS_COLS = `pa.network, pa.address, pa.label, pa.verification, pa.created_at`;

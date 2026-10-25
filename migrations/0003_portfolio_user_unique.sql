@@ -1,0 +1,11 @@
+-- 0003: one portfolio per user, enforced by the database.
+-- ensurePortfolio and the wallet-link writer both used check-then-insert,
+-- which races: two concurrent writers could insert two portfolios for one
+-- user and split the address book/history across them. The UNIQUE index makes
+-- the database the arbiter; writers use INSERT ... ON CONFLICT(user_id)
+-- DO NOTHING followed by SELECT (atomic, race-safe).
+-- NOTE: staging was inspected for pre-existing duplicates BEFORE applying
+-- (SELECT user_id, COUNT(*) FROM portfolios GROUP BY user_id HAVING COUNT(*)>1
+-- returned zero rows); production data must be inspected the same way before
+-- this migration ever runs there - never blind-apply a unique index.
+CREATE UNIQUE INDEX IF NOT EXISTS portfolios_user_unique ON portfolios(user_id);
