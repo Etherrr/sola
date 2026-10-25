@@ -69,8 +69,19 @@ every query carries user_id/owner predicates (existing D1 store pattern extends)
   UPDATE ... WHERE consumed_at IS NULL AND id = <current attempt>; a session is created
   ONLY when exactly one row was claimed by the current attempt. D1 batch atomicity is
   insufficient and zero-affected-rows is not a SQL error, so row-count claims are the
-  gate; check-then-mark permits prior-consumer replay. Concurrency/replay/crash tests
-  are mandatory for this path before any native session goes live.
+  gate; check-then-mark permits prior-consumer replay. The claim is bound to a fresh
+  server-generated attempt ID; a session is created only when THIS request affected
+  exactly one row carrying that attempt ID (consumed=true alone is insufficient). A
+  crash after a successful claim burns the challenge — there is no automatic un-consume.
+  Mandatory tests: concurrent claims produce exactly one session; sequential replay adds
+  zero; expiry; crash-after-claim; attempt-ID collision.
+- Auth != entitlement: before cutover, run host/direct-origin/preview bypass tests —
+  a request that skips the app shell must still fail entitlement server-side.
+- Negative-path test matrix (all mandatory before cutover): recovery at least as strong
+  as primary sign-in with recent reauthentication for sensitive changes; OTP replay and
+  rate limits; passkey RP-ID/origin/credential-ID checks; session fixation, revocation
+  and CSRF; wallet-link non-transfer (a verified wallet cannot be re-linked to another
+  account without a fresh challenge from that wallet).
 - SIWS format binding: Solana sign-in supports exactly one expected message format per
   challenge (plain Wallet Standard SIWS vs offchain envelope); the server binds the
   expected format to the issued challenge and rejects any mismatch.
@@ -94,7 +105,12 @@ every query carries user_id/owner predicates (existing D1 store pattern extends)
    tracked_addresses(owner=access-key) to portfolio_addresses(user) — never keyed on
    email text alone: the binding evidence is the live Access JWT + verified native
    email in one session.
-3. Rollback: copy-not-move means tracked_addresses stays intact; reverting is removing
+3. Reconciliation: after claims, row counts and labels are reconciled between
+   tracked_addresses and portfolio_addresses per owner; unmatched legacy rows stay
+   claimable. Matching email/mailbox text alone is NEVER continuity proof — the binding
+   evidence is the live Access JWT plus the freshly verified native email challenge in
+   the same session.
+4. Rollback: copy-not-move means tracked_addresses stays intact; reverting is removing
    the claim affordance. Data deletion of legacy rows is a separate, later,
    owner-approved operation.
 4. Cutover: after QA (invited new user, returning user, wallet-verified, two-account
@@ -112,8 +128,23 @@ every query carries user_id/owner predicates (existing D1 store pattern extends)
   (claims Workers support) pending an exact Pages packaging/runtime spike on staging;
   WebCrypto Ed25519 exists in the Workers runtime but is not package-compatibility
   proof; fallback is minimal hand-rolled verification per the OWASP passkey sheet.
-- EVM SIWE verification approach on Workers — Isa research pending.
+- EVM SIWE verification (advisory, Isa 2026-10-25): candidate is viem's
+  publicClient.verifySiweMessage (ERC-4361 + contract-account verification with block
+  context) with explicit expected domain, stored nonce, time window, chain/account/URI
+  policy and bounded fail-closed RPC. ERC-6492 undeployed-account support is NOT
+  confirmed — qualify it or mark it honestly unsupported at release. Pin the exact viem
+  version and spike it on staging; the jsr Workers listing is a different version and is
+  not build proof. Do not choose the standalone `siwe` package on its official name:
+  the provenance succession between signinwithethereum/siwe and spruceid/siwe is not
+  established. Final library/version choices remain ours after runtime spikes.
 - Email sending from Pages Functions (native OTP) needs a mail path: transactional
   email provider = keyed service = owner decision; interim: keep Access email-code as
   the email factor during dual-gate while native email challenge ships only on staging.
 - Solana reliability work (bounded retries/fallback) is Phase C, independent of auth.
+- Portfolio valuation invariants (advisory, Isa): Aave positions must model receipt
+  vs underlying vs debt explicitly with netting rules that allow a negative net;
+  a deterministic stale-price policy (never silently treat stale as fresh, never zero);
+  "priced subtotal" is a subtotal, not a lower-bound claim. Tests: partial provider
+  failures, duplicate deliveries, immutable idempotent snapshots, cross-user cache
+  isolation, consent-withdrawal deletion vs in-flight jobs, watched-vs-verified
+  separation. Snapshots are value-only; never P&L.
