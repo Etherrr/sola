@@ -202,6 +202,103 @@ export async function lookupAddress(
   }
 }
 
+export type BulkLookupOutcome =
+  | { kind: 'ok'; data: ApiSuccess }
+  | { kind: 'error'; message: string; retryable: boolean; retryAfterSeconds?: number };
+
+/**
+ * Multi-address variant for the combined view: one resolve call for up to five saved addresses
+ * on one network. Same transport, parsing and failure wording as lookupAddress. A successful
+ * answer may legitimately omit a requested address; the caller marks that address failed
+ * instead of rejecting the whole answer. An answer naming an address that was never requested
+ * is rejected as unusable. Address identity is chain-specific (EVM case-insensitive).
+ */
+export async function lookupAddresses(
+  network: TrackNetwork,
+  addresses: string[],
+  signal?: AbortSignal,
+): Promise<BulkLookupOutcome> {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 12000);
+  const onAbort = () => ctl.abort();
+  signal?.addEventListener('abort', onAbort);
+  if (signal?.aborted) ctl.abort();
+  const malformed: BulkLookupOutcome = {
+    kind: 'error',
+    message:
+      'The answer was not in the expected form (your Access session may have expired; reload and sign in). Nothing was shown.',
+    retryable: true,
+  };
+  try {
+    const res = await fetch('/api/v1/portfolio/resolve', {
+      method: 'POST',
+      credentials: 'same-origin',
+      cache: 'no-store',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ network, addresses, currency: 'USD' }),
+      signal: ctl.signal,
+    });
+    if (res.ok) {
+      let data: ApiSuccess | null = null;
+      try {
+        data = parseApiSuccess(await res.json());
+      } catch {
+        data = null; // HTML from an Access redirect or a malformed body
+      }
+      if (data) {
+        const asked = new Set(
+          network === 'ethereum' ? addresses.map((a) => a.toLowerCase()) : addresses,
+        );
+        const allAsked = data.wallets.every((w) =>
+          asked.has(network === 'ethereum' ? w.address.toLowerCase() : w.address),
+        );
+        if (!allAsked || data.wallets.length > addresses.length) data = null;
+      }
+      return data ? { kind: 'ok', data } : malformed;
+    }
+    if (res.status === 503) {
+      let code = '';
+      try {
+        code = String(
+          ((await res.json()) as { error?: { code?: string }; code?: string }).error?.code ?? '',
+        );
+      } catch {
+        /* ignore */
+      }
+      if (code === 'disabled' || code === 'not_configured')
+        return {
+          kind: 'error',
+          message:
+            code === 'disabled'
+              ? 'The lookup is switched off on this deployment. This is expected, not a fault.'
+              : 'The lookup is not configured on this deployment yet.',
+          retryable: false,
+        };
+    }
+    const [message, retryable] = MESSAGES[res.status] ?? [
+      'The lookup failed. Nothing was substituted.',
+      true,
+    ];
+    return {
+      kind: 'error',
+      message,
+      retryable,
+      ...(res.status === 429
+        ? { retryAfterSeconds: retryAfterSeconds(res.headers.get('retry-after')) }
+        : {}),
+    };
+  } catch {
+    return {
+      kind: 'error',
+      message: 'The lookup service could not be reached. Nothing was substituted.',
+      retryable: true,
+    };
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', onAbort);
+  }
+}
+
 export type SessionState =
   | { kind: 'verified'; email: string; expiresAtMs: number }
   | { kind: 'rejected' }

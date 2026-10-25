@@ -43,10 +43,11 @@ describe('learning and safety boundaries', () => {
       .filter((file) => /\.(ts|tsx)$/.test(file) && file !== API_CLIENT)
       .map((file) => readFileSync(file, 'utf8'))
       .join('\n');
-    // Exactly five browser requests exist: the lookup POST, the same-origin session GET, the same-origin
-    // health GET, the same-origin saved-addresses API and the same-origin markets overview GET
-    // (all through this one module).
-    expect(readFileSync(API_CLIENT, 'utf8').match(/fetch\s*\(/g)).toHaveLength(5);
+    // Exactly six browser requests exist: the single-address lookup POST and its multi-address
+    // variant (same resolve endpoint, same transport guarantees), the same-origin session GET,
+    // the same-origin health GET, the same-origin saved-addresses API and the same-origin
+    // markets overview GET (all through this one module).
+    expect(readFileSync(API_CLIENT, 'utf8').match(/fetch\s*\(/g)).toHaveLength(6);
     expect(readFileSync(API_CLIENT, 'utf8')).toMatch(/fetch\('\/api\/v1\/health'/);
     expect(readFileSync(API_CLIENT, 'utf8')).toMatch(/fetch\('\/api\/v1\/session'/);
     expect(readFileSync(API_CLIENT, 'utf8')).toMatch(/fetch\('\/api\/v1\/portfolio\/resolve'/);

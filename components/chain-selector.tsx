@@ -13,9 +13,10 @@ export function ChainSelector() {
   const id = useId();
   const path = usePathname();
   const { network, setNetwork } = useTrackNetwork();
-  // The overview demo spans invented Ethereum and Solana holdings, so a network filter there
-  // would be misleading. The selector only appears where a network actually applies.
-  if (path.startsWith('/portfolio')) return <span className="scope-chip">Demo · all networks</span>;
+  // The portfolio page mixes the all-networks combined view with the demo fixture, and neither
+  // takes a network selection: any chip there would read as page scope it does not have. The
+  // selector only appears where a network actually applies.
+  if (path.startsWith('/portfolio')) return null;
   if (!path.startsWith('/track')) return <span className="scope-chip">Sola Lens preview</span>;
   return (
     <div className="chain-select">

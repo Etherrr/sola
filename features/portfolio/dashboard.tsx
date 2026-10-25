@@ -19,9 +19,8 @@ export function Dashboard({ view = 'overview' }: { view?: View }) {
   const defi = positions.filter((item) => item.kind !== 'Wallet');
   return (
     <div className="page-container">
-      <SimulatedNotice />
       <PageIntro
-        eyebrow="DEMO · ALL NETWORKS"
+        eyebrow={view === 'overview' ? 'PORTFOLIO · ALL NETWORKS' : 'DEMO · ALL NETWORKS'}
         title={
           view === 'risk'
             ? 'Risk insights'
@@ -32,8 +31,17 @@ export function Dashboard({ view = 'overview' }: { view?: View }) {
                 : 'Overview'
         }
       >
-        <p>Invented Ethereum and Solana holdings, not your wallet.</p>
+        {view === 'overview' ? (
+          <p>
+            Combine the public addresses saved on your account, loaded only when you ask - each
+            section shows its own data mode. Below the combined view is a separate invented demo
+            fixture.
+          </p>
+        ) : (
+          <p>Invented Ethereum and Solana holdings, not your wallet.</p>
+        )}
       </PageIntro>
+      {view === 'overview' ? null : <SimulatedNotice />}
       <nav className="tabs" aria-label="Portfolio views">
         {views.map((item) => (
           <Link key={item.id} href={item.href} aria-current={view === item.id ? 'page' : undefined}>
@@ -49,6 +57,7 @@ export function Dashboard({ view = 'overview' }: { view?: View }) {
           view above.
         </p>
       ) : null}
+      {view === 'overview' ? <SimulatedNotice /> : null}
       <div className="metric-grid">
         <div className="metric main-metric">
           <p>Priced net sample value</p>
