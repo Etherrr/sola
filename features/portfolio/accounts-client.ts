@@ -84,6 +84,8 @@ async function failureFrom(res: Response): Promise<AccountsFailure> {
       return { kind: 'limited', retryAfterSeconds: retryAfterSeconds(res.headers.get('retry-after')) };
     case 400:
       return { kind: 'badEntry', message: message || 'That entry was not accepted.' };
+    case 408:
+      return { kind: 'error', message: 'That request took too long. Try again.', retryable: true };
     case 413:
     case 415:
       return { kind: 'badEntry', message: 'That request was not accepted.' };

@@ -1,5 +1,5 @@
 'use client';
-import { createContext, useContext, useState } from 'react';
+import { createContext, useContext, useRef, useState } from 'react';
 import type { TrackNetwork } from './api-client';
 
 // One shared network selection for the Track page: the top-bar selector and the form chips are
@@ -9,21 +9,28 @@ import type { TrackNetwork } from './api-client';
 const TrackNetworkContext = createContext<{
   network: TrackNetwork;
   setNetwork: (n: TrackNetwork) => void;
-  prefill: string | null;
+  prefillEvent: { address: string; seq: number } | null;
   prefillAddress: (address: string, network: TrackNetwork) => void;
-  clearPrefill: () => void;
-}>({ network: 'ethereum', setNetwork: () => undefined, prefill: null, prefillAddress: () => undefined, clearPrefill: () => undefined });
+}>({
+  network: 'ethereum',
+  setNetwork: () => undefined,
+  prefillEvent: null,
+  prefillAddress: () => undefined,
+});
 
 export function TrackNetworkProvider({ children }: { children: React.ReactNode }) {
   const [network, setNetwork] = useState<TrackNetwork>('ethereum');
-  const [prefill, setPrefill] = useState<string | null>(null);
+  const [prefillEvent, setPrefillEvent] = useState<{ address: string; seq: number } | null>(null);
+  // A monotonically increasing token per request: the form consumes each token once, so the same
+  // address can be sent again later and there is nothing to clear (no cross-component setState).
+  const seq = useRef(0);
   const prefillAddress = (address: string, n: TrackNetwork) => {
     if (n !== network) setNetwork(n);
-    setPrefill(address);
+    seq.current += 1;
+    setPrefillEvent({ address, seq: seq.current });
   };
-  const clearPrefill = () => setPrefill(null);
   return (
-    <TrackNetworkContext.Provider value={{ network, setNetwork, prefill, prefillAddress, clearPrefill }}>
+    <TrackNetworkContext.Provider value={{ network, setNetwork, prefillEvent, prefillAddress }}>
       {children}
     </TrackNetworkContext.Provider>
   );

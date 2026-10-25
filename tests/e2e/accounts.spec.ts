@@ -109,6 +109,9 @@ test('verified user sees saved addresses grouped and can add, rename, remove and
   await panel.getByRole('button', { name: 'Remove' }).first().click();
   await panel.getByRole('button', { name: 'Remove it' }).click();
   await expect(panel.getByText('Very cold')).toHaveCount(0);
+  // Focus is never dumped to <body> after a destructive action: it lands on the panel heading.
+  await expect(panel.locator('h2#accounts-h')).toBeFocused();
+  await page.screenshot({ path: `test-results/accounts-${info.project.name}-post-remove-focus.png` });
 
   // Clear-all is a two-step confirm.
   await panel.getByRole('button', { name: 'Clear all saved addresses' }).click();
@@ -117,6 +120,7 @@ test('verified user sees saved addresses grouped and can add, rename, remove and
   await page.screenshot({ path: `test-results/accounts-${info.project.name}-clear-confirm.png` });
   await panel.getByRole('button', { name: 'Clear everything' }).click();
   await expect(panel.getByText('None saved.').first()).toBeVisible();
+  await expect(panel.locator('h2#accounts-h')).toBeFocused(); // same after clearing the list
   await expect(panel.getByText('Solar')).toHaveCount(0);
 });
 
@@ -190,4 +194,90 @@ test('Use in Track prefills the lookup form and switches network without firing 
   await expect(page.locator('.track').getByRole('button', { name: 'Solana (SOL only)' })).toHaveAttribute('aria-pressed', 'true');
   expect(lookups).toBe(0); // no automatic provider request
   await page.screenshot({ path: `test-results/accounts-${info.project.name}-useintrack.png` });
+});
+
+// Identity switch or expiry mid-session (review F2): a delayed response from the OLD identity
+// must never commit into the NEW identity's panel - not a stale list paint, not a mutation echo.
+
+test('a delayed list response from the previous identity never paints after a switch', async ({ page }) => {
+  let identity = 'jun@example.com';
+  // Short token life: the app's own expiry path clears the identity and renews it mid-session.
+  await page.route('**/api/v1/session', (r) =>
+    r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        status: 'ok',
+        via: 'cloudflare-access',
+        identity: { email: identity },
+        expiresAt: new Date(Date.now() + 2000).toISOString(),
+      }),
+    }),
+  );
+  // First GET (identity A) is gated; its rows are captured at request time. Later GETs (B) answer at once.
+  let releaseA: (() => void) | null = null;
+  let firstGet = true;
+  await page.route('**/api/v1/portfolio/accounts', async (route) => {
+    const body = { accounts: [mkRow('ethereum', ETH1, 'A cold wallet')], limits: { maxPerNetwork: 5 } };
+    const bodyB = { accounts: [mkRow('solana', SOL1, 'B solar')], limits: { maxPerNetwork: 5 } };
+    const chosen = firstGet ? body : bodyB;
+    if (firstGet) {
+      firstGet = false;
+      await new Promise<void>((resolve) => {
+        releaseA = resolve;
+      });
+    }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ requestId: 'r', ...chosen }) });
+  });
+  await page.goto('/track');
+  const panel = page.locator('.accounts');
+  // A's list is still in flight when the token expires and the renewal answers as identity B.
+  identity = 'sam@example.com';
+  await expect(panel.getByText('B solar')).toBeVisible({ timeout: 10000 }); // expiry -> renewal -> B's list
+  releaseA!(); // A's slow response lands now: it must be dropped (aborted + stale-guarded).
+  await page.waitForTimeout(300); // give a misbehaving paint its window
+  await expect(panel.getByText('A cold wallet')).toHaveCount(0);
+  await expect(panel.getByText('B solar')).toBeVisible();
+});
+
+test('a delayed remove resolving after an identity switch does not commit or refresh into the new panel', async ({ page }) => {
+  let identity = 'jun@example.com';
+  await page.route('**/api/v1/session', (r) =>
+    r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        status: 'ok',
+        via: 'cloudflare-access',
+        identity: { email: identity },
+        expiresAt: new Date(Date.now() + 3000).toISOString(),
+      }),
+    }),
+  );
+  // One route: A's list first, every later GET is the new identity's (empty) list, DELETE gated.
+  let releaseDelete: (() => void) | null = null;
+  let servedFirstList = false;
+  await page.route('**/api/v1/portfolio/accounts', async (route) => {
+    const req = route.request();
+    if (req.method() === 'DELETE') {
+      await new Promise<void>((resolve) => {
+        releaseDelete = resolve;
+      });
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ requestId: 'r', removed: true }) });
+    }
+    const accounts = servedFirstList ? [] : [mkRow('ethereum', ETH1, 'A cold wallet')];
+    servedFirstList = true;
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ requestId: 'r', accounts, limits: { maxPerNetwork: 5 } }) });
+  });
+  await page.goto('/track');
+  const panel = page.locator('.accounts');
+  await expect(panel.getByText('A cold wallet')).toBeVisible();
+  await panel.getByRole('button', { name: 'Remove' }).first().click();
+  await panel.getByRole('button', { name: 'Remove it' }).click(); // DELETE is now in flight, gated
+  identity = 'sam@example.com'; // token expires mid-delete; renewal answers as B
+  await expect(panel.getByText('None saved.').first()).toBeVisible({ timeout: 10000 }); // expiry -> renewal -> B's empty list
+  releaseDelete!(); // the old identity's mutation resolves: no commit, no stale paint, no error
+  await page.waitForTimeout(300); // give a misbehaving paint its window
+  await expect(panel.getByText('None saved.').first()).toBeVisible();
+  await expect(panel.getByText('A cold wallet')).toHaveCount(0);
 });

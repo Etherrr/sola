@@ -47,6 +47,14 @@ describe('accounts client contract', () => {
     stubFetch(503, { error: { code: 'storage_unavailable', message: 'x' }, requestId: 'r' });
     expect((await listAccounts()).kind).toBe('storage');
   });
+  it('maps 408 to a retryable "took too long" error', async () => {
+    stubFetch(408, { error: { code: 'timeout', message: 'x' }, requestId: 'r' });
+    expect(await listAccounts()).toEqual({
+      kind: 'error',
+      message: 'That request took too long. Try again.',
+      retryable: true,
+    });
+  });
   it('maps 401 to signin, 409 to cap, 429 to limited with the server retry delay', async () => {
     stubFetch(401, { error: { code: 'unauthorized', message: 'x' } });
     expect((await addAccount('ethereum', ACCT.address, 'x')).kind).toBe('signin');

@@ -10,3 +10,4 @@ output/
 *.tsbuildinfo
 .DS_Store
 .wrangler/
+harness/node_modules/

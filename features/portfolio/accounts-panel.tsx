@@ -68,6 +68,7 @@ export function AccountsPanel() {
   // In-flight guard: a mutation started under one identity must not apply its result after the
   // identity expired or changed. The identity effect reloads for the new identity anyway.
   const emailRef = useRef(email);
+  const headingRef = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
     emailRef.current = email;
   }, [email]);
@@ -184,6 +185,7 @@ export function AccountsPanel() {
     if (r.kind === 'ok') {
       setRemoving(null);
       await refresh();
+      headingRef.current?.focus({ preventScroll: true }); // focus is never lost after a removal
     } else fail(r);
   }
 
@@ -197,6 +199,7 @@ export function AccountsPanel() {
     if (r.kind === 'ok') {
       setClearing(false);
       await refresh();
+      headingRef.current?.focus({ preventScroll: true }); // same after clearing the list
     } else fail(r);
   }
 
@@ -209,7 +212,7 @@ export function AccountsPanel() {
   if (session.kind !== 'verified')
     return (
       <section className="accounts" aria-labelledby="accounts-h">
-        <h2 id="accounts-h">Saved addresses</h2>
+        <h2 id="accounts-h" tabIndex={-1} ref={headingRef}>Saved addresses</h2>
         <p className="fine">
           Saving addresses needs a verified sign-in. Nothing is saved while you are signed out.
         </p>
@@ -223,7 +226,7 @@ export function AccountsPanel() {
   return (
     <section className="accounts" aria-labelledby="accounts-h">
       <p className="eyebrow">SAVED ADDRESSES</p>
-      <h2 id="accounts-h">Saved addresses</h2>
+      <h2 id="accounts-h" tabIndex={-1} ref={headingRef}>Saved addresses</h2>
       <p className="fine">
         Saved under your verified sign-in on this service. A saved address is observed, not proven
         to be yours. Removing an address deletes it from the live saved list right away; the
