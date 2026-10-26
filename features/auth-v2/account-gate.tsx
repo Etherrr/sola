@@ -7,6 +7,7 @@ import { AddressBook } from '../portfolio-v2/address-book';
 import { CombinedProvider } from '../portfolio-v2/combined-context';
 import { CombinedBalances } from '../portfolio-v2/combined-balances';
 import { nativeLogoutRequest } from '../portfolio/api-client';
+import { WalletPanel } from './wallet-panel';
 import { ClaimSection, claimSectionLive } from '../claim/claim-section';
 
 /**
@@ -142,6 +143,7 @@ export function AccountGate() {
           RENDERED account page is unchanged from before; the only addition is
           one discovery GET (claim:false -> nothing renders). */}
       <ClaimSection discover={claimSectionLive.discover} makeApi={claimSectionLive.makeApi} />
+      <WalletPanel link />
       <CombinedProvider>
         <AddressBook />
         <CombinedBalances />

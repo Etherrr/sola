@@ -1,4 +1,4 @@
-/** Explicit two-action controller, currently not mounted in customer UI. */
+/** Explicit two-action message-only controller for customer wallet entry. */
 import { walletAuthRequest } from '../portfolio/api-client';
 import type { WalletChoice, PublicWalletConnection } from './wallet-connectors';
 export type WalletFlowState =

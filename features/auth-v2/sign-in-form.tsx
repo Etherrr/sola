@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { authEmailChallenge, authEmailVerify } from '../portfolio/api-client';
 import { loginWithPasskey, passkeysSupported } from './passkey-client';
 import { safeNextPath, DEFAULT_NEXT } from './next-path';
@@ -11,12 +11,16 @@ import { safeNextPath, DEFAULT_NEXT } from './next-path';
  * not unlock data - entitled accounts only (routes answer 403 otherwise).
  */
 
+const subscribeSupport = () => () => {};
+const noServerPasskey = () => false;
+
 type Step =
   | { kind: 'email' }
   | { kind: 'code'; email: string; expiresAt: string; expiresAtText: string | null }
   | { kind: 'done'; email: string | null };
 
 export function SignInForm({ context = 'sign-in' }: { context?: 'sign-in' | 'create-account' }) {
+  const supported = useSyncExternalStore(subscribeSupport, passkeysSupported, noServerPasskey);
   const [step, setStep] = useState<Step>({ kind: 'email' });
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
@@ -174,7 +178,7 @@ export function SignInForm({ context = 'sign-in' }: { context?: 'sign-in' | 'cre
             </button>
           </>
         )}
-        {step.kind === 'email' && passkeysSupported() && (
+        {step.kind === 'email' && supported && (
           <>
             <button
               type="button"
