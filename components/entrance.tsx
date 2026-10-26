@@ -2,13 +2,24 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { AccountMenu } from './account-menu';
+import { useRouter } from 'next/navigation';
 import { useSession } from '@/features/portfolio/session-context';
+import { useNativeSession } from '@/features/auth-v2/native-session';
 
 // The one entrance. Two real destinations. The intro (panels sliding apart) plays on every
 // load and never when the user prefers reduced motion. It gates nothing: Cloudflare Access has
 // already authenticated the visitor before this page loads. Nothing is stored to remember it.
 export function Entrance() {
   const session = useSession();
+  const router = useRouter();
+  const native = useNativeSession();
+  // Plan Phase B.4 / acceptance: a returning authorized user (live native account session)
+  // lands directly on the portfolio; the entrance choice is for first-time visitors.
+  // replace() keeps the entrance out of the back stack. 'off' (native routes disabled on
+  // this host) and 'none' (no session) keep the entrance exactly as before.
+  useEffect(() => {
+    if (native.kind === 'ok') router.replace('/account');
+  }, [native.kind, router]);
   const email = session.kind === 'verified' ? session.email : null;
   const [intro, setIntro] = useState(false);
   const [curtainDone, setCurtainDone] = useState(false);

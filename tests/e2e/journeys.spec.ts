@@ -2602,3 +2602,28 @@ test('entering on /learn still fetches health exactly once on return to the port
     })
     .toBe(1);
 });
+
+test('a returning authorized user lands directly on the portfolio from the entrance', async ({
+  page,
+}) => {
+  // Plan Phase B.4 / acceptance: returning authorized users land directly on the portfolio.
+  // Synthetic session only - the native session endpoint is stubbed, no real identity.
+  await page.route('**/api/v1/auth/email/session', (r) =>
+    r.fulfill({ status: 200, json: { status: 'ok', email: 'jun@example.com', fresh: true } }),
+  );
+  await page.goto('/');
+  await page.waitForURL('**/account**');
+  await expect(page.getByText('Choose your')).toHaveCount(0);
+});
+
+test('a first-time visitor keeps the entrance choice paths', async ({ page }) => {
+  // No live native session: the entrance keeps its sign-in / create-account / learn paths.
+  await page.route('**/api/v1/auth/email/session', (r) =>
+    r.fulfill({ status: 401, json: { error: 'auth_required' } }),
+  );
+  await page.goto('/');
+  await expect(page.getByRole('link', { name: 'Sign in', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Create account' })).toBeVisible();
+  await expect(page.getByRole('link', { name: /learn|Education/i }).first()).toBeVisible();
+  await expect(page).toHaveURL(/127\.0\.0\.1:3000\/$/);
+});
