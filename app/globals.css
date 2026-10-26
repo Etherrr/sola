@@ -4124,3 +4124,13 @@ html {
 
 .ov2-defi-scroll { max-width: 100%; overflow-x: auto; }
 .ov2-defi-scroll:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+
+/* Optional saved-address recovery is secondary to the native account book. */
+.claim-import {
+  margin-top: 24px;
+}
+.claim-import > summary {
+  min-height: 44px;
+  padding: 10px 0;
+  cursor: pointer;
+}
