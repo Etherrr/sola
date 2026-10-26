@@ -31,3 +31,7 @@ Owner: existing public website only. Read [docs/WORDPRESS_SCOPE.md](docs/WORDPRE
 ## Consistent execution loop
 **Inspect → write small plan → implement on a branch → verify → document → PR/review → deploy after approval.**
 Every handoff must state: changes, tests actually run, results, open risks, external dependencies, rollback impact and next work item. Follow [docs/OPERATIONS.md](docs/OPERATIONS.md).
+
+## Dev surfaces (front-door Phase 0)
+
+Pages under `app/dev/` are named `page.dev.tsx` and are excluded from the export unless the build runs with `SOLA_INCLUDE_DEV_PAGES=1` (`npm run dev`, `npm run build:dev`, and `npm run test:e2e` set it). Production builds (`npm run build`, Cloudflare Pages Production) must never set the flag: `scripts/verify-export.mjs` fails a production export that contains any `/dev/` route and a dev build that contains none. On Cloudflare Pages, set `SOLA_INCLUDE_DEV_PAGES=1` only on the Preview environment.

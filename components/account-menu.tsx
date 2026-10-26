@@ -17,7 +17,8 @@ export function AccountMenu() {
   const [passkeyNote, setPasskeyNote] = useState<string | null>(null);
   const [passkeyBusy, setPasskeyBusy] = useState(false);
   const setupPasskey = async () => {
-    setPasskeyBusy(true); setPasskeyNote(null);
+    setPasskeyBusy(true);
+    setPasskeyNote(null);
     const out = await registerPasskey();
     setPasskeyNote(out.ok ? 'Passkey saved.' : out.message);
     setPasskeyBusy(false);
@@ -77,8 +78,7 @@ export function AccountMenu() {
   // ('none'), greeting the Access email would be a false signed-in state
   // while the app's own pages say "Sign in" - so nothing is greeted.
   const nativeEmail = native.kind === 'ok' ? native.email : null;
-  const email =
-    nativeEmail ?? (native.kind === 'off' && s.kind === 'verified' ? s.email : null);
+  const email = nativeEmail ?? (native.kind === 'off' && s.kind === 'verified' ? s.email : null);
   const label = email
     ? `Account: ${email}`
     : s.kind === 'rejected'
@@ -121,7 +121,7 @@ export function AccountMenu() {
               </>
             ) : native.kind === 'none' ? (
               <>
-                Not signed in. <Link href="/dev/sign-in">Sign in</Link>
+                Not signed in. <Link href="/sign-in">Sign in</Link>
               </>
             ) : email ? (
               <>

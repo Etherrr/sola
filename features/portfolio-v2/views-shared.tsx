@@ -9,7 +9,7 @@ export function StateBlock({ kind, reason }: { kind: string; reason?: string }) 
   if (kind === 'signin')
     return (
       <p className="muted">
-        Sign in to see your recorded view. <Link href="/dev/sign-in">Sign in</Link>
+        Sign in to see your recorded view. <Link href="/sign-in">Sign in</Link>
       </p>
     );
   if (kind === 'notinvited')
@@ -26,8 +26,7 @@ export function StateBlock({ kind, reason }: { kind: string; reason?: string }) 
   if (kind === 'empty')
     return (
       <p className="muted">
-        The latest complete observation recorded no holdings here - an empty wallet is not an
-        error.
+        The latest complete observation recorded no holdings here - an empty wallet is not an error.
       </p>
     );
   return <p className="muted">Could not load this view. Try again shortly.</p>;
@@ -62,8 +61,8 @@ export function Caveats({
         </p>
       )}
       <p className="muted caveat">
-        Recorded observations only: spot balances and recorded Aave V3 positions. Unsupported
-        items are never shown as zero.
+        Recorded observations only: spot balances and recorded Aave V3 positions. Unsupported items
+        are never shown as zero.
       </p>
     </>
   );

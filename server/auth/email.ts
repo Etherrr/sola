@@ -27,6 +27,9 @@ export interface NativeAuthEnv {
   NATIVE_AUTH_EMAIL_FROM?: string;
   /** EVM chain id policy for SIWE sign-in (default '1' = mainnet). */
   NATIVE_AUTH_EVM_CHAIN_ID?: string;
+  /** Phase 0: global daily OTP send budget (all emails, all IPs, all instances).
+   *  Positive integer as a string; unset/invalid falls back to the default below. */
+  NATIVE_AUTH_DAILY_SEND_BUDGET?: string;
   PORTFOLIO_ACCOUNTS_DB?: ChallengeDb;
 }
 
@@ -67,6 +70,34 @@ const ISSUE_WINDOWS: LimitWindow[] = [
 ];
 /** Verify attempts per email address (on top of per-challenge lockout). */
 const VERIFY_WINDOWS: LimitWindow[] = [{ limit: 15, windowMs: 600_000 }];
+
+/**
+ * Phase 0 (reviewer scope 2026-10-26): durable per-IP windows on top of the
+ * per-email ones, plus a GLOBAL daily send budget. All three layers are
+ * D1-keyed (same fail-closed limiter): per-IP stops one address cycling many
+ * emails, and the single shared global counter caps total provider sends per
+ * UTC day no matter how many emails, IPs, or isolates are involved.
+ */
+const ISSUE_IP_WINDOWS: LimitWindow[] = [
+  { limit: 5, windowMs: 600_000 },
+  { limit: 20, windowMs: 86_400_000 },
+];
+const VERIFY_IP_WINDOWS: LimitWindow[] = [{ limit: 30, windowMs: 600_000 }];
+const DEFAULT_DAILY_SEND_BUDGET = 50;
+
+function dailySendBudget(env: NativeAuthEnv): number {
+  const n = env.NATIVE_AUTH_DAILY_SEND_BUDGET
+    ? Number.parseInt(env.NATIVE_AUTH_DAILY_SEND_BUDGET, 10)
+    : NaN;
+  return Number.isFinite(n) && n > 0 ? n : DEFAULT_DAILY_SEND_BUDGET;
+}
+
+/** Client IP for limiting: Cloudflare's connecting-IP header. A missing header is
+ *  not an escape hatch - every request without it shares one conservative bucket. */
+function clientIp(req: Request): string {
+  const ip = req.headers.get('cf-connecting-ip')?.trim();
+  return ip && ip.length <= 64 ? ip : '__unknown__';
+}
 
 const json = (status: number, body: unknown, headers?: HeadersInit): Response =>
   new Response(JSON.stringify(body), {
@@ -124,7 +155,38 @@ export async function handleEmailChallenge(
   const limiter = createD1Limiter(db as never, ISSUE_WINDOWS, 'auth_email_issue');
   const lim = await limiter.check(email);
   if (!lim.allowed)
-    return json(429, { error: 'rate_limited', retryAfterSec: lim.retryAfterSec, requestId });
+    return json(429, {
+      error: 'rate_limited',
+      scope: 'email',
+      retryAfterSec: lim.retryAfterSec,
+      requestId,
+    });
+
+  const ipLimiter = createD1Limiter(db as never, ISSUE_IP_WINDOWS, 'auth_email_issue_ip');
+  const ipLim = await ipLimiter.check(clientIp(req));
+  if (!ipLim.allowed)
+    return json(429, {
+      error: 'rate_limited',
+      scope: 'ip',
+      retryAfterSec: ipLim.retryAfterSec,
+      requestId,
+    });
+
+  // Global daily send budget, checked LAST so only requests that pass the
+  // identity limits consume it; it caps real provider sends, not rejected spam.
+  const budgetLimiter = createD1Limiter(
+    db as never,
+    [{ limit: dailySendBudget(env), windowMs: 86_400_000 }],
+    'auth_email_issue_global',
+  );
+  const budget = await budgetLimiter.check('global');
+  if (!budget.allowed)
+    return json(429, {
+      error: 'rate_limited',
+      scope: 'global',
+      retryAfterSec: budget.retryAfterSec,
+      requestId,
+    });
 
   const issued = await issueChallenge(db, 'email_code', email, CODE_TTL_MS);
   try {
@@ -149,10 +211,25 @@ export async function handleEmailVerify(req: Request, env: NativeAuthEnv): Promi
   if (!email || !code) return json(400, { error: 'invalid_request', requestId });
 
   const db = env.PORTFOLIO_ACCOUNTS_DB!;
+  const ipLimiter = createD1Limiter(db as never, VERIFY_IP_WINDOWS, 'auth_email_verify_ip');
+  const ipLim = await ipLimiter.check(clientIp(req));
+  if (!ipLim.allowed)
+    return json(429, {
+      error: 'rate_limited',
+      scope: 'ip',
+      retryAfterSec: ipLim.retryAfterSec,
+      requestId,
+    });
+
   const limiter = createD1Limiter(db as never, VERIFY_WINDOWS, 'auth_email_verify');
   const lim = await limiter.check(email);
   if (!lim.allowed)
-    return json(429, { error: 'rate_limited', retryAfterSec: lim.retryAfterSec, requestId });
+    return json(429, {
+      error: 'rate_limited',
+      scope: 'email',
+      retryAfterSec: lim.retryAfterSec,
+      requestId,
+    });
 
   // Handler-enforced lockout: the store counts attempts; the handler refuses beyond the cap.
   const state = await getChallengeState(db, 'email_code', email);

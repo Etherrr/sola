@@ -50,6 +50,8 @@ npm run dev
 
 Open `http://127.0.0.1:3000`. For the exported static local preview, run `npm run build` then `npm run start`. The static server binds only to loopback by default. No environment variables, provider credentials, database, or wallet extension are required for the local simulated preview. The loopback static server has no Pages Functions; API/session browser tests use explicit mocks.
 
+Dev surfaces under `/dev/` are preview-only: they build only with `SOLA_INCLUDE_DEV_PAGES=1`, which `npm run dev`, `npm run build:dev` and `npm run test:e2e` set for you. `npm run build` (production) never includes them, and `npm run verify:export` enforces both directions. On Cloudflare Pages the variable belongs only on the Preview environment.
+
 ```sh
 npm run check                 # lint, typecheck, unit tests, production build
 npx playwright install chromium
