@@ -16,7 +16,7 @@ export function WelcomeDoor() {
   const router = useRouter();
 
   useEffect(() => {
-    if (native.kind === 'ok') router.replace('/account');
+    if (native.kind === 'ok') router.replace('/account/overview');
   }, [native.kind, router]);
 
   if (native.kind === 'loading' || native.kind === 'ok') {
@@ -37,8 +37,7 @@ export function WelcomeDoor() {
       <div className="panel">
         <h2>Education</h2>
         <p>
-          <em>Lessons and exercises - no Sola account needed in the native journey
-          (this staging host still has its own access gate).</em>{' '}
+          <em>Lessons and exercises - no Sola account needed.</em>{' '}
           <a href="/learn">Open Education</a>
         </p>
       </div>

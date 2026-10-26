@@ -25,7 +25,7 @@ describe('native frontdoor admission before assets', () => {
   });
   it('no session, cookie spoof, expired and revoked session deny before static response', async () => {
     const { env, req, raw } = await setup();
-    for(const p of ['/account/', '/portfolio/assets/', '/_next/data/build/account.json', '/_next/static/private.json']) {
+    for(const p of ['/account/', '/account/overview/', '/account/assets/', '/account/defi/', '/account/risk/', '/portfolio/assets/', '/_next/data/build/account.json', '/_next/static/private.json']) {
       const r = await frontdoorAdmission(req(p, 'bogus'), env); expect(r?.status).toBe(302);expect(r?.headers.get('location')).toMatch(/^\/sign-in\/\?next=%2F/);
     }
     raw.exec("UPDATE sessions SET expires_at='2000-01-01'");expect((await frontdoorAdmission(req('/account/'), env))?.status).toBe(302);

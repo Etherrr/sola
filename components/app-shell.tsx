@@ -20,8 +20,12 @@ const sections = [
     // /track route still answers directly until its lookup is refactored
     // into the address manager (plan line 218.2).
     items: [
-      { href: '/account', label: 'Portfolio', icon: '◧' },
-      { href: '/markets', label: 'Markets', icon: '◷' },
+      { href: '/account/overview', label: 'Overview', icon: '◧' },
+      { href: '/account/assets', label: 'Assets', icon: '◈' },
+      { href: '/account/defi', label: 'DeFi', icon: '◇' },
+      { href: '/account/risk', label: 'Risk & Return', icon: '◉', cls: 'overflow-desktop' },
+      { href: '/account', label: 'Addresses & Wallets', icon: '▤', cls: 'overflow-desktop' },
+      { href: '/markets', label: 'Markets', icon: '◷', cls: 'overflow-desktop' },
       legacyLink,
     ],
   },
@@ -132,7 +136,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     href={i.href}
                     data-section={sec.id}
                     className={(sec.id === 'defi' ? 'nav-defi' : 'nav-edu') + ('cls' in i && i.cls ? ` ${i.cls}` : '')}
-                    aria-current={path.startsWith(i.href) ? 'page' : undefined}
+                    aria-current={(i.href === '/account' ? path.replace(/\/$/, '') === '/account' : path.startsWith(i.href)) ? 'page' : undefined}
                   >
                     <span aria-hidden="true">{i.icon}</span>
                     {i.label}
@@ -155,7 +159,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 ref={moreBtnRef}
                 aria-expanded={moreOpen}
                 aria-current={
-                  path.startsWith('/learn') || path.startsWith('/portfolio')
+                  path.startsWith('/learn') || path.startsWith('/portfolio') || path.startsWith('/account/risk') || path.startsWith('/markets') || path.replace(/\/$/, '') === '/account'
                     ? 'page'
                     : undefined
                 }
@@ -166,11 +170,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </button>
               {moreOpen ? (
                 <div role="group" aria-label="More" className="more-menu">
-                  {[educationLink, legacyLink].map((t) => (
+                  {[...sections[0].items.filter((i) => 'cls' in i && i.cls === 'overflow-desktop'), educationLink, legacyLink].map((t) => (
                     <a
                       key={t.href}
                       href={t.href}
-                      aria-current={path.startsWith(t.href) ? 'page' : undefined}
+                      aria-current={(t.href === '/account' ? path.replace(/\/$/, '') === '/account' : path.startsWith(t.href)) ? 'page' : undefined}
                     >
                       <span aria-hidden="true">{t.icon}</span>
                       {t.label}

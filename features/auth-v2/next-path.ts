@@ -5,7 +5,7 @@
  * encoding, traversal) falls back. Rejecting '%' wholesale kills encoded
  * forms (%2f, %5c, double-encoding) without a decode arms race.
  */
-export const DEFAULT_NEXT = '/account';
+export const DEFAULT_NEXT = '/account/overview';
 
 const ALLOWED = /^\/[A-Za-z0-9\-._~!$&'()*+,;=:@/?]*$/;
 

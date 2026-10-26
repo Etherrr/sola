@@ -1,14 +1,12 @@
 'use client';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type MouseEvent } from 'react';
 import { AccountMenu } from './account-menu';
 import { useRouter } from 'next/navigation';
 import { useSession } from '@/features/portfolio/session-context';
 import { useNativeSession } from '@/features/auth-v2/native-session';
 
-// The one entrance. Two real destinations. The intro (panels sliding apart) plays on every
-// load and never when the user prefers reduced motion. It gates nothing: Cloudflare Access has
-// already authenticated the visitor before this page loads. Nothing is stored to remember it.
+// Intentional entry only. A returning entitled session skips the welcome.
 export function Entrance() {
   const session = useSession();
   const router = useRouter();
@@ -18,31 +16,30 @@ export function Entrance() {
   // replace() keeps the entrance out of the back stack. 'off' (native routes disabled on
   // this host) and 'none' (no session) keep the entrance exactly as before.
   useEffect(() => {
-    if (native.kind === 'ok') router.replace('/account');
+    if (native.kind === 'ok') router.replace('/account/overview');
   }, [native.kind, router]);
   const email = session.kind === 'verified' ? session.email : null;
-  const [intro, setIntro] = useState(false);
-  const [curtainDone, setCurtainDone] = useState(false);
-  const curtain = intro && !curtainDone;
+  const [destination, setDestination] = useState<string | null>(null);
+  const intro = destination !== null;
+  const enter = (event: MouseEvent<HTMLAnchorElement>, target: string) => {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    event.preventDefault();
+    setDestination(target);
+  };
   useEffect(() => {
-    const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    // Reads browser-only state after hydration, so server HTML and first paint always match.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (!calm) setIntro(true);
-  }, []);
-  // Remove the curtain after the animation so it can never linger over the page.
-  useEffect(() => {
-    if (!curtain) return;
-    const t = window.setTimeout(() => setCurtainDone(true), 3200);
-    return () => window.clearTimeout(t);
-  }, [curtain]);
+    if (!destination) return;
+    const timer = window.setTimeout(() => window.location.assign(destination), 650);
+    return () => window.clearTimeout(timer);
+  }, [destination]);
   return (
     <div className={intro ? 'entrance intro' : 'entrance'}>
       <a className="skip-link" href="#main">
         Skip to content
       </a>
-      {curtain && (
-        <div className="entrance-curtain" aria-hidden="true" data-sensitive>
+      {intro && (
+        <div className="entrance-curtain" data-sensitive>
+          <button type="button" className="button secondary entrance-skip" onClick={() => destination && window.location.assign(destination)}>Skip intro</button>
           <span className="curtain-half left" />
           <span className="curtain-half right" />
           <span className="curtain-mark">
@@ -71,24 +68,23 @@ export function Entrance() {
           <span>Choose your</span> <em>lens.</em>
         </h1>
         <p className="entrance-sub">
-          Open the app, or learn first. Address lookups read live public balances; sample pages
-          are demo data. Everything is read-only.
+          Choose where to begin, or sign in.
         </p>
         <p className="actions entrance-auth-actions">
-          <Link className="button primary" href="/sign-in">
+          <Link className="button primary" href="/sign-in" onClick={(e) => enter(e, '/sign-in')}>
             Sign in
           </Link>{' '}
-          <Link className="button secondary" href="/create-account">
+          <Link className="button secondary" href="/create-account" onClick={(e) => enter(e, '/create-account')}>
             Create account
           </Link>
         </p>
         <p className="entrance-account" data-sensitive>
           {email
-            ? `Preview unlocked for ${email}. A Sola account is separate - invitation-only while in preview.`
+            ? `Legacy sign-in recognized for ${email}. Sola account access is invitation-only.`
             : 'Accounts are invitation-only while in preview.'}
         </p>
         <div className="entrance-split">
-          <Link href="/learn" className="entrance-card edu">
+          <Link href="/learn" className="entrance-card edu" onClick={(e) => enter(e, '/learn')}>
             <span className="entrance-h">Education</span>
             <span className="card-kicker">LEARN DEFI AT YOUR OWN PACE</span>
             <span className="entrance-p">
@@ -98,15 +94,14 @@ export function Entrance() {
               Enter Education <span aria-hidden="true">→</span>
             </span>
           </Link>
-          <Link href="/portfolio" className="entrance-card app">
-            <span className="entrance-h">DeFi App</span>
-            <span className="card-kicker">LIVE ADDRESS LOOKUP · READ-ONLY</span>
+          <Link href="/account/overview" className="entrance-card app" onClick={(e) => enter(e, '/account/overview')}>
+            <span className="entrance-h">Portfolio</span>
+            <span className="card-kicker">SAVED ADDRESSES · RECORDED OBSERVATIONS</span>
             <span className="entrance-p">
-              Look up real ETH and SOL balances at public addresses. The overview portfolio is
-              still a clearly labeled sample. No wallet connection.
+              Review recognized holdings, coverage and history. Add watched addresses without connecting a wallet.
             </span>
             <span className="card-link">
-              Enter DeFi App <span aria-hidden="true">→</span>
+              Enter Portfolio <span aria-hidden="true">→</span>
             </span>
           </Link>
         </div>

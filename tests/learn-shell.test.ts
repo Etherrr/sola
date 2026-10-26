@@ -43,7 +43,7 @@ describe('separate learning shell (plan §8)', () => {
 
   it('the learning shell keeps a return-to-portfolio action', () => {
     expect(shell).toContain('Back to the portfolio');
-    expect(shell).toContain("href: '/account'");
+    expect(shell).toContain("href: '/account/overview'");
   });
 
   it('the learning nav is built from the registry in the pinned section order', () => {

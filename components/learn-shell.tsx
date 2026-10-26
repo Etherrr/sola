@@ -16,7 +16,7 @@ const PRACTICE = [
   { href: '/learn/network-journey', label: 'Ethereum transfer walkthrough' },
   { href: '/learn/security-lab', label: 'Security decision lab' },
 ];
-const returnLink = { href: '/account', label: 'Back to the portfolio', icon: '←' };
+const returnLink = { href: '/account/overview', label: 'Back to the portfolio', icon: '←' };
 
 // '01 / BLOCKCHAIN BASICS' -> 'Blockchain basics'
 function navLabel(eyebrow: string) {

@@ -198,9 +198,9 @@ describe('the entrance is truthful about live lookups and welcomes the verified 
     expect(entrance).toMatch(/◇ READ-ONLY/);
   });
   it('describes the live read-only lookup without overstating coverage', () => {
-    expect(entrance).toMatch(/live public balances/);
-    expect(entrance).toMatch(/clearly labeled sample/);
-    expect(entrance).toMatch(/No wallet connection/);
+    expect(entrance).toMatch(/recognized holdings, coverage and history/);
+    expect(entrance).not.toMatch(/clearly labeled sample|demo data/);
+    expect(entrance).toMatch(/without connecting a wallet/);
   });
   it('greets only the verified session email, never a guessed name', () => {
     expect(entrance).toContain('useSession');
@@ -241,13 +241,13 @@ describe('markets coverage and privacy claims', () => {
     expect(view).not.toMatch(/[Uu]pdated/);
     expect(view).toContain('wrapped SOL');
   });
-  it('settings disclose provider reads, Access identity and saved addresses honestly', () => {
+  it('settings disclose provider reads, native identity and saved addresses honestly', () => {
     const settings = readFileSync('app/settings/page.tsx', 'utf8');
-    expect(settings).toContain('Cloudflare Access verifies');
+    expect(settings).toContain('Sola sign-in uses an email code');
     expect(settings).toContain('PublicNode');
     expect(settings).not.toContain('no provider APIs');
     expect(settings).not.toMatch(/does not create passwords or save\s+address lists/);
-    expect(settings).toMatch(/saves labeled public addresses/);
+    expect(settings).toMatch(/saves\s+labeled watched public addresses/);
     expect(settings).toContain('DexScreener');
   });
   it('balance observation and response completion have separate labels', () => {

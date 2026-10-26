@@ -51,6 +51,7 @@ export function DefiView() {
           <p className="muted">No recorded lending or borrowing positions.</p>
         )}
         {ok && ok.rows.length > 0 && (
+          <div className="ov2-defi-scroll" role="region" aria-label="Recorded lending and borrowing positions" tabIndex={0}>
           <table className="ov2-holdings-table">
             <thead>
               <tr>
@@ -92,6 +93,7 @@ export function DefiView() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
         <p className="muted caveat">
           Health factor, APY and liquidation price are not calculated - they need protocol

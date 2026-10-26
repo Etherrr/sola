@@ -11,24 +11,20 @@ export default function Settings() {
       <section className="panel">
         <h2>About this preview</h2>
         <p>
-          Cloudflare Access verifies your signed-in identity; Sola creates no passwords. Your
-          account saves labeled public addresses per verified identity so the combined view works
-          across devices; you can rename or remove them at any time. The Portfolio page combines
-          live read-only balances for your saved addresses and keeps a separate clearly labeled
-          invented demo. Track reads supported public balances through PublicNode - and, only when PublicNode
-          answers rate limiting, once through Solana's public RPC endpoint; its form discloses
-          where the address goes before lookup. Markets shows selected Solana DEX pools through
-          DexScreener; tokenized equities are on-chain tokens, not the underlying stocks. There are
-          no wallet connections, signatures or transaction features. Balance history recording
-          stays off until you turn it on from the Portfolio page; Refresh then reads your saved
-          addresses
-          through public chain nodes and stores the snapshot under your account, kept until you
-          delete it - withdrawing deletes the recorded history. Page requests reach the app
-          host.
+          Sola sign-in uses an email code or a passkey you have set up. Your account saves
+          labeled watched public addresses; a watched address does not prove wallet ownership.
+          Manage addresses, rename or remove them from Addresses &amp; Wallets. The Overview,
+          Assets, DeFi and Risk &amp; Return pages use recorded observations, not invented balances.
+          History recording is off until you choose it. Refresh then reads saved addresses through
+          PublicNode and the documented Solana fallback, then records observations under your account. Withdrawing recording
+          deletes that recorded history after confirmation. Read-only lookups and recording are
+          separate actions. Ethereum and Aave V3 coverage is limited; Solana supports SOL only.
+          Markets uses selected Solana DEX pools through DexScreener. Tokenized equities are
+          on-chain tokens, not the underlying stocks. No transactions or approvals are requested.
         </p>
         <p>
           External links open third-party websites under their own terms. This app loads no external
-          fonts, trackers, or wallet scripts. This preview is protected by Cloudflare Access. A
+          fonts, trackers, or wallet scripts. Protected pages require an invited Sola account. Legacy address and migration pages retain an extra sign-in for ownership checks. A
           formal privacy review is still required before any public launch.
         </p>
       </section>

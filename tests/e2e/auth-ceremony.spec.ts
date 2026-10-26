@@ -34,7 +34,7 @@ async function mockAuth(page: Page) {
 
 test('full email-code ceremony signs in and Continue honors a valid next', async ({ page }) => {
   await mockAuth(page);
-  await page.goto('/dev/sign-in/?next=/portfolio?tab=assets'); // trailing slash: serve 308 strips the query otherwise
+  await page.goto('/sign-in/?next=/portfolio?tab=assets'); // trailing slash: serve 308 strips the query otherwise
   await page.getByLabel(/email you were invited with/i).fill('jun@example.com');
   await page.getByRole('button', { name: 'Send sign-in code' }).click();
   await page.getByLabel(/email code/i).fill('123456');
@@ -46,24 +46,24 @@ test('full email-code ceremony signs in and Continue honors a valid next', async
 test('open-redirect next values fall back to the default destination', async ({ page }) => {
   await mockAuth(page);
   for (const bad of ['//evil.example/x', '/%2f%2fevil.example', 'https://evil.example']) {
-    await page.goto(`/dev/sign-in/?next=${encodeURIComponent(bad)}`);
+    await page.goto(`/sign-in/?next=${encodeURIComponent(bad)}`);
     await page.getByLabel(/email you were invited with/i).fill('jun@example.com');
     await page.getByRole('button', { name: 'Send sign-in code' }).click();
     await page.getByLabel(/email code/i).fill('123456');
     await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-    await expect(page.getByRole('link', { name: 'Continue' })).toHaveAttribute('href', '/account');
+    await expect(page.getByRole('link', { name: 'Continue' })).toHaveAttribute('href', '/account/overview');
   }
 });
 
 test('wrong code and lockout render honest errors, no fake success', async ({ page }) => {
   await mockAuth(page);
-  await page.goto('/dev/sign-in/');
+  await page.goto('/sign-in/');
   await page.getByLabel(/email you were invited with/i).fill('jun@example.com');
   await page.getByRole('button', { name: 'Send sign-in code' }).click();
   await page.getByLabel(/email code/i).fill('000000');
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await expect(page.locator('p[role=alert]')).toContainText('That code is not right');
-  await page.goto('/dev/sign-in/');
+  await page.goto('/sign-in/');
   await page.getByLabel(/email you were invited with/i).fill('locked@example.com');
   await page.getByRole('button', { name: 'Send sign-in code' }).click();
   await page.getByLabel(/email code/i).fill('123456');
@@ -77,7 +77,7 @@ test('challenge rate limit shows the server cooldown seconds', async ({ page }) 
   await page.route(CH, (route) =>
     route.fulfill({ status: 429, json: { error: 'rate_limited', retryAfterSec: 95 } })
   );
-  await page.goto('/dev/sign-in/');
+  await page.goto('/sign-in/');
   await page.getByLabel(/email you were invited with/i).fill('jun@example.com');
   await page.getByRole('button', { name: 'Send sign-in code' }).click();
   await expect(page.locator('p[role=alert]')).toContainText('Too many attempts. Try again in about 95 seconds.');
@@ -95,7 +95,7 @@ test('same-email recovery: Send a new code re-issues for the same address, human
     challenges += 1;
     return route.fulfill({ status: 200, json: { status: 'ok', expiresAt: new Date(Date.now() + 600_000).toISOString() } });
   });
-  await page.goto('/dev/sign-in/');
+  await page.goto('/sign-in/');
   await page.getByLabel(/email you were invited with/i).fill('jun@example.com');
   await page.getByRole('button', { name: 'Send sign-in code' }).click();
   await expect(page.getByText(/Code sent to jun@example\.com - it expires at \d{1,2}:\d{2}/)).toBeVisible();

@@ -4112,3 +4112,15 @@ html {
 .ov2-yaxis { display: flex; flex-direction: column; justify-content: space-between; font-size: 11px; color: #8b94a3; text-align: right; padding: 12px 6px 26px 0; min-width: 46px; }
 .ov2-xaxis { grid-column: 2; display: flex; justify-content: space-between; font-size: 11px; color: #8b94a3; margin-top: 4px; }
 .ov2-grid { stroke: rgba(139, 148, 163, 0.18); stroke-width: 1; }
+
+/* The welcome transition starts only from an entry action and stays skippable. */
+.entrance-skip { position: fixed; z-index: 120; top: 20px; right: 20px; pointer-events: auto; }
+.entrance.intro .curtain-half.left,
+.entrance.intro .curtain-half.right { animation-duration: 320ms; animation-delay: 230ms; }
+.entrance.intro .curtain-mark { animation-duration: 180ms; animation-delay: 400ms; }
+.entrance.intro .curtain-welcome { animation-duration: 160ms; animation-delay: 40ms; }
+
+@media (max-width: 900px) { .side-nav .overflow-desktop { display: none; } }
+
+.ov2-defi-scroll { max-width: 100%; overflow-x: auto; }
+.ov2-defi-scroll:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
