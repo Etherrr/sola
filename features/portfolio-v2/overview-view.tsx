@@ -6,6 +6,7 @@
 // carry-forward line, no invented coverage, no returns/performance framing.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { fetchOverviewView, type OverviewResult, type HistorySeries } from './views-client';
+import { SYNCED_EVENT } from './snapshot-consent';
 import { StateBlock, Caveats } from './views-shared';
 import { usd } from './view-format';
 import { feedTimeUTC as fmtTime } from './format-time';
@@ -170,6 +171,18 @@ export function OverviewView() {
   }, []);
   useEffect(() => {
     void load();
+  }, [load]);
+  useEffect(() => {
+    const onSynced = (e: Event) => {
+      // Same-page invalidation (what-changed.tsx pattern): a Refresh records
+      // new observations and a withdrawal deletes them - both must re-render
+      // this panel without a full page reload. Withdrawal clears to loading at
+      // once rather than showing deleted figures until the refetch lands.
+      if ((e as CustomEvent).detail?.reason === 'withdraw') setState({ kind: 'loading' });
+      void load();
+    };
+    window.addEventListener(SYNCED_EVENT, onSynced);
+    return () => window.removeEventListener(SYNCED_EVENT, onSynced);
   }, [load]);
 
   if (state.kind === 'loading') return <p className="muted">Loading recorded overview…</p>;
