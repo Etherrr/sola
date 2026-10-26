@@ -97,6 +97,24 @@ describe('email verify handler', () => {
     expect(r.status).toBe(429);
     expect((await r.json() as { error: string }).error).toBe('too_many_attempts');
   });
+  it('an expired code is 401 invalid_code and sets no session cookie', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
+      const code = await issue('exp@x.co');
+      // Past the 10-minute OTP TTL: expired and wrong codes share one honest
+      // error by design (anti-enumeration), and no session is created.
+      vi.setSystemTime(new Date('2026-01-01T00:11:00Z'));
+      const r = await handleEmailVerify(post({ email: 'exp@x.co', code }), env);
+      expect(r.status).toBe(401);
+      expect((await r.json() as { error: string }).error).toBe('invalid_code');
+      expect(r.headers.get('set-cookie')).toBeNull();
+      const sessions = await db.prepare('SELECT COUNT(*) AS n FROM sessions').bind().first<{ n: number }>();
+      expect(sessions!.n).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
   it('a new code request supersedes the old one', async () => {
     const first = await issue('sup@x.co');
     const second = await issue('sup@x.co');

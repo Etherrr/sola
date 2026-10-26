@@ -64,6 +64,31 @@ test('full path: sign-in ceremony resumes into the gated account', async ({ page
   await expect(page.getByText('Signed in as jun@example.com.')).toBeVisible();
 });
 
+test('successful sign-out lands on the entrance and stays signed out', async ({ page }) => {
+  let mode: 'ok' | 'none' = 'ok';
+  await page.route(SESS, (r) =>
+    mode === 'none'
+      ? r.fulfill({ status: 401, json: { error: 'auth_required' } })
+      : r.fulfill({ status: 200, json: { status: 'ok', email: 'jun@example.com', fresh: true } }),
+  );
+  await page.route(ADDR, (r) => r.fulfill({ status: 200, json: { status: 'ok', addresses: [] } }));
+  let logoutHit = false;
+  await page.route('**/api/v1/auth/email/logout', (r) => {
+    logoutHit = true;
+    mode = 'none'; // the server cleared the session: the next check sees none
+    return r.fulfill({ status: 200, json: { status: 'ok' } });
+  });
+  await page.goto('/account/');
+  await expect(page.getByText('Signed in as jun@example.com.')).toBeVisible();
+  await page.getByRole('button', { name: 'Sign out' }).click();
+  await page.waitForURL((url) => url.pathname === '/');
+  expect(logoutHit).toBe(true);
+  // With the session gone the entrance renders and must NOT bounce back to
+  // /account - the returning-user redirect only fires for a live session.
+  await expect(page.getByRole('heading', { name: /Choose your/i })).toBeVisible();
+  await expect(page).toHaveURL(/\/$/);
+});
+
 test('failed sign-out keeps the truth visible - no fake signed-out navigation', async ({ page }) => {
   await mockSession(page, 'ok');
   await page.route(ADDR, (r) => r.fulfill({ status: 200, json: { status: 'ok', addresses: [] } }));
