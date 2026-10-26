@@ -1,5 +1,7 @@
 'use client';
 import { money, summarize } from '../portfolio/model';
+import { differsWhenRounded } from '../portfolio/format';
+import { AaveSection } from '../portfolio/aave-section';
 import { fmtTimestamp } from './format-time';
 import { useCombined } from './combined-context';
 
@@ -39,6 +41,18 @@ export function CombinedBalances() {
   const hasSolana = ready
     ? ready.result.perAddress.some((a) => a.network === 'solana')
     : false;
+  // Aave V3 sections pass through per address (server includes them only when its flag is
+  // on); they render separately below and never enter any aggregate above.
+  const aaveRows = ready ? ready.result.perAddress.filter((a) => a.aave !== null) : [];
+  const aaveExact = aaveRows.some(
+    (a) =>
+      a.aave?.status === 'ok' &&
+      a.aave.positions.some(
+        (pos) =>
+          differsWhenRounded(pos.supplied, null, pos.suppliedValueUsd) ||
+          differsWhenRounded(pos.variableDebt, null, pos.variableDebtValueUsd),
+      ),
+  );
 
   return (
     <div className="combined ov2-combined" aria-busy={phase.kind === 'loading'}>
@@ -83,6 +97,9 @@ export function CombinedBalances() {
               {/* n/a, never $0.00, when no address contributed: zero would read as empty wallets. */}
               <strong>{contributing === 0 ? 'n/a' : money(totals.net)}</strong>
               <small>Wallet balances only - not net worth.</small>
+              {aaveRows.length > 0 ? (
+                <small>Aave V3 positions listed separately - never added to this total.</small>
+              ) : null}
               {ready.result.incomplete ? (
                 <small className="warn-text">
                   Incomplete: {totalUnpriced} unpriced {totalUnpriced === 1 ? 'asset' : 'assets'},{' '}
@@ -180,9 +197,29 @@ export function CombinedBalances() {
                 unknown, never zero. Each address counted once.
                 {hasSolana ? ' Solana lookups show the SOL balance only.' : ''}
                 {ready.providers.length > 0 ? ` Sources: ${ready.providers.join(', ')}.` : ''}
+                {aaveRows.length > 0
+                  ? ' Aave V3 (Ethereum) supplied and variable-debt positions are listed per address below; they are never added to wallet balances or the combined total.'
+                  : ''}
               </p>
             </details>
           </div>
+          {aaveRows.length > 0 ? (
+            <div className="combined-aave">
+              {aaveRows.map((a) => (
+                <div key={`aave-${a.network}:${a.address}`}>
+                  <p className="ov2-quiet">
+                    {a.label ?? short(a.address)}{' '}
+                    <small className="ov2-quiet">{short(a.address)}</small> - listed separately,
+                    never added to the combined total
+                  </p>
+                  <p className="ov2-quiet ab-lookup-pan-hint">
+                    Scroll sideways for debt and observed time.
+                  </p>
+                  {a.aave ? <AaveSection section={a.aave} exact={aaveExact} /> : null}
+                </div>
+              ))}
+            </div>
+          ) : null}
           <button
             type="button"
             className="button secondary"

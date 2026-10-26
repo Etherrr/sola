@@ -343,6 +343,9 @@ export function CombinedWallets() {
                     <span className="fine muted">{short(a.address)}</span> - listed separately,
                     never added to the combined total
                   </p>
+                  <p className="fine muted ab-lookup-pan-hint">
+                    Scroll sideways for debt and observed time.
+                  </p>
                   {a.aave ? <AaveSection section={a.aave} exact={aaveExact} /> : null}
                 </div>
               ))}

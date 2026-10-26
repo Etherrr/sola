@@ -350,7 +350,7 @@ const AAVE_OK = {
 };
 const walletWithAave = (w: Record<string, unknown>, aave: unknown) => ({ ...w, aave });
 
-test('aave sections render per address, separately, and never enter the combined total', async ({ page }) => {
+test('aave sections render per address, separately, and never enter the combined total', async ({ page }, info) => {
   await stubAccounts(page, SEED);
   await stubResolve(page, {
     ethWallets: [walletWithAave(ETH_WALLETS[0] as Record<string, unknown>, AAVE_OK), ETH_WALLETS[1]],
@@ -368,6 +368,21 @@ test('aave sections render per address, separately, and never enter the combined
   await expect(section.locator('.aave-table').getByText('USDC')).toBeVisible();
   // Only the flagged address carries a section; the other two do not.
   await expect(section.getByRole('heading', { name: 'Aave V3 positions (Ethereum)' })).toHaveCount(1);
+  // Mobile usability: the pan affordance is offered and every column is reachable by panning.
+  const hint = section.getByText('Scroll sideways for debt and observed time.');
+  await expect(hint).toBeAttached();
+  if (info.project.name === 'mobile') {
+    await expect(hint).toBeVisible();
+    const scroller = section.locator('.aave-scroll');
+    await scroller.scrollIntoViewIfNeeded();
+    await scroller.evaluate((el) => {
+      el.scrollLeft = el.scrollWidth;
+    });
+    // The rightmost columns (debt, observed time) sit outside the initial phone viewport and
+    // must be reachable by panning the scroll region.
+    await expect(section.locator('.aave-table th', { hasText: 'Variable debt' }).first()).toBeInViewport();
+    await expect(section.locator('.aave-table th', { hasText: 'Observed' }).first()).toBeInViewport();
+  }
 });
 
 test('an unavailable aave section says nothing was substituted and changes no total', async ({ page }) => {

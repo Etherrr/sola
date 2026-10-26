@@ -192,3 +192,63 @@ test('non-empty native book: one click loads combined balances through the nativ
   expect(seen.find((x) => x.network === 'solana')?.addresses).toEqual([sol]);
   expect(legacy).toBe(0);
 });
+
+// Aave V3 Phase 1 on the NATIVE combined view (fixture-only): a flag-on resolve answer carries
+// one aave section per wallet; the native /account surface renders it per address, separately,
+// and never adds it to the combined total. No chain is read.
+test('native combined view renders aave per address, separately, never added to the total', async ({
+  page,
+}) => {
+  await mockSession(page, 'ok');
+  const eth = '0x' + 'a'.repeat(40);
+  const rows = [
+    { network: 'ethereum', address: eth, label: 'Cold wallet', verification: 'watched', createdAt: '2026-10-25T00:00:00Z', lastObservedAt: null },
+  ];
+  await page.route(ADDR, (r) => r.fulfill({ status: 200, json: { status: 'ok', addresses: rows } }));
+  await page.route('**/api/v1/portfolio/resolve', async (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        schemaVersion: 1, requestId: 'r',
+        generatedAt: '2026-10-25T05:58:00Z', observedAt: '2026-10-25T05:58:00Z',
+        provider: 'test-live', chainId: 1, network: 'ethereum',
+        mode: 'live', simulated: false,
+        wallets: [{
+          address: eth,
+          assets: [{
+            assetId: 'eip155:1/native', symbol: 'ETH', decimals: 18,
+            amount: '1.5', price: '1', value: '4500',
+            priceSource: 'test-feed', priceObservedAt: '2026-10-25T05:55:00Z',
+          }],
+          partial: false, warnings: [],
+          aave: {
+            status: 'ok',
+            positions: [{
+              underlyingAsset: '0x' + 'c'.repeat(40), symbol: 'USDC', decimals: 6,
+              supplied: '11392.069003', variableDebt: '0',
+              suppliedValueUsd: '11390.54', variableDebtValueUsd: '0',
+              priceSource: 'chainlink:USDC/USD', priceObservedAt: '2026-10-23T11:58:00Z',
+              observedAt: '2026-10-23T11:58:00Z',
+              usageAsCollateralEnabled: true, reserveNote: null,
+            }],
+          },
+        }],
+        totals: { recognizedPricedSubtotalUsd: null, unpricedAssetCount: 0, note: 'test' },
+        partial: false, warnings: [],
+      }),
+    }),
+  );
+  await page.goto('/account/');
+  await expect(page.getByRole('heading', { name: 'All saved addresses' })).toBeVisible();
+  await page.getByRole('button', { name: 'Load combined balances' }).click();
+  // Total stays the wallet balance only: $4,500.00; the $11,390.54 supplied position never enters it.
+  await expect(page.getByText('$4,500.00').first()).toBeVisible();
+  await expect(
+    page.getByText(/Aave V3 positions listed separately - never added to this total/),
+  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Aave V3 positions (Ethereum)' })).toBeVisible();
+  await expect(page.locator('.combined-aave').getByText('Cold wallet')).toBeVisible();
+  await expect(page.locator('.aave-table').getByText('USDC')).toBeVisible();
+  await expect(page.getByText('Scroll sideways for debt and observed time.')).toBeAttached();
+});
