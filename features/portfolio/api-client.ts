@@ -591,6 +591,42 @@ export async function overviewHistoryRequest(signal?: AbortSignal): Promise<Resp
 }
 
 /**
+ * GET /api/v1/portfolio/<view> - the caller's own recorded Assets / DeFi
+ * positions / Risk views (reviewed read routes). Returns the raw Response;
+ * parsing and the honest-state contract live in features/portfolio-v2/views-client.ts.
+ */
+export async function portfolioViewRequest(
+  view: 'assets' | 'positions' | 'risk',
+  signal?: AbortSignal,
+): Promise<Response> {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 12000);
+  const onAbort = () => ctl.abort();
+  signal?.addEventListener('abort', onAbort);
+  if (signal?.aborted) ctl.abort();
+  // Explicit literal paths (no computed URL): the content guardrail enumerates
+  // every client fetch endpoint, so each view's path must appear verbatim.
+  const path =
+    view === 'assets'
+      ? '/api/v1/portfolio/assets'
+      : view === 'positions'
+        ? '/api/v1/portfolio/positions'
+        : '/api/v1/portfolio/risk';
+  try {
+    return await fetch(path, {
+      method: 'GET',
+      credentials: 'same-origin',
+      cache: 'no-store',
+      headers: { accept: 'application/json' },
+      signal: ctl.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', onAbort);
+  }
+}
+
+/**
  * POST /api/v1/auth/email/challenge - request a sign-in code. Message
  * signature sign-in only; this is EMAIL code auth, never wallet signing.
  * Returns the raw Response; error mapping lives in features/auth-v2.
