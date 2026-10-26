@@ -1,170 +1,245 @@
-# Account-data claiming: Access-era rows to native accounts (B.3)
+# Account-data claiming: Access-era rows to native accounts (B.3) - REVISED DRAFT v2
 
-Status: DESIGN DRAFT for independent review, 2026-10-26. No implementation,
-route activation, real-data re-keying, or production access is authorized by
-this document. Synthetic staging rehearsal only, after review.
+Status: DESIGN DRAFT for independent whole-head review, 2026-10-26 (supersedes
+the 5c041a6 v1 draft). No implementation, route activation, real-data
+re-keying, or production access is authorized. Synthetic staging rehearsal
+only, after review. The SQL-shaped construction in section 5 is REVIEW INPUT
+(reviewer 02:06), not an approved algorithm; the open questions in sections
+6-8 must be resolved or explicitly carried as blockers before any code.
 
-Plan sources: Phase B.3 ("tested account-data migration/claiming process,
-preserving labels and privacy preferences without making trust assumptions"),
-plan line 78 (no silent Cloudflare-identity-to-Sola-user assumption; preserve
-saved addresses only after secure proof of account continuity), §11 ("auth
-migration is rehearsed on staging, rollback documented").
+Plan sources: Phase B.3, plan line 78 (no silent Cloudflare-identity-to-Sola
+-user assumption; preserve only after secure proof of continuity), §11
+(rehearsed on staging, rollback documented).
 
 ## 1. Data model (source of truth: migrations/)
 
-Legacy (Access era, migrations/0001_accounts_and_counters.sql):
-- `tracked_addresses(owner_issuer_subject, network, address, label, created_at,
-  updated_at)` - PK (owner_issuer_subject, network, address). The owner key is
-  the Cloudflare Access `iss` + `sub` pair. This is the only Access-era user
-  data table; `rate_counters` is operational and is never claimed.
+Legacy (Access era, 0001): `tracked_addresses(owner_issuer_subject, network,
+address, label, created_at, updated_at)`, PK (owner_issuer_subject, network,
+address). Owner key = Access `iss` + `sub`. The only Access-era USER table;
+`rate_counters` is operational and never claimed.
 
-Native (migrations/0002_native_auth.sql, 0003):
-- `users` / `auth_identities(kind, identifier)` / `sessions`.
-- `portfolios` UNIQUE(user_id) (0003, race-safe ensurePortfolio).
-- `portfolio_addresses(portfolio_id, network, address, label, verification,
-  created_at, removed_at)` - PK (portfolio_id, network, address).
+Native (0002/0003): `users`, `auth_identities`, `sessions`; `portfolios`
+UNIQUE(user_id); `portfolio_addresses(portfolio_id, network, address, label,
+verification, created_at, removed_at)`, PK (portfolio_id, network, address).
+Per-network cap is 5 in BOTH stores (reviewer-verified parity), label CHECK
+1-40 in both, network CHECK identical, ETH addresses stored lowercase in both
+(verbatim copy is case-safe).
 
-Claim mapping: each legacy row becomes one `portfolio_addresses` row under the
-claimant's single portfolio, with `label` preserved verbatim, original
-`created_at` preserved, `verification='watched'` (pasted watched addresses
-carry no ownership proof - existing semantics, server/portfolio/addresses.ts),
-`removed_at=NULL`. `updated_at` has no native column; the before-image retains
-it (see §5).
+New claim tables (proposed, migration 0004 - not written):
+- `claims_ledger(id TEXT PRIMARY KEY, owner_key TEXT NOT NULL, user_id TEXT
+  NOT NULL, state TEXT NOT NULL CHECK(state IN ('claimed','rolled_back')),
+  created_at TEXT NOT NULL, rolled_back_at TEXT)` with
+  `CREATE UNIQUE INDEX claims_one_active ON claims_ledger(owner_key)
+   WHERE state='claimed'` (partial unique index - see §7 reclaim policy).
+- `claim_before_images(ledger_id, network, address, label, created_at,
+  updated_at, PRIMARY KEY(ledger_id, network, address))` - verbatim legacy
+  copy INCLUDING `updated_at` (which the native schema drops).
+- `claims_ledger_rows(ledger_id, network, address, disposition
+  CHECK(disposition IN ('copied','skipped_live_dup','skipped_tombstone_dup')),
+  PRIMARY KEY(ledger_id, network, address))` - exact per-row provenance.
 
-## 2. Continuity and threat model
+## 2. Continuity and threat model (unchanged from v1, reviewer-verified)
 
-The binding. A claim binds a legacy owner key to a native user only when the
-claim request carries a Cloudflare Access assertion validated AT CLAIM TIME by
-the existing verifier (server/portfolio/access.ts `checkAccessJwt`, jose:
-signature, alg, exp/nbf, issuer=https://teamDomain, audience, required exp,
-key fetch fails closed past 6h staleness) whose validated `iss`+`sub` equals
-the legacy `owner_issuer_subject` byte-for-byte.
+Binding: claim request must carry an Access assertion validated AT CLAIM TIME
+by the existing verifier (`checkAccessJwt`: jose RS256 signature, exp/nbf,
+iss=https://teamDomain, aud, required exp, key fetch fails closed past 6h
+staleness) whose validated `iss`+`sub` equals the legacy owner key
+byte-for-byte. Email is a display hint, never the binding; the plan forbids
+email-text merging. Rotation (org re-add -> new sub) fails equality -> orphan,
+owner-manual only. Forgery rejected by signature/iss/aud; replay by exp/nbf +
+one-shot ledger. Claim is EXPLICITLY user-initiated from a signed-in native,
+entitled session, with the same strict Origin/CSRF checks as existing auth
+POSTs and per-user rate limits. There is NO auto-claim at sign-in or anywhere.
 
-Email is not proof. An Access-verified email and a native-OTP-verified email
-are two logins to one inbox: one factor, and the plan forbids merging on
-email text alone. The email claim may be shown as a consistency hint only.
+## 3. Required invariants (review gate, unchanged)
 
-Cases:
-- Forged/assertion from another app: rejected by signature + iss + aud checks.
-- Replayed stale assertion: rejected by exp/nbf at claim time.
-- Subject rotation (user removed and re-added to the Zero Trust org receives a
-  NEW sub - documented hazard, docs/PORTFOLIO_ACCOUNTS_DESIGN.md): validated
-  iss+sub no longer equals the legacy key, so no claim is possible. Those rows
-  are orphans: owner-manual held path only, never silent reassignment.
-- Racing or replayed claims for the same owner key: exactly one must win (see
-  candidate protocols; the ledger uniqueness constraint is the arbiter).
-- UI spoofing an email match: irrelevant - the email is never consulted for
-  the binding.
+I1 never expose mixed ownership; I2 never restore over a concurrent legitimate
+update; I3 defined recovery after a crash at every boundary, converging to
+claim-absent OR claim-complete, never both.
 
-## 3. Required invariants (review gate)
+## 4. Reviewer rulings applied (2026-10-26 02:04-02:06)
 
-- I1 - never expose mixed ownership: every row is visible under exactly one
-  owner key at every observable instant, or hidden.
-- I2 - never restore over a concurrent legitimate update: any compensating
-  restore must be conditional on current state still equalling the post-claim
-  state it intends to undo.
-- I3 - defined recovery after a crash at every boundary: pre-ledger,
-  post-ledger pre-rekey, mid-rekey, post-rekey pre-tombstone,
-  mid-compensation. Each intermediate state must be detectable on next boot
-  and converge to claim-absent OR claim-complete, never both.
+- Protocol: CANDIDATE A (single guarded batch). Candidate B (two-batch +
+  compensating restore) is NOT approved - its inter-batch crash windows can
+  strand or misrestore ownership, and post-commit change counts detect but do
+  not prevent partial state. Candidate C (copy-then-hide visibility flip)
+  rejected: read-path exposure risk and no atomic flip across row sets.
+- Concurrent legacy writes: FREEZE-WRITES-ON-CLAIM-START as an IN-STATEMENT
+  guard on the legacy write paths (add/remove/clear), not a precheck:
+  `AND NOT EXISTS(SELECT 1 FROM claims_ledger WHERE owner_key=? AND
+  state='claimed')`. The legacy add is already one atomic INSERT...SELECT
+  (server/accounts/d1.ts:77-81), so the guard serializes writes against the
+  claim at the database. Claim-window UX is product polish, not a control.
+  Accept-and-sweep rejected as the mechanism (hidden stragglers + second
+  writer); optional later defense-in-depth only.
+- Reviewer's naive repeated-NOT-EXIST guards and its own first "no
+  self-reference" simplification were WITHDRAWN (02:05-02:06) after main
+  showed self-invalidation under read-your-writes. The S1-S4 construction
+  below is the replacement and is REVIEW INPUT.
 
-## 4. Protocol candidates (UNRESOLVED - for reviewer evaluation)
+## 5. The S1-S4 single-batch construction (review input; exact order matters)
 
-Grounded facts: D1 `batch()` is transactional - "if a statement in the
-sequence fails... it aborts or rolls back the entire sequence"
-(developers.cloudflare.com/d1/worker-api/d1-database/#batch, fetched
-2026-10-26). BUT an UPDATE matching zero rows SUCCEEDS (0 changes): rollback
--on-error is not rollback-on-no-op, so guards must be constraints, not row
-counts. `meta.changes` per statement is available post-commit for detection,
-not prevention.
+ATT = fresh attempt id, K = validated legacy owner key, P = claimant
+portfolio, U = claimant user. One D1 batch, four statements:
 
-Candidate A - single-batch guarded claim:
-One batch: INSERT INTO claims_ledger(owner_key, ...) ... with
-claims_ledger.owner_key UNIQUE (the atomic arbiter; a replayed/concurrent
-claim violates it and aborts the whole batch before any re-key) + guarded
-re-key INSERT...SELECT statements conditioned on the ledger insert. Within
-one batch, statements commit or roll back together, so there is no
-interleaving window INSIDE the commit. Open: SQLite INSERT...SELECT can
-reference the ledger row inserted earlier in the same batch only if D1
-executes the batch in one transaction with statement ordering preserved
-(docs say sequential) - MUST be proven on actual D1, not only the node:sqlite
-adapter. Crash inside the batch = full rollback (I3 satisfied at the one
-boundary). Concurrent LEGACY writes (user still using Legacy Track during
-their claim) are the hard case: a legacy INSERT after the pre-read but before
-the batch would be missed by the re-key SELECT and then sit unclaimed under a
-claimed key - candidate mitigation: tombstone the owner key FIRST inside the
-same batch and make legacy writes reject tombstoned keys (a write-path
-change), or accept-and-sweep (recovery sweep re-claims stragglers; must not
-violate I1 during the window). UNRESOLVED.
+  S1 ledger: INSERT INTO claims_ledger(id, owner_key, user_id, state,
+    created_at) SELECT ATT, K, U, 'claimed', now
+    WHERE EXISTS(SELECT 1 FROM tracked_addresses WHERE owner_issuer_subject=K)
+      AND NOT EXISTS(SELECT 1 FROM claims_ledger WHERE owner_key=K
+                     AND state='claimed')
+      AND (per network n: nativeLive(P,n) + |legacy(K,n)|
+           - |legacy(K,n) whose PK exists in portfolio_addresses(P,n) at ANY
+             removed_at state| <= 5)
+    -- S1 carries ALL raw guards and no self-reference; it runs first, so its
+    -- reads see only committed pre-claim state. The partial unique index is
+    -- the atomic arbiter for racing claims: the loser violates it and the
+    -- whole batch aborts.
 
-Candidate B - two-phase with conditional compensation:
-Batch 1 reserves via ledger INSERT...SELECT WHERE EXISTS(unclaimed rows),
-verified by meta.changes==1; batch 2 writes before-image + re-key; mismatch
-triggers compensating restore. Open failure windows (must be enumerated, not
-waved): crash between reservation and re-key strands a claimed-but-unmoved
-key; compensation can misrestore over concurrent legitimate updates unless
-each restore statement is conditioned on current state (I2). Detection is
-post-commit; prevention is not available across batches. Included for
-completeness; currently disfavored.
+  S2 before-image: INSERT INTO claim_before_images SELECT ATT, network,
+    address, label, created_at, updated_at FROM tracked_addresses
+    WHERE owner_issuer_subject=K
+      AND EXISTS(SELECT 1 FROM claims_ledger WHERE id=ATT)
+    -- attempt-specific gate: NOT "any ledger row", THIS attempt.
 
-Candidate C - copy-then-hide with visibility flip:
-Write native rows hidden (a pending_claim marker), flip visibility in one
-guarded UPDATE, tombstone the legacy key after. Open: flip atomicity across
-row sets, read-path changes everywhere to respect the marker (I1 exposure
-risk if any read path misses it), and the same concurrent-legacy-write
-problem as A.
+  S3 provenance (MUST precede S4): INSERT INTO claims_ledger_rows
+    SELECT ATT, t.network, t.address, CASE WHEN p.address IS NULL THEN 'copied'
+      WHEN p.removed_at IS NULL THEN 'skipped_live_dup'
+      ELSE 'skipped_tombstone_dup' END
+    FROM tracked_addresses t LEFT JOIN portfolio_addresses p
+      ON p.portfolio_id=P AND p.network=t.network AND p.address=t.address
+    WHERE t.owner_issuer_subject=K
+      AND EXISTS(SELECT 1 FROM claims_ledger WHERE id=ATT)
+    -- Evaluated on the pre-copy snapshot: own writes so far touch only
+    -- claims_ledger/claim_before_images, so the join cannot see S4's rows.
 
-The concurrent-legacy-write problem (claims racing active Track usage) is
-common to all three and is called out as the reviewer's named hazard to rule
-on: freeze-writes-on-claim-start (write-path gate on tombstone) vs
-accept-and-sweep (recovery pass) vs claim-window UX (claim only from a
-signed-out-of-Track state). 
+  S4 copy: INSERT INTO portfolio_addresses(portfolio_id, network, address,
+    label, verification, created_at) SELECT P, network, address, label,
+    'watched', created_at FROM tracked_addresses
+    WHERE owner_issuer_subject=K
+      AND EXISTS(SELECT 1 FROM claims_ledger WHERE id=ATT)
+      AND NOT EXISTS(SELECT 1 FROM portfolio_addresses p
+        WHERE p.portfolio_id=P AND p.network=network AND p.address=address)
+    -- NOT EXISTS is the skip mechanism; no ON CONFLICT needed within one
+    -- serialized batch. Labels and created_at are verbatim; verification is
+    -- always 'watched'.
 
-## 5. Rollback and evidence
+Caps are evaluated ONLY in S1 (single snapshot); S2-S4 never re-evaluate them
+(mid-batch count shifts were a named hazard). Legacy rows are NOT deleted and
+NOT updated by the claim; hiding is derived (§6).
 
-- Before-image: full copy of the claimed legacy rows (including `updated_at`,
-  which the native schema drops) written before any re-key, keyed by
-  claims_ledger id.
-- Old keys are TOMBSTONED (claims_ledger marks the owner key claimed), never
-  purged, while rollback can restore. Purge is a separate owner-approved
-  operation after the rollback window.
-- Rollback = restore from before-image with per-statement state conditions
-  (I2), then ledger marked rolled-back. Rollback availability and the purge
-  gate are part of the rehearsal.
+Crash semantics: crash before batch commit = full rollback = claim-absent;
+crash after commit = claim-complete. No intermediate states exist by
+construction, which is why this candidate satisfies I3 IF D1 batch atomicity
+holds - hence the proof obligations in §7.
 
-## 6. Rehearsal matrix (synthetic staging rows only, after review)
+## 6. Per-row visibility and residue semantics (resolves main 02:06 questions)
 
-Seed synthetic legacy rows under a synthetic owner key; synthetic native user.
-1. Happy path: labels/created_at verbatim, counts reconcile, verification
-   always 'watched', ledger + before-image written, old key tombstoned.
-2. Replayed claim: UNIQUE abort, zero partial state.
-3. Two concurrent claims, same owner key: exactly one wins; loser's session
-   gets an honest already-claimed state.
-4. Zero-match re-key (rows removed between pre-read and commit): detected;
-   no successful ledger state; restore leaves before-image intact.
-5. Crash injection at every I3 boundary (kill between statements via
-   injected fault points in the rehearsal harness): next-boot recovery
-   converges to claim-absent or claim-complete.
-6. Concurrent legacy write during claim: behavior per the reviewer's ruling
-   on §4; asserted against I1.
-7. Adapter honesty: node:sqlite results do NOT establish D1 behavior - the
-   guarded batch and guard-miss rollback are re-verified against actual D1 on
-   staging before any real claim path exists.
-8. Before-image consistency spot-check, including `updated_at` fidelity.
+Hiding is STATE-DERIVED, never "any ledger row hides forever":
+- Legacy list/read paths filter `WHERE NOT EXISTS(SELECT 1 FROM claims_ledger
+  WHERE owner_key=K AND state='claimed')`. A 'rolled_back' row does NOT hide.
+- Legacy write paths (add/remove/clear) carry the same state='claimed' guard
+  (freeze-writes ruling).
+- Native rows created by a claim are ordinary portfolio_addresses rows; their
+  claim origin is recorded ONLY in claims_ledger_rows (provenance), so
+  rollback can distinguish them from pre-existing native rows exactly.
 
-## 7. Environment inventory (read-only, counts/keying only)
+Per-row lifecycle:
+1. unclaimed: visible in the legacy list, writable.
+2. claimed+copied: legacy row hidden; native live row exists with
+   provenance disposition='copied'.
+3. claimed+skipped_live_dup: legacy row hidden; the PRE-EXISTING native live
+   row is untouched (label never overwritten); the legacy label survives in
+   the before-image and the claim report names the set.
+4. claimed+skipped_tombstone_dup: legacy row hidden; the native tombstone
+   STAYS tombstoned (removed_at never flipped - no silent resurrection); the
+   legacy label survives in the before-image and the claim report names it.
+5. rolled_back: see below.
 
-Staging D1 (2026-10-26 05:49Z baseline): entitlements=1 (owner test account),
-users=2, sessions=4, challenges=6, tracked_addresses=0, portfolio_addresses=2
-(native tombstones from earlier reviewed exercises). No Access-era user rows
-currently exist on staging - rehearsal seeds its own. Production inventory:
-not inspected; production D1 is never test-written (standing constraint).
+Claim report (shown to the user BEFORE confirm, and persisted): three
+enumerated sets - rows to copy, live duplicates (kept native, legacy label
+preserved in before-image only), tombstone duplicates (stay deleted). No
+silent resurrect, no silent label overwrite, no silent drop.
 
-## 8. Open questions
+Rollback (a separate, explicit, guarded batch):
+  R1: DELETE FROM portfolio_addresses WHERE (portfolio_id,network,address) IN
+    (SELECT P, r.network, r.address FROM claims_ledger_rows r JOIN
+     claim_before_images b ON b.ledger_id=r.ledger_id AND b.network=r.network
+     AND b.address=r.address WHERE r.ledger_id=ATT AND r.disposition='copied')
+    AND (label, created_at) match the before-image exactly   -- I2: row
+    -- unmodified since claim. Modified rows are NOT deleted.
+  R2: UPDATE claims_ledger SET state='rolled_back', rolled_back_at=now
+    WHERE id=ATT AND state='claimed'.
+Policy when a copied row was natively modified after the claim: the rollback
+batch FAILS CLOSED (guard detects the mismatch) and reports the modified rows;
+it never restores over user edits (I2). A separate explicit "detach edited
+rows and roll back the rest" action is a UX policy question (§8), not part of
+the base protocol. After rollback, previously-hidden legacy rows are visible
+again; rollback restores the PRE-CLAIM observable world, including any
+pre-existing same-address presence in both lists - the residue report says so
+per row (this is the pre-claim world, not a new mixed state; I1 constrains
+the FORWARD claim's intermediate instants, which are inside one batch).
+Rollback is idempotent: R2's state guard makes a second rollback a no-op.
 
-1. Reviewer's ruling on the concurrent-legacy-write hazard (§4).
-2. Which candidate protocol (A/B/C) after failure-window review.
-3. Claim entry point (an explicit /account claim surface is implied; nothing
-   routes today).
-4. Rollback window length and purge gating.
-5. Whether `updated_at` preservation matters beyond the before-image.
+## 7. Reclaim after rollback, and D1 proof obligations
+
+Reclaim: the partial unique index `claims_one_active ... WHERE
+state='claimed'` permits a NEW attempt (new ATT) after a rollback; a
+UNIQUE(owner_key) without the state filter would block reclaim forever.
+Recommendation: partial index, reclaim allowed, provenance is per-attempt so
+attempts never confuse rows. POLICY DECISION for reviewer (alternative: one
+claim ever per key, reclaim owner-manual).
+
+Actual-D1 proof obligations (synthetic keys on staging; node:sqlite adapter
+results do NOT establish D1 behavior):
+ D1 UNIQUE-violation aborts the WHOLE batch (nothing commits).
+ D2 read-your-writes WITHIN a batch: S2/S3/S4's EXISTS(claims_ledger id=ATT)
+    sees S1's uncommitted insert.
+ D3 two concurrent identical claims: exactly one batch commits.
+ D4 statement ordering within a batch is preserved (S3's pre-copy snapshot).
+ D5 guarded legacy write during a claim attempt: rejected honestly AFTER the
+    ledger commit, accepted BEFORE it (no hidden stragglers).
+
+## 8. Rehearsal matrix (synthetic staging rows only, after design approval)
+
+1. Happy path: labels/created_at verbatim, verification always 'watched',
+   provenance complete, before-image includes updated_at.
+2. Replayed claim (same ATT and new ATT): clean loss, honest already-claimed,
+   zero partial state.
+3. Concurrent claims same K: exactly one wins (D3).
+4. Cap-merge reject: merged count >5 -> S1 no-op, NOTHING mutates, honest
+   cap error (regression for the named guard-cascade hazard).
+5. Live duplicate: native row untouched, disposition recorded, legacy hidden,
+   report names it; rollback leaves the native row alone (never deletes
+   pre-existing native).
+6. Tombstone duplicate: never resurrected; report names it; after rollback
+   the tombstone is exactly as before.
+7. D1 obligations D1-D5 on actual D1 (explicitly not the adapter).
+8. Crash injection around the single batch: before commit -> claim-absent;
+   after commit -> claim-complete; recovery sweep finds no partial state.
+9. Legacy write during claim window: frozen with honest error after ledger
+   commit (D5); succeeds before it and is then included in the claim.
+10. Rollback unmodified: full restore of the pre-claim world; idempotent
+    second rollback.
+11. Rollback with natively-modified copied row: fail-closed abort + named
+    rows; no restore over edits (I2).
+12. Reclaim after rollback with a fresh ATT: succeeds, provenance disjoint
+    (or, if policy picks one-claim-ever, honest refusal).
+
+## 9. Environment inventory (read-only, counts/keying only, 2026-10-26)
+
+Staging D1: entitlements=1, users=2, sessions=4, challenges=6,
+tracked_addresses=0, portfolio_addresses=2 (native tombstones from earlier
+reviewed exercises). ZERO Access-era user rows exist on staging - rehearsal
+seeds its own synthetic keys. Production: not inspected; never test-written.
+
+## 10. Open questions / blockers for the reviewer
+
+1. S1-S4 soundness under actual D1 semantics (D1-D5) - the atomicity and
+   read-your-writes questions stay UNRESOLVED until proven; the construction
+   is not adopted as sound on documentation alone.
+2. Reclaim policy: partial-unique-index reclaim vs one-claim-ever (§7).
+3. Rollback-with-edits UX: fail-closed only, or an explicit detach-edited
+   path (§6).
+4. Whether 'rolled_back' ledger rows need retention limits/purge gating.
+5. Claim entry surface placement (/account claim panel) - UX only, no route
+   exists or is authorized.
