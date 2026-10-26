@@ -121,7 +121,7 @@ export function WalletPanel({
         <p role="status">
           {state.linked
             ? 'Wallet verified and linked. Reload your address book to confirm its current state.'
-            : 'Signed in. Continue to your portfolio.'}{' '}
+            : 'Sign-in verified. Continue to check preview access.'}{' '}
           {
             <a href={state.linked ? '/account' : next}>
               {state.linked ? 'Reload address book' : 'Continue'}
@@ -133,7 +133,7 @@ export function WalletPanel({
         <p role="alert">
           The server result could not be confirmed. A sign-in or link may have been saved.{' '}
           <a href={link ? '/account' : '/account/overview'}>
-            Reload your account to check before trying again
+            Reload to check sign-in and preview access before trying again
           </a>
           .
         </p>
