@@ -28,17 +28,6 @@ type Gate =
   | { kind: 'ready' };
 
 
-/** The legacy Track saved-address list stays reachable from every rendered gate
- *  state, with no redirect. Loading it requires the older Cloudflare Access sign-in. */
-function LegacyTrackLink() {
-  return (
-    <p className="notice">
-      The older Track address list requires your previous Cloudflare sign-in. Open the{' '}
-      <a href="/portfolio">Legacy Track list</a> page.
-    </p>
-  );
-}
-
 export function AccountGate() {
   const native = useNativeSession();
   const router = useRouter();
@@ -85,12 +74,12 @@ export function AccountGate() {
 
   if (native.kind === 'none') return <p><em>Taking you to sign in…</em></p>;
   if (native.kind === 'error')
-    return <div className="panel"><p role="alert">Your sign-in could not be checked. Reload to try again.</p><LegacyTrackLink /></div>;
+    return <div className="panel"><p role="alert">Your sign-in could not be checked. Reload to try again.</p></div>;
   if (native.kind === 'off')
     return (
       <div className="panel">
         <p><em>Native accounts are not enabled on this host yet.</em></p>
-        <LegacyTrackLink />
+
       </div>
     );
   if (gate.kind === 'loading') return <p><em>Checking your sign-in…</em></p>;
@@ -98,7 +87,7 @@ export function AccountGate() {
     return (
       <div className="panel">
         <p><em>Your account could not be read just now. Try again in a moment.</em></p>
-        <LegacyTrackLink />
+
       </div>
     );
   if (gate.kind === 'not-invited')
@@ -115,7 +104,7 @@ export function AccountGate() {
           </button>
         </p>
         {signOutFailed && <p role="alert" className="form-alert">Could not sign out just now - try again.</p>}
-        <LegacyTrackLink />
+
       </div>
     );
   if (gate.kind === 'reauth')
@@ -127,7 +116,7 @@ export function AccountGate() {
             Sign in again
           </a>
         </p>
-        <LegacyTrackLink />
+
       </div>
     );
   return (
@@ -142,19 +131,19 @@ export function AccountGate() {
           until the user explicitly opens the section. With the flag off the
           RENDERED account page is unchanged from before; the only addition is
           one discovery GET (claim:false -> nothing renders). */}
-      <ClaimSection discover={claimSectionLive.discover} makeApi={claimSectionLive.makeApi} />
       <WalletPanel link />
       <CombinedProvider>
         <AddressBook />
         <CombinedBalances />
       </CombinedProvider>
+      <ClaimSection discover={claimSectionLive.discover} makeApi={claimSectionLive.makeApi} />
       <p className="actions">
         <button type="button" className="button secondary" onClick={signOut}>
           Sign out
         </button>
       </p>
       {signOutFailed && <p role="alert" className="form-alert">Could not sign out just now - try again.</p>}
-      <LegacyTrackLink />
+
     </>
   );
 }

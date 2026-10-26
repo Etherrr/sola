@@ -35,15 +35,16 @@ test('intentional welcome animation is skippable and navigates to selected nativ
   await expect(page).toHaveURL(/\/account\/overview\/?$/);
 });
 
-test('mobile More reaches Risk, Addresses, Markets and the explicit protected legacy list',async ({page},info)=>{
+test('mobile More reaches Risk, Addresses, Markets without a separate old-list detour',async ({page},info)=>{
   test.skip(info.project.name !== 'mobile');
   await stub(page,true);await page.goto('/account/risk/');
   await page.getByRole('button',{name:'More',exact:true}).click();
   const menu=page.getByRole('group',{name:'More',exact:true});
-  for(const [name,path] of [['Risk & Return','/account/risk'],['Addresses & Wallets','/account'],['Markets','/markets'],['Legacy Track list','/portfolio']]) {
+  for(const [name,path] of [['Risk & Return','/account/risk'],['Addresses & Wallets','/account'],['Markets','/markets']]) {
     await expect(menu.getByRole('link',{name,exact:true})).toHaveAttribute('href',path);
     await expect(menu.getByRole('link',{name,exact:true})).toBeVisible();
   }
+  await expect(menu.getByRole('link',{name:'Legacy Track list',exact:true})).toHaveCount(0);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   await page.screenshot({path:'/downloads/r3-native-more-mobile.png'});
 });

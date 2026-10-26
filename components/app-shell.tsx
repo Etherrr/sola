@@ -8,9 +8,6 @@ import { AccountMenu } from './account-menu';
 import { fetchHealth } from '@/features/portfolio/api-client';
 import { SessionProvider } from '@/features/portfolio/session-context';
 import { TrackNetworkProvider } from '@/features/portfolio/track-network-context';
-// Legacy Track requires the previous Cloudflare sign-in and full navigation: in the desktop
-// sidebar (below) and in the mobile More disclosure. Its store is untouched.
-const legacyLink = { href: '/portfolio', label: 'Legacy Track list', icon: '⧉', cls: 'legacy-desktop' };
 const sections = [
   {
     id: 'defi',
@@ -26,7 +23,6 @@ const sections = [
       { href: '/account/risk', label: 'Risk & Return', icon: '◉', cls: 'overflow-desktop' },
       { href: '/account', label: 'Addresses & Wallets', icon: '▤', cls: 'overflow-desktop' },
       { href: '/markets', label: 'Markets', icon: '◷', cls: 'overflow-desktop' },
-      legacyLink,
     ],
   },
 ];
@@ -170,7 +166,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </button>
               {moreOpen ? (
                 <div role="group" aria-label="More" className="more-menu">
-                  {[...sections[0].items.filter((i) => 'cls' in i && i.cls === 'overflow-desktop'), educationLink, legacyLink].map((t) => (
+                  {[...sections[0].items.filter((i) => 'cls' in i && i.cls === 'overflow-desktop'), educationLink].map((t) => (
                     <a
                       key={t.href}
                       href={t.href}

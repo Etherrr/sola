@@ -12,7 +12,7 @@ describe('native portfolio journey production mounts', () => {
     expect(DEFAULT_NEXT).toBe('/account/overview');
   });
   it('keeps legacy routes and migration page unchanged while new views use native guards', () => {
-    expect(read('components/app-shell.tsx')).toContain("href: '/portfolio', label: 'Legacy Track list'");
+    expect(read('components/app-shell.tsx')).not.toContain("Legacy Track list");
     expect(read('features/auth-v2/account-gate.tsx')).toContain('<ClaimSection');
     expect(read('public/_routes.json')).toContain('/*');
   });

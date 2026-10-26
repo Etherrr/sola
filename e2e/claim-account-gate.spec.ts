@@ -152,14 +152,16 @@ describe('real /account integration (production seams, mocked wire)', () => {
       addresses: HEALTHY_BOOK,
       features: { status: 200, body: { claim: true } },
     });
-    await page.waitForSelector('text=Check for saved addresses');
+    await page.getByText('Import saved addresses', {exact:true}).waitFor();
+    expect(await page.getByRole('link', {name:'Verify previous sign-in'}).isVisible()).toBe(false);
     expect(calls).toEqual({ ...ZERO, features: 1 });
     expect(await page.locator('.claim-panel').count()).toBe(0);
-    await page.getByRole('button', { name: 'Check for saved addresses' }).click();
+    await page.getByText('Import saved addresses', {exact:true}).click();
+    await page.getByRole('link', { name: 'Verify previous sign-in' }).click();
     await page.waitForURL('**/account/legacy-bridge/');
+    await page.getByText('verify your previous sign-in before importing.', { exact: false }).waitFor();
     await page.getByRole('button', { name: 'Check for saved addresses' }).click();
     expect(page.url()).toContain('/account/legacy-bridge/');
-    expect(await page.getByText('requires your previous Cloudflare sign-in.', { exact: false }).count()).toBeGreaterThan(0);
     // The panel mounts and its first (and only) automatic call is the preview;
     // the mocked 503 disabled answer renders the honest could-not-check state.
     await page.waitForSelector('text=Could not check your old saved addresses.');
@@ -282,8 +284,10 @@ describe('claim updates mounted authoritative address readers', () => {
       await page.route('**/api/v1/claim/attempt', (r) => { moved = true; return json(r, 200, ambiguous ? {} : { attemptId: 'ATT-mounted', report }); });
       await page.route('**/api/v1/claim/report/**', (r) => json(r, 200, { attemptId: 'ATT-mounted', state: moved ? 'claimed' : 'rolled_back', report }));
       await page.route('**/api/v1/claim/rollback/**', (r) => { moved = false; return json(r, 200, ambiguous ? {} : { state: 'rolled_back', report }); });
-      await page.getByRole('button', { name: 'Check for saved addresses' }).click();
+      await page.getByText('Import saved addresses', {exact:true}).click();
+    await page.getByRole('link', { name: 'Verify previous sign-in' }).click();
     await page.waitForURL('**/account/legacy-bridge/');
+    await page.getByText('verify your previous sign-in before importing.', { exact: false }).waitFor();
     await page.getByRole('button', { name: 'Check for saved addresses' }).click();
       await page.getByRole('button', { name: 'Move 1 address', exact: true }).click();
       if (ambiguous) {

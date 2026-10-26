@@ -63,29 +63,25 @@ export function ClaimSection({ discover, makeApi }: Props) {
 
   if (available !== true) return null;
 
-  if (!api)
-    return (
-      <div className="panel claim-section">
-        <p>
-          <em>Saved addresses under your old sign-in</em>
-        </p>
-        <p className="claim-note">
-          Moving older saved addresses requires both your Sola account and your previous Cloudflare sign-in. Open the protected migration page first; no addresses move until you confirm.
-        </p>
-        <p><a href="/account/legacy-bridge/">Open protected migration page</a></p>
-        <p className="actions">
-          <button type="button" className="button secondary" onClick={() => {
-              if (window.location.pathname !== '/account/legacy-bridge/' && window.location.pathname !== '/account/legacy-bridge') {
-                window.location.assign('/account/legacy-bridge/');
-                return;
-              }
-              setApi(makeApi());
-            }}>
-            Check for saved addresses
-          </button>
-        </p>
-      </div>
-    );
+  if (!api) {
+    const bridge = typeof window !== 'undefined' &&
+      /^\/account\/legacy-bridge\/?$/.test(window.location.pathname);
+    const entry = <div className="panel claim-section">
+      <p className="claim-note">
+        If you saved addresses before, verify your previous sign-in before importing.
+        Nothing moves without your confirmation.
+      </p>
+      {bridge ? <p className="actions">
+        <button type="button" className="button secondary" onClick={() => setApi(makeApi())}>
+          Check for saved addresses
+        </button>
+      </p> : <p><a href="/account/legacy-bridge/">Verify previous sign-in</a></p>}
+    </div>;
+    return bridge ? entry : <details className="claim-import">
+      <summary>Import saved addresses</summary>
+      {entry}
+    </details>;
+  }
 
   return (
     <div className="panel claim-section">

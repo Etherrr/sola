@@ -13,10 +13,6 @@ export default function SignIn() {
       <section className="panel">
         <SignInForm />
       </section>
-      <p className="notice">
-        Looking for the older Track list? Use the{' '}
-        <a href="/portfolio">Legacy Track list</a> page.
-      </p>
     </div>
   );
 }

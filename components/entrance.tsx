@@ -81,7 +81,7 @@ export function Entrance() {
         </p>
         <p className="entrance-account" data-sensitive>
           {email
-            ? `Legacy sign-in recognized for ${email}. Sola account access is invitation-only.`
+            ? `Previous sign-in recognized for ${email}. Sola account access is invitation-only.`
             : 'Accounts are invitation-only while in preview.'}
         </p>
         <div className="entrance-split">
