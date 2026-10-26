@@ -16,7 +16,7 @@ type Step =
   | { kind: 'code'; email: string; expiresAt: string }
   | { kind: 'done'; email: string | null };
 
-export function SignInForm() {
+export function SignInForm({ context = 'sign-in' }: { context?: 'sign-in' | 'create-account' }) {
   const [step, setStep] = useState<Step>({ kind: 'email' });
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
@@ -138,14 +138,21 @@ export function SignInForm() {
           </button>
         )}
         {step.kind === 'email' && passkeysSupported() && (
-          <button
-            type="button"
-            className="button secondary"
-            disabled={busy}
-            onClick={() => void signInWithPasskey()}
-          >
-            Sign in with a passkey
-          </button>
+          <>
+            <button
+              type="button"
+              className="button secondary"
+              disabled={busy}
+              onClick={() => void signInWithPasskey()}
+            >
+              Sign in with a passkey
+            </button>
+            {context === 'create-account' && (
+              <span className="passkey-note">
+                <em>Passkeys work after you have signed in once and set one up.</em>
+              </span>
+            )}
+          </>
         )}
       </p>
     </form>

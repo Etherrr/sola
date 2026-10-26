@@ -86,9 +86,9 @@ export function AccountGate() {
       <div className="panel">
         <h2>Not invited yet</h2>
         <p>
-          You are signed in{native.kind === 'ok' ? ` as ${native.email}` : ''}, but this
-          preview is invite-only and your email is not on the list yet. Nothing is shown
-          here because there is nothing invited to show - not because your account is empty.
+          You are signed in{native.kind === 'ok' ? ` as ${native.email}` : ''}. This email
+          does not have preview access. Sign out to use the email your invitation was sent
+          to.
         </p>
         <p className="actions">
           <button type="button" className="button secondary" onClick={signOut}>
@@ -113,8 +113,7 @@ export function AccountGate() {
     <>
       <div className="panel">
         <p>
-          <em>Signed in{native.kind === 'ok' ? ` as ${native.email}` : ''}. Read-only:
-          nothing here moves funds or asks for wallet signatures.</em>
+          <em>Signed in{native.kind === 'ok' ? ` as ${native.email}` : ''}.</em>
         </p>
       </div>
       <AddressBook />

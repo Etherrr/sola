@@ -3730,3 +3730,9 @@ html {
 .ov2-signedout .actions {
   margin-top: 18px;
 }
+/* Address book form: persistent labels above fields, quiet hint copy. */
+.addr-field { display: flex; flex-direction: column; gap: 6px; min-width: 160px; flex: 1; }
+.addr-field > span { font-size: 0.8rem; color: var(--muted); letter-spacing: 0.04em; }
+.addr-network { flex: 0 1 240px; }
+.addr-hint, .passkey-note { font-size: 0.85rem; color: var(--muted); }
+.passkey-note { display: inline-block; max-width: 220px; }

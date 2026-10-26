@@ -9,7 +9,7 @@ export default function CreateAccount() {
         <p>Enter the email your invitation went to - we email you a single-use code.</p>
       </PageIntro>
       <section className="panel">
-        <SignInForm />
+        <SignInForm context="create-account" />
       </section>
     </div>
   );

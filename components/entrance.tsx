@@ -63,11 +63,6 @@ export function Entrance() {
           Open the app, or learn first. Address lookups read live public balances; sample pages
           are demo data. Everything is read-only.
         </p>
-        {email && (
-          <p className="entrance-account" data-sensitive>
-            Signed in as {email} · read-only access
-          </p>
-        )}
         <p className="actions entrance-auth-actions">
           <Link className="button primary" href="/sign-in">
             Sign in
@@ -75,6 +70,11 @@ export function Entrance() {
           <Link className="button secondary" href="/create-account">
             Create account
           </Link>
+        </p>
+        <p className="entrance-account" data-sensitive>
+          {email
+            ? `Preview unlocked for ${email}. A Sola account is separate - invitation-only while in preview.`
+            : 'Accounts are invitation-only while in preview.'}
         </p>
         <div className="entrance-split">
           <Link href="/education" className="entrance-card edu">

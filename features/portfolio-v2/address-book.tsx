@@ -360,38 +360,45 @@ export function AddressBook() {
       )}
 
       {load.kind === 'ok' && (
+        <>
         <form
           onSubmit={(ev) => {
             ev.preventDefault();
             add();
           }}
         >
-          <select
-            value={network}
-            onChange={(ev) => setNetwork(ev.target.value as 'ethereum' | 'solana')}
-            disabled={busy}
-            aria-label="Network"
-          >
-            <option value="ethereum">EVM</option>
-            <option value="solana">Solana</option>
-          </select>
-          <input
-            type="text"
-            placeholder="Address"
-            value={address}
-            onChange={(ev) => setAddress(ev.target.value)}
-            disabled={busy}
-            aria-label="Address"
-          />
-          <input
-            type="text"
-            placeholder="Label"
-            value={label}
-            onChange={(ev) => setLabel(ev.target.value)}
-            maxLength={40}
-            disabled={busy}
-            aria-label="Label"
-          />
+          <label className="addr-field addr-network">
+            <span>Network</span>
+            <select
+              value={network}
+              onChange={(ev) => setNetwork(ev.target.value as 'ethereum' | 'solana')}
+              disabled={busy}
+            >
+              <option value="ethereum">EVM (Ethereum and compatible)</option>
+              <option value="solana">Solana</option>
+            </select>
+          </label>
+          <label className="addr-field">
+            <span>Address</span>
+            <input
+              type="text"
+              placeholder="0x… or Solana address"
+              value={address}
+              onChange={(ev) => setAddress(ev.target.value)}
+              disabled={busy}
+            />
+          </label>
+          <label className="addr-field">
+            <span>Label</span>
+            <input
+              type="text"
+              placeholder="A name you recognize"
+              value={label}
+              onChange={(ev) => setLabel(ev.target.value)}
+              maxLength={40}
+              disabled={busy}
+            />
+          </label>
           <button
             type="submit"
             className="button primary"
@@ -400,6 +407,12 @@ export function AddressBook() {
             Add address
           </button>
         </form>
+        {!busy && (!address.trim() || !label.trim()) && (
+          <p className="addr-hint">
+            <em>Add address unlocks once both the address and a label are filled in.</em>
+          </p>
+        )}
+        </>
       )}
 
       {note && <p role="alert"><em>{note}</em></p>}

@@ -32,7 +32,7 @@ test('signed in but not invited: honest state, never empty holdings', async ({ p
   await page.route(ADDR, (r) => r.fulfill({ status: 403, json: { error: 'not_entitled' } }));
   await page.goto('/account/');
   await expect(page.getByRole('heading', { name: 'Not invited yet' })).toBeVisible();
-  await expect(page.getByText('not because your account is empty')).toBeVisible();
+  await expect(page.getByText('does not have preview access')).toBeVisible();
   await expect(page.getByText('Signed in as jun@example.com')).toBeVisible();
 });
 
