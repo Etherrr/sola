@@ -28,15 +28,15 @@
  */
 import type { ChallengeDb } from '../auth/challenges';
 import { requireEntitledSession } from '../auth/guards';
-import { loadRecordedPositions } from './position-history';
-import { assetsView, defiView, riskView } from './read-model';
+import { loadRecordedPositions, loadRunSeries } from './position-history';
+import { assetsView, defiView, overviewAllocation, overviewTotals, riskView } from './read-model';
 
 export type ViewsEnv = {
   PORTFOLIO_ACCOUNTS?: string;
   PORTFOLIO_ACCOUNTS_DB?: ChallengeDb;
 };
 
-export type ViewKind = 'assets' | 'positions' | 'risk';
+export type ViewKind = 'assets' | 'positions' | 'risk' | 'overview';
 
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), {
@@ -69,6 +69,9 @@ export async function handlePortfolioView(req: Request, env: ViewsEnv, view: Vie
         latestCompleteObservedAt: h.latestObservedAt,
         networks: h.networks,
         recordedRunMembership: h.recordedRunMembership,
+        // A1: history is served even here - earlier runs stay visible and a
+        // complete zero-row run plots at 0 (an actual recorded snapshot).
+        ...(view === 'overview' ? { history: await loadRunSeries(db, identity.userId) } : {}),
       });
     const base = {
       status: 'ok' as const,
@@ -86,6 +89,13 @@ export async function handlePortfolioView(req: Request, env: ViewsEnv, view: Vie
     };
     if (view === 'assets') return json(200, { ...base, rows: assetsView(h.positions) });
     if (view === 'positions') return json(200, { ...base, rows: defiView(h.positions) });
+    if (view === 'overview')
+      return json(200, {
+        ...base,
+        totals: overviewTotals(h.positions),
+        allocation: overviewAllocation(h.positions),
+        history: await loadRunSeries(db, identity.userId),
+      });
     return json(200, { ...base, risk: riskView(h.positions) });
   } catch {
     return json(503, { error: 'storage_unavailable', message: 'History storage is unavailable. Try again later.' });

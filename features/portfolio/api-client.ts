@@ -596,7 +596,7 @@ export async function overviewHistoryRequest(signal?: AbortSignal): Promise<Resp
  * parsing and the honest-state contract live in features/portfolio-v2/views-client.ts.
  */
 export async function portfolioViewRequest(
-  view: 'assets' | 'positions' | 'risk',
+  view: 'assets' | 'positions' | 'risk' | 'overview',
   signal?: AbortSignal,
 ): Promise<Response> {
   const ctl = new AbortController();
@@ -611,7 +611,9 @@ export async function portfolioViewRequest(
       ? '/api/v1/portfolio/assets'
       : view === 'positions'
         ? '/api/v1/portfolio/positions'
-        : '/api/v1/portfolio/risk';
+        : view === 'risk'
+          ? '/api/v1/portfolio/risk'
+          : '/api/v1/portfolio/summary';
   try {
     return await fetch(path, {
       method: 'GET',

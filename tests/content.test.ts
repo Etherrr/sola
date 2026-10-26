@@ -59,8 +59,11 @@ describe('learning and safety boundaries', () => {
     // the claim FEATURE DISCOVERY GET - the only claim-area request /account may
     // make before user initiation; a false/failed answer means no claim endpoint
     // is ever called. Nineteenth: ONE shared fetch inside portfolioViewRequest
-    // that the three recorded view requests (assets, positions, risk - plan
-    // 6.2-6.4) funnel through; each is a reviewed GET read route.
+    // that the FOUR recorded view requests (assets, positions, risk, and the
+    // plan 6.1 Overview page wire at /api/v1/portfolio/summary - note the
+    // What-changed route /api/v1/portfolio/overview is a DIFFERENT endpoint;
+    // tests/portfolio-route-contracts.test.ts pins both contracts) funnel
+    // through; each is a reviewed GET read route.
     expect(readFileSync(API_CLIENT, 'utf8').match(/fetch\s*\(/g)).toHaveLength(19);
     expect(readFileSync(API_CLIENT, 'utf8')).toMatch(/fetch\('\/api\/v1\/claim\/features'/);
     expect(readFileSync(API_CLIENT, 'utf8')).toMatch(/fetch\('\/api\/v1\/health'/);
@@ -85,6 +88,7 @@ describe('learning and safety boundaries', () => {
     expect(readFileSync(API_CLIENT, 'utf8')).toMatch(/\/api\/v1\/portfolio\/assets/);
     expect(readFileSync(API_CLIENT, 'utf8')).toMatch(/\/api\/v1\/portfolio\/positions/);
     expect(readFileSync(API_CLIENT, 'utf8')).toMatch(/\/api\/v1\/portfolio\/risk/);
+    expect(readFileSync(API_CLIENT, 'utf8')).toMatch(/\/api\/v1\/portfolio\/summary/);
     expect(source).not.toMatch(
       /window\.(ethereum|solana)|eth_requestAccounts|signTransaction|signMessage|sendTransaction|fetch\s*\(/,
     );

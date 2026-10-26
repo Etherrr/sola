@@ -360,3 +360,169 @@ export function usePortfolioView<T extends { kind: string }>(
     return { status: { ...(result as unknown as ViewOk), loaded: true }, data: result as T & ViewOk, retry };
   return { status: result as ViewStatus, data: null, retry };
 }
+
+/* ---------- Overview view (plan 6.1, reviewer binding verdict A1-A5 + PIN1-3) ---------- */
+
+export type OverviewTotals = {
+  assetRowCount: number;
+  /** null = UNKNOWN (asset rows exist, none usable-priced) - never render $0. */
+  grossPricedUsd: string | null;
+  grossPartial: boolean;
+  unpricedAssetCount: number;
+  staleAssetCount: number;
+  debtState: 'none' | 'priced' | 'partially_unknown';
+  recordedDebtUsd: string | null;
+  /** Present only when computable; renders ONLY under "Net of recorded debt"
+   *  with the "(known priced assets only)" qualifier when netPartial. */
+  netUsd: string | null;
+  netPartial: boolean;
+};
+
+export type HistoryPoint = {
+  /** Points key by RUN ID, never by instant (PIN3). */
+  runId: string;
+  requestedAt: string;
+  observedAt: string;
+  pricedSubtotalUsd: string;
+  unpricedCount: number;
+  staleCount: number;
+  legacy: boolean;
+};
+
+export type HistorySeries = { network: string; points: HistoryPoint[] };
+
+export type OverviewResult =
+  | (ViewOk & { totals: OverviewTotals; allocation: { byNetwork: ConcentrationRow[]; byCategory: ConcentrationRow[] }; history: HistorySeries[] })
+  | { kind: 'empty'; reason: 'no_recorded_observations' | 'no_holdings_recorded'; newerPartial: boolean; newerUnattributed: boolean; recordedRunMembership: RecordedRunMembership; history: HistorySeries[] | null }
+  | { kind: 'signin' | 'notinvited' | 'off' | 'failed' };
+
+const count = (v: unknown): number | undefined =>
+  typeof v === 'number' && Number.isInteger(v) && v >= 0 ? v : undefined;
+
+const totals = (v: unknown): OverviewTotals | null => {
+  if (!v || typeof v !== 'object') return null;
+  const o = v as Record<string, unknown>;
+  // Fail-closed: counts and booleans never default to the reassuring value.
+  if (
+    count(o.assetRowCount) === undefined ||
+    decOrNull(o.grossPricedUsd) === undefined ||
+    typeof o.grossPartial !== 'boolean' ||
+    count(o.unpricedAssetCount) === undefined ||
+    count(o.staleAssetCount) === undefined ||
+    (o.debtState !== 'none' && o.debtState !== 'priced' && o.debtState !== 'partially_unknown') ||
+    decOrNull(o.recordedDebtUsd) === undefined ||
+    decOrNull(o.netUsd) === undefined ||
+    typeof o.netPartial !== 'boolean'
+  )
+    return null;
+  return {
+    assetRowCount: o.assetRowCount as number,
+    grossPricedUsd: decOrNull(o.grossPricedUsd) as string | null,
+    grossPartial: o.grossPartial as boolean,
+    unpricedAssetCount: o.unpricedAssetCount as number,
+    staleAssetCount: o.staleAssetCount as number,
+    debtState: o.debtState,
+    recordedDebtUsd: decOrNull(o.recordedDebtUsd) as string | null,
+    netUsd: decOrNull(o.netUsd) as string | null,
+    netPartial: o.netPartial as boolean,
+  };
+};
+
+const historyPoint = (v: unknown): HistoryPoint | null => {
+  if (!v || typeof v !== 'object') return null;
+  const o = v as Record<string, unknown>;
+  if (
+    typeof o.runId !== 'string' ||
+    typeof o.requestedAt !== 'string' ||
+    typeof o.observedAt !== 'string' ||
+    dec(o.pricedSubtotalUsd) === undefined ||
+    count(o.unpricedCount) === undefined ||
+    count(o.staleCount) === undefined ||
+    typeof o.legacy !== 'boolean'
+  )
+    return null;
+  return {
+    runId: o.runId,
+    requestedAt: o.requestedAt,
+    observedAt: o.observedAt,
+    pricedSubtotalUsd: o.pricedSubtotalUsd as string,
+    unpricedCount: o.unpricedCount as number,
+    staleCount: o.staleCount as number,
+    legacy: o.legacy as boolean,
+  };
+};
+
+const history = (v: unknown): HistorySeries[] | null => {
+  if (!Array.isArray(v)) return null;
+  const out: HistorySeries[] = [];
+  for (const s of v) {
+    if (!s || typeof s !== 'object') return null;
+    const o = s as Record<string, unknown>;
+    if (typeof o.network !== 'string' || !Array.isArray(o.points)) return null;
+    const pts = o.points.map(historyPoint);
+    if (pts.some((p) => p === null)) return null;
+    out.push({ network: o.network, points: pts as HistoryPoint[] });
+  }
+  return out;
+};
+
+/** GET the recorded Overview. Unlike the other views, the no_holdings_recorded
+ *  empty state CARRIES history (A1: earlier runs stay visible and a complete
+ *  zero-row run plots at 0), so this view parses that branch itself. */
+export async function fetchOverviewView(signal?: AbortSignal): Promise<OverviewResult> {
+  let res: Response;
+  try {
+    res = await portfolioViewRequest('overview', signal);
+  } catch {
+    return { kind: 'failed' };
+  }
+  if (res.status === 401) return { kind: 'signin' };
+  if (res.status === 403) return { kind: 'notinvited' };
+  if (res.status === 503) return { kind: 'off' };
+  if (!res.ok) return { kind: 'failed' };
+  let j: unknown;
+  try {
+    j = await res.json();
+  } catch {
+    return { kind: 'failed' };
+  }
+  if (!j || typeof j !== 'object') return { kind: 'failed' };
+  const o = j as Record<string, unknown>;
+  const newerPartial = o.newerPartial === true;
+  const newerUnattributed = o.newerUnattributed === true;
+  if (o.status === 'empty') {
+    const m = 'recordedRunMembership' in o ? member(o.recordedRunMembership) : null;
+    if (m === undefined) return { kind: 'failed' };
+    if (o.reason === 'no_recorded_observations')
+      return { kind: 'empty', reason: o.reason, newerPartial, newerUnattributed, recordedRunMembership: m, history: null };
+    if (o.reason === 'no_holdings_recorded') {
+      const h = history(o.history);
+      if (!h) return { kind: 'failed' }; // zero-row history must be served intact
+      return { kind: 'empty', reason: o.reason, newerPartial, newerUnattributed, recordedRunMembership: m, history: h };
+    }
+    return { kind: 'failed' };
+  }
+  if (o.status !== 'ok') return { kind: 'failed' };
+  if (typeof o.latestCompleteObservedAt !== 'string') return { kind: 'failed' };
+  const m = member(o.recordedRunMembership);
+  if (m === undefined) return { kind: 'failed' };
+  const networks = Array.isArray(o.networks) ? o.networks.map(net) : null;
+  if (!networks || networks.some((n) => n === null)) return { kind: 'failed' };
+  const t = totals(o.totals);
+  const h = history(o.history);
+  const alloc = o.allocation && typeof o.allocation === 'object' ? (o.allocation as Record<string, unknown>) : null;
+  const byNetwork = alloc ? concList(alloc.byNetwork) : null;
+  const byCategory = alloc ? concList(alloc.byCategory) : null;
+  if (!t || !h || !byNetwork || !byCategory) return { kind: 'failed' };
+  return {
+    kind: 'ok',
+    at: o.latestCompleteObservedAt,
+    newerPartial,
+    newerUnattributed,
+    recordedRunMembership: m,
+    networks: networks as ViewNetwork[],
+    totals: t,
+    allocation: { byNetwork, byCategory },
+    history: h,
+  };
+}

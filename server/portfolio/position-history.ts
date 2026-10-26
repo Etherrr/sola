@@ -49,7 +49,7 @@
  *   matching units.valueUsd). Unpriced rows keep valueUsd=null, never '0'.
  */
 import type { ChallengeDb } from '../auth/challenges';
-import { mulDecimal, type AssetRef, type Network, type Position, type PositionKind, type PricePoint } from './domain';
+import { addDecimal, mulDecimal, PRICE_MAX_SKEW_MS, type AssetRef, type Network, type Position, type PositionKind, type PricePoint } from './domain';
 import { attributedCompleteRuns, hasNewerUnattributed, newestAttributedPartialAt } from './run-baselines';
 
 const NETWORKS: Network[] = ['ethereum', 'solana'];
@@ -236,4 +236,97 @@ export async function loadRecordedPositions(db: ChallengeDb, userId: string): Pr
     networks,
     recordedRunMembership: anyLegacyServing ? 'best_effort_legacy' : 'exact',
   };
+}
+
+/* ---------- Slice 3 (plan 6.1): per-run history series ---------- */
+
+/** One ACTUAL recorded observation on the time axis (reviewer A1/PIN3):
+ *  every point is one real attributed COMPLETE run - never a derived or
+ *  carried-forward value. Points key by RUN ID, never by instant: multiple
+ *  runs sharing an observedAt all persist as distinct points. */
+export type RunSeriesPoint = {
+  runId: string;
+  /** Wall-clock request time - ordering tiebreak within same-instant ties
+   *  (approved A1 ordering); NOT the chart axis. */
+  requestedAt: string;
+  /** The run's observation instant - the chart x value (A4). */
+  observedAt: string;
+  /** Priced subtotal of the run's ASSET rows (spot + supplied) under the
+   *  same fresh-price convention as the headline: rows whose recorded quote
+   *  is stale relative to the run's own observation are excluded and counted;
+   *  DEBT rows never enter the series (A3). A complete ZERO-ROW run plots
+   *  '0' - an actual recorded "nothing held", never a resurrection. */
+  pricedSubtotalUsd: string;
+  unpricedCount: number;
+  staleCount: number;
+  /** Legacy-era run: per-run membership is best-effort (may under-serve);
+   *  flagged on the point, never silently mixed (A1). */
+  legacy: boolean;
+};
+
+/** Per-network actual-run series for the Overview history chart. Chronological
+ *  order (requested_at ASC, id ASC within a tie - PIN3: within a same-instant
+ *  tie the LATER run in the approved order is the network's value going
+ *  forward, so a same-instant zero-row removal is never hidden). */
+export async function loadRunSeries(
+  db: ChallengeDb,
+  userId: string,
+): Promise<{ network: Network; points: RunSeriesPoint[] }[]> {
+  const out: { network: Network; points: RunSeriesPoint[] }[] = [];
+  for (const network of NETWORKS) {
+    const runs = await attributedCompleteRuns(db, userId, network);
+    const points: RunSeriesPoint[] = [];
+    // runs arrive newest-first; series are chronological.
+    for (const run of [...runs].reverse()) {
+      const balances = await db
+        .prepare(
+          `SELECT bs.amount AS amount, bs.observed_at AS observedAt,
+                  po.usd AS priceUsd, po.price_observed_at AS priceObservedAt
+             FROM balance_snapshots bs
+             JOIN portfolios pf ON pf.id = bs.portfolio_id
+             ${PRICE_LATEST('bs.sync_run_id', 'bs.asset_id')}
+            WHERE pf.user_id = ? AND bs.sync_run_id = ? AND bs.network = ?`,
+        )
+        .bind(userId, run.id, network)
+        .all<{ amount: string; observedAt: string; priceUsd: string | null; priceObservedAt: string | null }>();
+      const rows = await db
+        .prepare(
+          `SELECT ps.position AS position, ps.observed_at AS observedAt,
+                  po.usd AS priceUsd, po.price_observed_at AS priceObservedAt
+             FROM position_snapshots ps
+             JOIN portfolios pf ON pf.id = ps.portfolio_id
+             ${PRICE_LATEST('ps.sync_run_id', `json_extract(ps.position, '$.asset.assetId')`)}
+            WHERE pf.user_id = ? AND ps.sync_run_id = ? AND ps.network = ?`,
+        )
+        .bind(userId, run.id, network)
+        .all<{ position: string; observedAt: string; priceUsd: string | null; priceObservedAt: string | null }>();
+      let subtotal = '0';
+      let unpriced = 0;
+      let stale = 0;
+      for (const r of balances.results) {
+        if (r.priceUsd === null) { unpriced += 1; continue; }
+        const value = mulDecimal(r.amount, r.priceUsd);
+        if ((Date.parse(r.observedAt) - Date.parse(r.priceObservedAt ?? r.observedAt)) > PRICE_MAX_SKEW_MS) { stale += 1; continue; }
+        subtotal = addDecimal(subtotal, value);
+      }
+      for (const r of rows.results) {
+        const body = JSON.parse(r.position) as { kind: PositionKind; valueUsd: string | null; observedAt?: string };
+        if (body.kind === 'protocol_debt') continue; // A3: debt never in the series
+        if (body.valueUsd === null) { unpriced += 1; continue; }
+        if ((Date.parse(r.observedAt) - Date.parse(r.priceObservedAt ?? r.observedAt)) > PRICE_MAX_SKEW_MS) { stale += 1; continue; }
+        subtotal = addDecimal(subtotal, body.valueUsd);
+      }
+      points.push({
+        runId: run.id,
+        requestedAt: run.requestedAt,
+        observedAt: run.instant,
+        pricedSubtotalUsd: subtotal,
+        unpricedCount: unpriced,
+        staleCount: stale,
+        legacy: run.legacy,
+      });
+    }
+    if (points.length > 0) out.push({ network, points });
+  }
+  return out;
 }

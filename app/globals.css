@@ -4046,3 +4046,69 @@ html {
   font-variant-numeric: tabular-nums;
   font-size: 0.85rem;
 }
+
+/* Overview v2 (plan 6.1): headline figure, allocation, actual-run history chart */
+.ov2 .ov2-figure {
+  font-size: 2rem;
+  font-weight: 600;
+  color: var(--gold-light);
+  margin: 0.3rem 0;
+  font-variant-numeric: tabular-nums;
+  word-break: break-word;
+}
+.ov2 .ov2-net {
+  margin: 0.5rem 0 0;
+  font-variant-numeric: tabular-nums;
+}
+.ov2 .ov2-alloc {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+@media (max-width: 560px) {
+  .ov2 .ov2-alloc {
+    grid-template-columns: 1fr;
+  }
+}
+.ov2 .ov2-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+.ov2 .ov2-table th,
+.ov2 .ov2-table td {
+  text-align: left;
+  padding: 0.25rem 0.5rem 0.25rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.ov2 .ov2-ranges {
+  display: flex;
+  gap: 0.4rem;
+  margin: 0.3rem 0 0.5rem;
+}
+.ov2 .ov2-chart {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.ov2 .ov2-line-ethereum {
+  stroke: var(--gold);
+  fill: var(--gold);
+}
+.ov2 .ov2-line-solana {
+  stroke: var(--gold-light);
+  fill: var(--gold-light);
+}
+
+/* Overview v2 chart axes/legend (slice 3 review pass): glanceable measured
+   context - USD y ticks, UTC x labels, per-network legend. */
+.ov2-swatch { width: 10px; height: 3px; border-radius: 2px; display: inline-block; margin-right: 6px; }
+.ov2-swatch.ov2-line-ethereum { background: var(--gold); }
+.ov2-swatch.ov2-line-solana { background: var(--gold-light); }
+.ov2-series-summary { list-style: none; margin: 8px 0 6px; padding: 0; font-size: 13px; color: var(--muted, #9aa4b2); }
+.ov2-series-summary li { margin: 2px 0; }
+.ov2-chartgrid { display: grid; grid-template-columns: auto 1fr; align-items: stretch; }
+.ov2-yaxis { display: flex; flex-direction: column; justify-content: space-between; font-size: 11px; color: #8b94a3; text-align: right; padding: 12px 6px 26px 0; min-width: 46px; }
+.ov2-xaxis { grid-column: 2; display: flex; justify-content: space-between; font-size: 11px; color: #8b94a3; margin-top: 4px; }
+.ov2-grid { stroke: rgba(139, 148, 163, 0.18); stroke-width: 1; }

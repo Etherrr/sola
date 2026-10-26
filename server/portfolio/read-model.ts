@@ -265,3 +265,99 @@ export function riskView(positions: Position[]): RiskView {
     partial: s.coverage === 'partial',
   };
 }
+
+/* ---------- Overview view (plan 6.1, reviewer binding verdict A1-A5 + PIN1-3) ---------- */
+
+export type OverviewTotals = {
+  /** Non-debt rows with a non-zero amount (the known-empty discriminator,
+   *  PIN1: zero asset rows + debt rows -> gross '0' observed-empty). */
+  assetRowCount: number;
+  /** Gross priced value of recognized asset positions (spot + supplied,
+   *  fresh prices only, debt NEVER inside). null = UNKNOWN (asset rows
+   *  exist, none fresh-priced: all unpriced or stale - never $0, A2c/PIN1c).
+   *  '0' with assetRowCount 0 = observed-empty, a real figure (PIN1a). */
+  grossPricedUsd: string | null;
+  /** TRUE when any asset row is unpriced or stale-priced: mandatory PARTIAL
+   *  badge on gross and the "(known priced assets only)" qualifier on net
+   *  (A2d/PIN2). */
+  grossPartial: boolean;
+  unpricedAssetCount: number;
+  staleAssetCount: number;
+  /** 'none' = no debt rows ("No recorded debt"); 'priced' = every debt row
+   *  priced; 'partially_unknown' = ANY debt row unpriced/stale (A3). */
+  debtState: 'none' | 'priced' | 'partially_unknown';
+  /** Set only when debtState==='priced'. */
+  recordedDebtUsd: string | null;
+  /** gross - debt, present ONLY when gross is non-null AND debtState is
+   *  'none' or 'priced' (A3/PIN2: unpriced debt suppresses net entirely -
+   *  no partial net of known debt). May be negative (debt-only portfolio).
+   *  Renders only under the explicit "Net of recorded debt" label. */
+  netUsd: string | null;
+  /** TRUE when net renders while gross is partial: mandatory "(known priced
+   *  assets only)" qualifier - never "total net worth" (PIN2). */
+  netPartial: boolean;
+};
+
+export function overviewTotals(positions: Position[]): OverviewTotals {
+  const assets = positions.filter((p) => p.kind !== 'protocol_debt' && !isZero(p.amount));
+  const debts = positions.filter((p) => p.kind === 'protocol_debt' && !isZero(p.amount));
+  let gross = '0';
+  let pricedAssets = 0;
+  let unpricedAssets = 0;
+  let staleAssets = 0;
+  for (const p of assets) {
+    if (p.price === null || p.valueUsd === null) { unpricedAssets += 1; continue; }
+    if (!isPriceFresh(p)) { staleAssets += 1; continue; }
+    pricedAssets += 1;
+    gross = addDecimal(gross, p.valueUsd);
+  }
+  let debtSum = '0';
+  let debtUnknown = false;
+  for (const p of debts) {
+    if (p.price === null || p.valueUsd === null || !isPriceFresh(p)) { debtUnknown = true; continue; }
+    debtSum = addDecimal(debtSum, p.valueUsd);
+  }
+  const grossPricedUsd = assets.length === 0 ? '0' : pricedAssets === 0 ? null : gross;
+  const grossPartial = unpricedAssets + staleAssets > 0;
+  const debtState = debts.length === 0 ? 'none' : debtUnknown ? 'partially_unknown' : 'priced';
+  const recordedDebtUsd = debtState === 'priced' ? debtSum : null;
+  const netUsd =
+    grossPricedUsd !== null && debtState !== 'partially_unknown'
+      ? subDecimal(grossPricedUsd, debtState === 'priced' ? debtSum : '0')
+      : null;
+  return {
+    assetRowCount: assets.length,
+    grossPricedUsd,
+    grossPartial,
+    unpricedAssetCount: unpricedAssets,
+    staleAssetCount: staleAssets,
+    debtState,
+    recordedDebtUsd,
+    netUsd,
+    netPartial: netUsd !== null && grossPartial,
+  };
+}
+
+/** Plan 6.1 allocation: by chain and by category (spot / supplied ONLY - no
+ *  invented liquidity/staking rows, A5). Shares over the SAME gross priced
+ *  subtotal on both axes (A5); debt excluded from numerators and denominator.
+ *  Fresh prices only - the Assets-page rule. */
+export type OverviewAllocation = { byNetwork: ConcentrationRow[]; byCategory: ConcentrationRow[] };
+
+export function overviewAllocation(positions: Position[]): OverviewAllocation {
+  const fresh = positions.filter(
+    (p) => p.kind !== 'protocol_debt' && !isZero(p.amount) && p.valueUsd !== null && p.price !== null && isPriceFresh(p),
+  );
+  const total = fresh.reduce((acc, p) => addDecimal(acc, p.valueUsd!), '0');
+  const group = (key: (p: Position) => string): ConcentrationRow[] => {
+    const m = new Map<string, string>();
+    for (const p of fresh) m.set(key(p), addDecimal(m.get(key(p)) ?? '0', p.valueUsd!));
+    return [...m.entries()]
+      .map(([label, valueUsd]) => ({ label, valueUsd, sharePct: pctShare(valueUsd, total) ?? '0' }))
+      .sort((a, b) => (a.valueUsd < b.valueUsd ? 1 : -1));
+  };
+  return {
+    byNetwork: group((p) => p.network),
+    byCategory: group((p) => (p.kind === 'wallet_balance' ? 'spot' : 'supplied')),
+  };
+}
