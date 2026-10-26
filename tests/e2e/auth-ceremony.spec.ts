@@ -71,6 +71,19 @@ test('wrong code and lockout render honest errors, no fake success', async ({ pa
   await expect(page.locator('p[role=alert]')).toContainText('Too many wrong codes');
 });
 
+test('challenge rate limit shows the server cooldown seconds', async ({ page }) => {
+  await mockAuth(page);
+  await page.unroute(CH);
+  await page.route(CH, (route) =>
+    route.fulfill({ status: 429, json: { error: 'rate_limited', retryAfterSec: 95 } })
+  );
+  await page.goto('/dev/sign-in/');
+  await page.getByLabel(/email you were invited with/i).fill('jun@example.com');
+  await page.getByRole('button', { name: 'Send sign-in code' }).click();
+  await expect(page.locator('p[role=alert]')).toContainText('Too many attempts. Try again in about 95 seconds.');
+  await expect(page.getByRole('button', { name: 'Send sign-in code' })).toBeEnabled();
+});
+
 test('same-email recovery: Send a new code re-issues for the same address, human expiry', async ({ page }) => {
   let challenges = 0;
   await mockAuth(page);
@@ -85,7 +98,7 @@ test('same-email recovery: Send a new code re-issues for the same address, human
   await page.goto('/dev/sign-in/');
   await page.getByLabel(/email you were invited with/i).fill('jun@example.com');
   await page.getByRole('button', { name: 'Send sign-in code' }).click();
-  await expect(page.getByText(/Code sent to jun@example.com\. It expires in about 10 minutes\./)).toBeVisible();
+  await expect(page.getByText(/Code sent to jun@example\.com - it expires at \d{1,2}:\d{2}/)).toBeVisible();
   await page.getByRole('button', { name: 'Send a new code' }).click();
   await expect(page.getByText('New code sent.')).toBeVisible();
   expect(challenges).toBe(2);

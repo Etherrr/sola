@@ -13,7 +13,7 @@ import { safeNextPath, DEFAULT_NEXT } from './next-path';
 
 type Step =
   | { kind: 'email' }
-  | { kind: 'code'; email: string; expiresAt: string; expiresInMin: number }
+  | { kind: 'code'; email: string; expiresAt: string; expiresAtText: string | null }
   | { kind: 'done'; email: string | null };
 
 export function SignInForm({ context = 'sign-in' }: { context?: 'sign-in' | 'create-account' }) {
@@ -65,9 +65,13 @@ export function SignInForm({ context = 'sign-in' }: { context?: 'sign-in' | 'cre
       const r = await authEmailChallenge(em);
       const body = (await r.json().catch(() => null)) as { error?: string; retryAfterSec?: number; expiresAt?: string } | null;
       if (r.ok && body?.expiresAt) {
-        // Human expiry from the server's actual expiresAt: whole minutes at issue.
-        const mins = Math.max(1, Math.round((Date.parse(body.expiresAt) - Date.now()) / 60000));
-        setStep({ kind: 'code', email: em, expiresAt: body.expiresAt, expiresInMin: mins });
+        // Absolute local expiry from the server's actual expiresAt: never goes
+        // stale like a relative "in N minutes" would. Malformed -> no time shown.
+        const at = new Date(body.expiresAt);
+        const atText = Number.isFinite(at.getTime())
+          ? new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(at)
+          : null;
+        setStep({ kind: 'code', email: em, expiresAt: body.expiresAt, expiresAtText: atText });
         setExpired(false);
         setCode('');
         setNote(target ? 'New code sent.' : null);
@@ -138,10 +142,9 @@ export function SignInForm({ context = 'sign-in' }: { context?: 'sign-in' | 'cre
           />
           <br />
           <small>
-            Code sent to {step.email}.{' '}
-            {expired
-              ? 'That code has expired - send a new one.'
-              : `It expires in about ${step.expiresInMin} minute${step.expiresInMin === 1 ? '' : 's'}.`}
+            Code sent to {step.email}
+            {step.expiresAtText ? ` - it expires at ${step.expiresAtText}` : ''}.{' '}
+            {expired ? 'That code has expired - send a new one.' : ''}
           </small>
         </p>
       )}
