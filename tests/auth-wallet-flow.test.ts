@@ -53,4 +53,9 @@ describe('unmounted explicit wallet flow',()=>{
   await s.flow.connect(s.choice);const signing=s.flow.sign(true);await new Promise(r=>setTimeout(r,0));expect(s.states.at(-1)?.kind).toBe('verifying');s.flow.disconnect();expect(s.states.at(-1)?.kind).toBe('verifying');s.flow.invalidate();expect(s.states.at(-1)).toEqual({kind:'uncertain',linked:true});resolve(new Response(JSON.stringify({status:'ok'})));await signing;expect(s.states.at(-1)?.kind).toBe('uncertain');s.flow.dispose();
  });
 
+ it.each([200,302,401,503])('unrecognized verify %s response stays uncertain on repeated invalidation',async status=>{
+  const s=setup();s.request.mockImplementation(async(_chain,action)=>action==='challenge'?new Response(JSON.stringify({message:message()})):new Response('<html>unexpected</html>',{status}));
+  await s.flow.connect(s.choice);await s.flow.sign(true);expect(s.states.at(-1)).toEqual({kind:'uncertain',linked:true});s.flow.invalidate();s.flow.invalidate();s.change();s.flow.disconnect();await s.flow.connect(s.choice);await s.flow.sign(true);expect(s.states.at(-1)).toEqual({kind:'uncertain',linked:true});expect(s.request).toHaveBeenCalledTimes(2);s.flow.dispose();
+ });
+
 });

@@ -36,7 +36,7 @@ export function createWalletFlow(update:(state:WalletFlowState)=>void,deps:Walle
    try{
     const next=await choice.connect();
     if(disposed||mine!==version){next.dispose();return;}
-    connection=next;remove=next.onChange(()=>{const pending=verifying;clear();if(pending){uncertain=true;emit({kind:'uncertain',linked:activeLink});}else emit({kind:'error',message:'Wallet changed. Connect again.'});});
+    connection=next;remove=next.onChange(()=>{if(uncertain)return;const pending=verifying;clear();if(pending){uncertain=true;emit({kind:'uncertain',linked:activeLink});}else emit({kind:'error',message:'Wallet changed. Connect again.'});});
     busy=false;emit({kind:'connected',address:next.address,network:next.network});
    }catch{if(mine===version){busy=false;emit({kind:'error',message:'Wallet connection was cancelled or could not complete. Nothing was saved.'});}}
   },
@@ -54,7 +54,12 @@ export function createWalletFlow(update:(state:WalletFlowState)=>void,deps:Walle
     const response=await deps.request(current.network,'verify',link,{address:current.address,message:body.message,signature},abort.signal);
     const result=await response.json().catch(()=>null) as {status?:string;error?:string;freshChallengeRequired?:boolean}|null;
     if(disposed||mine!==version)return;
-    if(response.status>=500&&!result?.freshChallengeRequired){uncertain=true;busy=false;verifying=false;emit({kind:'uncertain',linked:link});return;}
+    const recognizedRejection = (response.status===503&&result?.error==='unavailable'&&result.freshChallengeRequired===true)||
+      (response.status===401&&['invalid_signature','invalid_or_consumed_challenge','not_authenticated','session_expired'].includes(result?.error??''))||
+      (response.status===403&&result?.error==='reauth_required')||
+      (response.status===409&&['wallet_linked_elsewhere','too_many_addresses'].includes(result?.error??''))||
+      (response.status===429&&['rate_limited','too_many_attempts'].includes(result?.error??''));
+    if(!(response.status===200&&result?.status==='ok')&&!recognizedRejection){uncertain=true;busy=false;verifying=false;emit({kind:'uncertain',linked:link});return;}
     verifying=false;
     if(!response.ok||result?.status!=='ok'){
      busy=false;
@@ -65,7 +70,7 @@ export function createWalletFlow(update:(state:WalletFlowState)=>void,deps:Walle
    }catch{if(mine===version&&!disposed){busy=false;if(verifying){uncertain=true;verifying=false;emit({kind:'uncertain',linked:link});}else emit({kind:'error',message:'The message step was cancelled or could not finish. Try again for a new message.'});}}
    // No retry uses the old message/signature; every click gets a new challenge.
   },
-  invalidate(){const pending=verifying;clear();if(pending){uncertain=true;verifying=false;emit({kind:'uncertain',linked:activeLink});}else emit({kind:'error',message:'Selected wallet is no longer available. Connect again.'});},
+  invalidate(){if(uncertain)return;const pending=verifying;clear();if(pending){uncertain=true;verifying=false;emit({kind:'uncertain',linked:activeLink});}else emit({kind:'error',message:'Selected wallet is no longer available. Connect again.'});},
   disconnect(){if(verifying||uncertain)return;clear();emit({kind:'idle'});},
   dispose(){disposed=true;clear();},
  };

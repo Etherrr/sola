@@ -19,7 +19,7 @@ export function WalletPanel({link=false,discover=discoverWallets,deps}:{link?:bo
   {!link&&<p>A wallet-only account has no email recovery. Losing access to the wallet can mean losing access to this account. Add a passkey after signing in.</p>}
   {!started?<button type="button" className="button secondary" onClick={()=>setStarted(true)}>Find wallets</button>:<>
    {choices.length===0&&<p>No supported browser wallet found. This preview supports Ethereum mainnet message signing and Solana software-wallet raw message signing. Contract wallets and transaction-only hardware wallets are not supported. You can use email instead.</p>}
-   {choices.map(choice=><button type="button" className="button secondary" key={choice.id} disabled={busy} onClick={()=>{selected.current=choice.id;void flow.current?.connect(choice);}}>{choice.name} ({choice.network==='evm'?'Ethereum':'Solana'})</button>)}
+   {choices.map(choice=><button type="button" className="button secondary" key={choice.id} disabled={busy||state.kind==='uncertain'} onClick={()=>{selected.current=choice.id;void flow.current?.connect(choice);}}>{choice.name} ({choice.network==='evm'?'Ethereum':'Solana'})</button>)}
   </>}
   {(state.kind==='connected'||state.kind==='signing'||state.kind==='verifying')&&<p>Selected public address: <span style={{overflowWrap:'anywhere'}}>{state.address}</span>. Not yet verified for this step.</p>}
   {state.kind==='connected'&&<button type="button" className="button primary" onClick={()=>void flow.current?.sign(link)}>{link?'Sign message to verify and link':'Sign message to sign in'}</button>}
