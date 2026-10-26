@@ -1,11 +1,12 @@
 // SANDBOX FIXTURE - never ships. Wires the REAL v0.2-native production handlers
 // (addresses, snapshot consent, sync, overview) to a local workerd D1 binding with
-// migrations 0002 + 0003 applied for real. Identity is seeded straight into D1
+// migrations 0002-0004 applied for real (0004 = claims; fixture-local schema). Identity is seeded straight into D1
 // (user + verified email identity + entitlement + live session) - no auth code is
 // weakened; every request still passes the unchanged requireEntitledSession gate.
 import mig1 from '../migrations/0001_accounts_and_counters.sql';
 import mig2 from '../migrations/0002_native_auth.sql';
 import mig3 from '../migrations/0003_portfolio_user_unique.sql';
+import mig4 from '../migrations/0004_claims.sql';
 import {
   handleAddressesList,
   handleAddressAdd,
@@ -17,13 +18,24 @@ import {
   handleSnapshotConsentChange,
 } from '../server/portfolio/consent';
 import { handleSync, type SyncDeps } from '../server/portfolio/sync';
+import {
+  handleClaimAttempt,
+  handleClaimPreview,
+  handleClaimReport,
+  handleClaimRollback,
+  type ClaimDeps,
+  type ClaimEnv,
+} from '../server/claim/routes';
+import { claimAttemptParam, claimMountGate } from '../server/claim/mount';
+import { SignJWT, generateKeyPair, exportJWK } from 'jose';
+import type { Jwk } from '../server/portfolio/access';
 import { handleOverview } from '../server/portfolio/overview-handler';
 import { mockProvider, solanaMockProvider, type PortfolioProvider, type ProviderResult } from '../server/portfolio/provider';
 import type { D1Like } from '../server/accounts/d1';
 
 // Production applies 0001 (rate_counters + legacy tables) and 0002; 0003 is the pending
 // production migration exercised here on the same footing.
-const MIGRATIONS = [mig1, mig2, mig3].flatMap((sql) =>
+const MIGRATIONS = [mig1, mig2, mig3, mig4].flatMap((sql) =>
   sql
     .replace(/--[^\n]*/g, '')
     .split(';')
@@ -94,6 +106,39 @@ function envFor(db: D1Like) {
 
 const now = () => new Date().toISOString();
 
+// Claim fixture support (SANDBOX ONLY): the claim handlers re-validate the Cloudflare
+// Access assertion at claim time through the real checkAccessJwt; the fixture mints
+// genuine RS256 JWTs locally and injects the JWKS through the fetchKeys seam - no
+// network, no real Access. CLAIM_ENABLED is '1' HERE only, against the local binding
+// with the real 0004 schema applied; it ships absent everywhere else.
+const TEAM = 'team-example.cloudflareaccess.com';
+const AUD = 'fixture-aud';
+type Keys = { privateKey: CryptoKey; jwks: Jwk[] };
+let keysP: Promise<Keys> | null = null;
+function keys(): Promise<Keys> {
+  if (!keysP) {
+    keysP = (async () => {
+      const { publicKey, privateKey } = await generateKeyPair('RS256');
+      const jwk = (await exportJWK(publicKey)) as Jwk;
+      jwk.kid = 'fixture-native-1';
+      jwk.alg = 'RS256';
+      return { privateKey, jwks: [jwk] };
+    })();
+  }
+  return keysP;
+}
+function claimDepsF(): ClaimDeps {
+  return { fetchKeys: async () => (await keys()).jwks, now: () => new Date(), id: () => crypto.randomUUID() };
+}
+function claimEnv(db: D1Like): ClaimEnv {
+  return {
+    ...envFor(db),
+    ACCESS_TEAM_DOMAIN: TEAM,
+    ACCESS_AUD: AUD,
+    CLAIM_ENABLED: '1', // fixture-local binding + real 0004 only; ships absent elsewhere
+  } as unknown as ClaimEnv;
+}
+
 export default {
   async fetch(req: Request, env: { DB: D1Like }): Promise<Response> {
     const url = new URL(req.url);
@@ -132,7 +177,42 @@ export default {
       });
     }
 
+    if (url.pathname === '/fixture/mint') {
+      const sub = url.searchParams.get('sub') ?? 'user-a';
+      const email = url.searchParams.get('email') ?? 'a@example.com';
+      const { privateKey } = await keys();
+      const token = await new SignJWT({ email })
+        .setProtectedHeader({ alg: 'RS256', kid: 'fixture-native-1' })
+        .setIssuer(`https://${TEAM}`)
+        .setAudience(AUD)
+        .setSubject(sub)
+        .setIssuedAt()
+        .setExpirationTime('1h')
+        .sign(privateKey);
+      return new Response(JSON.stringify({ token }), { headers: { 'content-type': 'application/json' } });
+    }
+
     const env2 = envFor(db);
+    // Claim endpoints: the SAME routing-layer gate as the production mounts, then the
+    // real handlers with fixture deps (fixture JWKS via the fetchKeys seam).
+    if (url.pathname === '/api/v1/claim/preview' || url.pathname === '/api/v1/claim/attempt') {
+      const cEnv = claimEnv(db);
+      const blocked = claimMountGate(cEnv, crypto.randomUUID());
+      if (blocked) return blocked;
+      return url.pathname.endsWith('preview')
+        ? handleClaimPreview(req, cEnv, claimDepsF())
+        : handleClaimAttempt(req, cEnv, claimDepsF());
+    }
+    const claimMatch = /^\/api\/v1\/claim\/(report|rollback)\/([^/]+)$/.exec(url.pathname);
+    if (claimMatch) {
+      const cEnv = claimEnv(db);
+      const blocked = claimMountGate(cEnv, crypto.randomUUID());
+      if (blocked) return blocked;
+      const attemptId = claimAttemptParam({ attemptId: decodeURIComponent(claimMatch[2]) });
+      return claimMatch[1] === 'report'
+        ? handleClaimReport(req, cEnv, claimDepsF(), attemptId)
+        : handleClaimRollback(req, cEnv, claimDepsF(), attemptId);
+    }
     switch (url.pathname) {
       case '/api/v1/portfolio/addresses':
         return req.method === 'GET' ? handleAddressesList(req, env2) : handleAddressAdd(req, env2);

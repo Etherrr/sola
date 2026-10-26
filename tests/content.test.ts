@@ -43,7 +43,7 @@ describe('learning and safety boundaries', () => {
       .filter((file) => /\.(ts|tsx)$/.test(file) && file !== API_CLIENT)
       .map((file) => readFileSync(file, 'utf8'))
       .join('\n');
-    // Exactly sixteen fetch call sites exist: the single-address lookup POST and its multi-address
+    // Exactly eighteen fetch call sites exist: the single-address lookup POST and its multi-address
     // variant (same resolve endpoint, same transport guarantees), the same-origin session GET,
     // the same-origin health GET, the same-origin saved-addresses API, the same-origin
     // markets overview GET, the v0.2 own-history overview GET, the two native email
@@ -53,8 +53,14 @@ describe('learning and safety boundaries', () => {
     // passkey requests (register options/verify, login options/verify) all funnel
     // through, and ONE shared fetch inside portfolioActionRequest that the three
     // observation requests (consent status, consent change, sync) funnel through -
-    // all through this one module.
-    expect(readFileSync(API_CLIENT, 'utf8').match(/fetch\s*\(/g)).toHaveLength(16);
+    // all through this one module. Seventeenth: ONE shared fetch inside claimRequest
+    // that the four claim requests (preview/attempt/report/rollback, plan B.3) funnel
+    // through; the endpoints 503 while CLAIM_ENABLED ships absent. Eighteenth:
+    // the claim FEATURE DISCOVERY GET - the only claim-area request /account may
+    // make before user initiation; a false/failed answer means no claim endpoint
+    // is ever called.
+    expect(readFileSync(API_CLIENT, 'utf8').match(/fetch\s*\(/g)).toHaveLength(18);
+    expect(readFileSync(API_CLIENT, 'utf8')).toMatch(/fetch\('\/api\/v1\/claim\/features'/);
     expect(readFileSync(API_CLIENT, 'utf8')).toMatch(/fetch\('\/api\/v1\/health'/);
     expect(readFileSync(API_CLIENT, 'utf8')).toMatch(/fetch\('\/api\/v1\/session'/);
     expect(readFileSync(API_CLIENT, 'utf8')).toMatch(/fetch\('\/api\/v1\/portfolio\/resolve'/);

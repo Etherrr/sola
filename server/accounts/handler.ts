@@ -65,6 +65,11 @@ const MAX_BODY = 2048;
 const mutationLimiter = createLimiter(MUTATION_WINDOWS);
 let lastMutSweepAt = 0;
 
+/** A claimed owner manages addresses in the new account; 'claimed' persists until rollback, so this is durable, not momentary. */
+function legacyWritesClosed(requestId: string) {
+  return err(409, 'legacy_writes_closed', 'These addresses are managed in your new account. Make changes there.', requestId);
+}
+
 export async function handleAccounts(
   req: Request,
   env: AccountsEnv,
@@ -159,6 +164,7 @@ export async function handleAccounts(
       if (!res.ok) {
         if (res.reason === 'storage')
           return err(503, 'storage_unavailable', 'Account storage is unavailable. Try again later.', requestId);
+        if (res.reason === 'frozen') return legacyWritesClosed(requestId);
         return err(409, 'cap_reached', `At most ${MAX_PER_NETWORK} saved addresses per network.`, requestId);
       }
       return reply(200, { requestId, account: res.entry });
@@ -167,20 +173,30 @@ export async function handleAccounts(
     // DELETE {network,address} removes one; DELETE {all:true} clears the owner's saved data.
     const b = body as Record<string, unknown> | null;
     if (b && b.all === true) {
+      let res;
       try {
-        await store.clear(owner);
+        res = await store.clear(owner);
       } catch {
         return err(503, 'storage_unavailable', 'Account storage is unavailable. Try again later.', requestId);
       }
+      if (!res.ok)
+        return res.reason === 'frozen'
+          ? legacyWritesClosed(requestId)
+          : err(500, 'storage_error', 'The change could not be stored. Nothing was modified.', requestId);
       return reply(200, { requestId, cleared: true });
     }
     const entry = parseEntry({ network: b?.network, address: b?.address, label: 'x' });
     if (!entry) return err(400, 'bad_entry', 'Network or address is not usable.', requestId);
+    let res;
     try {
-      await store.remove(owner, entry.network, entry.address);
+      res = await store.remove(owner, entry.network, entry.address);
     } catch {
       return err(503, 'storage_unavailable', 'Account storage is unavailable. Try again later.', requestId);
     }
+    if (!res.ok)
+      return res.reason === 'frozen'
+        ? legacyWritesClosed(requestId)
+        : err(500, 'storage_error', 'The change could not be stored. Nothing was modified.', requestId);
     return reply(200, { requestId, removed: true });
   }
 

@@ -840,6 +840,62 @@ async function portfolioActionRequest(
   }
 }
 
+/**
+ * Seventeenth fetch site: the four claim requests (preview/attempt/report/rollback,
+ * plan B.3) all funnel through claimRequest. The endpoints 503 while CLAIM_ENABLED
+ * ships absent - callers render that honestly. Wired into the UI only by the
+ * future, separately reviewed /account claim-panel mounting.
+ */
+async function claimRequest(path: string, method: 'GET' | 'POST', signal?: AbortSignal): Promise<Response> {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 12000);
+  const onAbort = () => ctl.abort();
+  signal?.addEventListener('abort', onAbort);
+  if (signal?.aborted) ctl.abort();
+  try {
+    return await fetch(path, {
+      method,
+      credentials: 'same-origin',
+      cache: 'no-store',
+      signal: ctl.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', onAbort);
+  }
+}
+export const claimPreviewRequest = (signal?: AbortSignal) => claimRequest('/api/v1/claim/preview', 'GET', signal);
+export const claimAttemptRequest = (signal?: AbortSignal) => claimRequest('/api/v1/claim/attempt', 'POST', signal);
+export const claimReportRequest = (attemptId: string, signal?: AbortSignal) =>
+  claimRequest(`/api/v1/claim/report/${encodeURIComponent(attemptId)}`, 'GET', signal);
+export const claimRollbackRequest = (attemptId: string, signal?: AbortSignal) =>
+  claimRequest(`/api/v1/claim/rollback/${encodeURIComponent(attemptId)}`, 'POST', signal);
+
+/**
+ * Eighteenth fetch site: GET the claim FEATURE DISCOVERY flag. This is the
+ * ONLY claim-area request the /account page may make before the user asks -
+ * when it answers false (or fails), no claim endpoint is ever called and the
+ * account page renders exactly as it does today.
+ */
+export async function claimFeaturesRequest(signal?: AbortSignal): Promise<Response> {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 12000);
+  const onAbort = () => ctl.abort();
+  signal?.addEventListener('abort', onAbort);
+  if (signal?.aborted) ctl.abort();
+  try {
+    return await fetch('/api/v1/claim/features', {
+      method: 'GET',
+      credentials: 'same-origin',
+      cache: 'no-store',
+      signal: ctl.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', onAbort);
+  }
+}
+
 /** Sixteenth fetch site: these three all run through portfolioActionRequest. */
 /** GET snapshot-consent status for the session user. */
 export async function snapshotConsentStatusRequest(signal?: AbortSignal): Promise<Response> {

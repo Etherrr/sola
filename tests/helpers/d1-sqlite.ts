@@ -8,7 +8,9 @@ import type { D1Like } from '../../server/accounts/d1';
 
 export function createSqliteD1(): { db: D1Like; raw: DatabaseSync } {
   const raw = new DatabaseSync(':memory:');
-  for (const f of ['0001_accounts_and_counters.sql', '0002_native_auth.sql', '0003_portfolio_user_unique.sql']) {
+  // 0004 included: the legacy-visibility read path (d1.ts list) references claims_ledger,
+  // so the adapter world is the post-0004 schema - the same order production must deploy in.
+  for (const f of ['0001_accounts_and_counters.sql', '0002_native_auth.sql', '0003_portfolio_user_unique.sql', '0004_claims.sql']) {
     raw.exec(readFileSync(resolve(__dirname, '../../migrations/' + f), 'utf8'));
   }
   const db: D1Like = {

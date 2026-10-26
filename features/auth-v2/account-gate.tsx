@@ -7,6 +7,7 @@ import { AddressBook } from '../portfolio-v2/address-book';
 import { CombinedProvider } from '../portfolio-v2/combined-context';
 import { CombinedBalances } from '../portfolio-v2/combined-balances';
 import { nativeLogoutRequest } from '../portfolio/api-client';
+import { ClaimSection, claimSectionLive } from '../claim/claim-section';
 
 /**
  * The gated native account page (plan §7 entry point). Every state honest:
@@ -134,6 +135,12 @@ export function AccountGate() {
           <em>Signed in{native.kind === 'ok' ? ` as ${native.email}` : ''}.</em>
         </p>
       </div>
+      {/* Claim integration (LOCAL prep, review pending): renders NOTHING unless
+          the discovery endpoint answers claim:true, and fetches no claim data
+          until the user explicitly opens the section. With the flag off the
+          RENDERED account page is unchanged from before; the only addition is
+          one discovery GET (claim:false -> nothing renders). */}
+      <ClaimSection discover={claimSectionLive.discover} makeApi={claimSectionLive.makeApi} />
       <CombinedProvider>
         <AddressBook />
         <CombinedBalances />

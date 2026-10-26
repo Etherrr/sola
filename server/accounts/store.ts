@@ -52,7 +52,14 @@ export function normEntry<T extends { network: Network; address: string }>(e: T)
 
 export type StoreResult =
   | { ok: true; entry: TrackedAddress }
-  | { ok: false; reason: 'cap' | 'storage' };
+  | { ok: false; reason: 'cap' | 'storage' | 'frozen' };
+
+/**
+ * remove/clear: success stays idempotent. 'frozen' reports an active claim's write freeze;
+ * 'storage_error' reports a guarded write that left rows retained WITHOUT an active claim.
+ * Both are rejections - a zero-change write is NEVER a false success when rows survived.
+ */
+export type WriteResult = { ok: true } | { ok: false; reason: 'frozen' | 'storage_error' };
 
 export interface AccountsStore {
   list(owner: string): Promise<TrackedAddress[]>;
@@ -61,8 +68,8 @@ export interface AccountsStore {
     entry: { network: Network; address: string; label: string },
     now: string,
   ): Promise<StoreResult>;
-  remove(owner: string, network: Network, address: string): Promise<void>;
-  clear(owner: string): Promise<void>;
+  remove(owner: string, network: Network, address: string): Promise<WriteResult>;
+  clear(owner: string): Promise<WriteResult>;
 }
 
 /** Fully tested in-memory store: same semantics as the D1 adapter, no persistence. */
@@ -93,9 +100,11 @@ export function createMemoryStore(): AccountsStore {
     },
     async remove(owner, network, address) {
       rows.delete(k(owner, network, network === 'ethereum' ? address.toLowerCase() : address));
+      return { ok: true };
     },
     async clear(owner) {
       for (const key of [...rows.keys()]) if (key.startsWith(`${owner}|`)) rows.delete(key);
+      return { ok: true };
     },
   };
 }

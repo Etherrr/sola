@@ -3917,3 +3917,40 @@ html {
   border-left: 2px solid var(--gold);
   padding-left: 10px;
 }
+
+/* Claim panel (dev preview surface only, features/claim). Reuses .notice/.button/table vocabulary. */
+.claim-panel {
+  margin-top: 24px;
+}
+.claim-panel h3 {
+  font-size: 0.8rem;
+  font-weight: 500;
+  margin: 20px 0 4px;
+}
+.claim-addr {
+  font-family: var(--mono, monospace);
+  font-size: 0.78rem;
+  word-break: break-all;
+  white-space: normal;
+}
+.claim-empty,
+.claim-note {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.claim-panel .button {
+  margin-top: 16px;
+}
+.claim-panel ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  font-size: 0.85rem;
+}
+
+/* Claim section shell (account integration; panel styles are .claim-panel above). */
+.claim-section {
+  margin-top: 24px;
+}
+.claim-section .claim-panel {
+  margin-top: 8px;
+}
