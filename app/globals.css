@@ -4134,3 +4134,13 @@ html {
   padding: 10px 0;
   cursor: pointer;
 }
+
+/* Sign-in should not inherit the saved-address form's centered offset. */
+.sign-in-page .email-sign-in .accounts {
+  max-width: none;
+  margin: 0;
+}
+
+.wallet-entry > p + .button {
+  margin-top: 12px;
+}

@@ -5,12 +5,12 @@ export const metadata = { title: 'Sign in' };
 
 export default function SignIn() {
   return (
-    <div className="page-container narrow">
+    <div className="page-container narrow sign-in-page">
       <PageIntro eyebrow="SOLA ACCOUNT" title="Sign in.">
-        <p>Use a wallet message or an email code. Never a seed phrase, key, transaction or approval.</p>
+        <p>Choose a wallet, email code or a passkey you have set up.</p>
       </PageIntro>
       <WalletPanel />
-      <section className="panel">
+      <section className="panel email-sign-in" aria-label="Email or passkey sign-in">
         <SignInForm />
       </section>
     </div>

@@ -243,7 +243,8 @@ describe('markets coverage and privacy claims', () => {
   });
   it('settings disclose provider reads, native identity and saved addresses honestly', () => {
     const settings = readFileSync('app/settings/page.tsx', 'utf8');
-    expect(settings).toContain('Sola sign-in uses an email code');
+    expect(settings).toContain('Sign in with a wallet message, an email code or a passkey');
+    expect(settings).toContain('Wallet-only accounts have no email recovery');
     expect(settings).toContain('PublicNode');
     expect(settings).not.toContain('no provider APIs');
     expect(settings).not.toMatch(/does not create passwords or save\s+address lists/);

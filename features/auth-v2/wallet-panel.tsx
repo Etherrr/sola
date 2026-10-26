@@ -46,17 +46,17 @@ export function WalletPanel({
   const busy =
     state.kind === 'connecting' || state.kind === 'signing' || state.kind === 'verifying';
   return (
-    <section className="panel" aria-label={link ? 'Verify and link wallet' : 'Wallet sign-in'}>
+    <section className="panel wallet-entry" aria-label={link ? 'Verify and link wallet' : 'Wallet sign-in'}>
       <h2>{link ? 'Verify and link a wallet' : 'Sign in with a wallet'}</h2>
-      <p>Read-only. No transactions, token approvals, seed phrases or private keys.</p>
+      <p>Sign a message, never a transaction or approval. No seed phrases or private keys.</p>
       <p>
-        Connecting shares a public address. Only a separate message signature proves control.
-        Preview access still needs an invitation.
+        Connecting shares your public address; a separate signature proves control. Invitation
+        required.
       </p>
       {!link && (
         <p>
-          A wallet-only account has no email recovery. Losing access to the wallet can mean losing
-          access to this account. Add a passkey after signing in.
+          Wallet-only accounts have no email recovery. Losing your wallet can lock you out. Add a
+          passkey after signing in.
         </p>
       )}
       {!started ? (
@@ -103,10 +103,9 @@ export function WalletPanel({
           {link ? 'Sign message to verify and link' : 'Sign message to sign in'}
         </button>
       )}
-      <p>
-        Clearing this selection does not undo a sign-in or link that the server has already
-        accepted.
-      </p>
+      {started && (
+        <p>Clearing your selection does not undo a sign-in or wallet link already saved.</p>
+      )}
       {busy && (
         <p role="status">
           {state.kind === 'connecting'
