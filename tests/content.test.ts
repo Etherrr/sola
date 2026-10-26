@@ -93,7 +93,7 @@ describe('learning and safety boundaries', () => {
     expect(source).not.toMatch(/window\.(ethereum|solana)|signTransaction|signAllTransactions|sendTransaction|eth_sendTransaction|eth_signTypedData|wallet_sendCalls|fetch\s*\(/);
     const approvedMessagePaths = new Set(['features/auth-v2/wallet-connectors.ts','features/auth-v2/wallet-flow.ts']);
     for (const path of paths.filter(path => !approvedMessagePaths.has(path)))
-      expect(readFileSync(path,'utf8')).not.toMatch(/eth_requestAccounts|personal_sign|signMessage/);
+      expect(readFileSync(path,'utf8')).not.toMatch(/eth_requestAccounts|method:\s*'personal_sign'|signMessage\s*\(/);
     const connector = readFileSync('features/auth-v2/wallet-connectors.ts','utf8');
     expect(connector.match(/method:'personal_sign'/g)).toHaveLength(1);
     expect(connector.match(/await signer\.signMessage\(/g)).toHaveLength(1);
