@@ -7,6 +7,8 @@ import { handleWalletChallenge, handleWalletVerify } from '../server/auth/wallet
 import { toEip55, personalSignDigest } from '../server/auth/siwe';
 import { readSessionCookie, type NativeAuthEnv } from '../server/auth/email';
 import { readLiveSession } from '../server/auth/sessions';
+import { handleNativeSessionInfo } from '../server/auth/session-info';
+import { requireEntitledSession } from '../server/auth/guards';
 
 const post = (body: unknown, origin: string | null = 'https://preview.test', path = '/api/v1/auth/wallet/x'): Request =>
   new Request('https://preview.test' + path, {
@@ -92,6 +94,13 @@ describe('wallet verify handler', () => {
     const req = new Request('https://preview.test/x', { headers: { cookie: cookie.split(';')[0] } });
     const sessionId = readSessionCookie(req)!;
     expect(await readLiveSession(db, sessionId)).not.toBeNull();
+    const info = await handleNativeSessionInfo(req,env);
+    expect(info.status).toBe(200);
+    expect(await info.json()).toMatchObject({identity:{kind:'wallet_evm',identifier:evmAddress.toLowerCase()}});
+    const denied = await requireEntitledSession(req,db);
+    expect(denied).toBeInstanceOf(Response);
+    expect((denied as Response).status).toBe(403); // Display identity grants no invitation.
+
   });
   it('Solana: genuine round trip, and the same wallet always resolves to the SAME user (non-transfer)', async () => {
     const c1 = await challenge('solana', solAddress);

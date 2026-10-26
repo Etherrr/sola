@@ -18,7 +18,8 @@ export function Entrance() {
   useEffect(() => {
     if (native.kind === 'ok') router.replace('/account/overview');
   }, [native.kind, router]);
-  const email = session.kind === 'verified' ? session.email : null;
+  const email = native.kind === 'ok' ? native.displayLabel
+    : native.kind === 'off' && session.kind === 'verified' ? session.email : null;
   const [destination, setDestination] = useState<string | null>(null);
   const intro = destination !== null;
   const enter = (event: MouseEvent<HTMLAnchorElement>, target: string) => {

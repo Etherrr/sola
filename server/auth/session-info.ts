@@ -5,8 +5,7 @@
  * identity instead, and Sign out must end the native session.
  *
  * GET info: read-only, one indexed lookup, no rate cost, cache never
- * stored. Returns the session user's latest verified EMAIL identity (never
- * a guessed name) and whether the session is inside the sensitive re-auth
+ * stored. Returns a verified email or wallet identity (never a guessed name) and whether the session is inside the sensitive re-auth
  * window, so re-auth-gated UI can warn honestly.
  * POST logout: same-origin only; revokes the exact live session the cookie
  * names (never all sessions - other devices stay signed in) and clears the
@@ -45,21 +44,23 @@ export async function handleNativeSessionInfo(
   if (!id) return json(401, { error: 'auth_required' });
   const session = await readLiveSession(db, id);
   if (!session) return json(401, { error: 'session_expired' });
-  // The session row names no email; the greeting shows the user's latest
-  // VERIFIED email identity. A session with no verified identity at all
-  // cannot identify anyone - honest 401, never a guess.
+  // Prefer a verified email for compatibility; wallet-only accounts remain
+  // native accounts too. Passkey IDs are credentials, never display identities.
   const identity = await db
     .prepare(
-      `SELECT identifier FROM auth_identities
-        WHERE user_id = ? AND kind = 'email' AND verified_at IS NOT NULL
-        ORDER BY verified_at DESC LIMIT 1`,
+      `SELECT kind, identifier FROM auth_identities
+        WHERE user_id = ? AND kind IN ('email','wallet_evm','wallet_solana')
+          AND verified_at IS NOT NULL
+        ORDER BY CASE WHEN kind = 'email' THEN 0 ELSE 1 END,
+                 verified_at DESC, kind ASC, identifier ASC LIMIT 1`,
     )
     .bind(session.user_id)
-    .first<{ identifier: string }>();
+    .first<{ kind: 'email' | 'wallet_evm' | 'wallet_solana'; identifier: string }>();
   if (!identity) return json(401, { error: 'session_expired' });
   return json(200, {
     status: 'ok',
-    email: identity.identifier,
+    identity,
+    ...(identity.kind === 'email' ? { email: identity.identifier } : {}),
     fresh: recentlyAuthenticated(session),
   });
 }

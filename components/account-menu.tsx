@@ -74,14 +74,14 @@ export function AccountMenu() {
   // A live native session is the identity the app greets (main 2026-10-25:
   // the native journey must reflect the native identity, not the Access
   // profile). The Access email is the fallback ONLY where native sign-in is
-  // switched off (production). Where native is enabled but signed out
+  // switched off. Where native is enabled but signed out
   // ('none'), greeting the Access email would be a false signed-in state
   // while the app's own pages say "Sign in" - so nothing is greeted.
-  const nativeEmail = native.kind === 'ok' ? native.email : null;
-  const email = nativeEmail ?? (native.kind === 'off' && s.kind === 'verified' ? s.email : null);
+  const nativeLabel = native.kind === 'ok' ? native.displayLabel : null;
+  const email = nativeLabel ?? (native.kind === 'off' && s.kind === 'verified' ? s.email : null);
   const label = email
     ? `Account: ${email}`
-    : s.kind === 'rejected'
+    : (native.kind === 'off' && s.kind === 'rejected')
       ? 'Account: session not verified'
       : 'Account';
   return (
@@ -104,7 +104,7 @@ export function AccountMenu() {
               <small>Hello</small>
               <span>{email}</span>
             </>
-          ) : s.kind === 'rejected' ? (
+          ) : (native.kind === 'off' && s.kind === 'rejected') ? (
             <span>Session not verified</span>
           ) : null}
         </span>
@@ -115,10 +115,12 @@ export function AccountMenu() {
       {open && (
         <div id={panelId} className="acct-panel" role="group" aria-label="Account">
           <p className="acct-status">
-            {nativeEmail ? (
+            {nativeLabel ? (
               <>
-                Signed in as <strong>{nativeEmail}</strong>
+                Signed in as <strong>{nativeLabel}</strong>
               </>
+            ) : native.kind === 'error' ? (
+              'Your sign-in could not be checked. Reload to try again.'
             ) : native.kind === 'none' ? (
               <>
                 Not signed in. <Link href="/sign-in">Sign in</Link>
@@ -127,7 +129,7 @@ export function AccountMenu() {
               <>
                 Signed in via Cloudflare Access as <strong>{email}</strong>
               </>
-            ) : s.kind === 'rejected' ? (
+            ) : (native.kind === 'off' && s.kind === 'rejected') ? (
               'Your session could not be verified. Reload to sign in again.'
             ) : (
               'Identity not available right now. Nothing is guessed.'
@@ -140,7 +142,7 @@ export function AccountMenu() {
             Sola Capital Partners ↗
           </a>
           <div className="acct-signout">
-            {nativeEmail ? (
+            {nativeLabel ? (
               <>
                 {passkeysSupported() && (
                   <>
@@ -166,7 +168,7 @@ export function AccountMenu() {
                   <p className="acct-signout-note">Ends this Sola sign-in on this device.</p>
                 )}
               </>
-            ) : native.kind === 'none' ? null : (
+            ) : native.kind !== 'off' ? null : (
               <>
                 <button type="button" className="acct-signout-btn" onClick={signOut}>
                   Sign out

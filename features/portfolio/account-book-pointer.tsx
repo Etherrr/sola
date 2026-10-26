@@ -11,7 +11,7 @@ export function AccountBookPointer() {
   if (native.kind !== 'ok') return null;
   return (
     <p className="notice">
-      Signed in as {native.email} - your address book and its combined view live on{' '}
+      Signed in as {native.displayLabel} - your address book and its combined view live on{' '}
       <Link href="/account">Account</Link>.
     </p>
   );

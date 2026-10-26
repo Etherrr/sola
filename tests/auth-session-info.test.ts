@@ -91,7 +91,8 @@ describe('native session info', () => {
     const resOld = await handleNativeSessionInfo(req(old.id), { ...ON, PORTFOLIO_ACCOUNTS_DB: db });
     expect(resOld.status).toBe(200);
     expect(await resOld.json()).toEqual({
-      status: 'ok', email: 'junjcchen204@gmail.com', fresh: false,
+      status: 'ok', email: 'junjcchen204@gmail.com',
+      identity: { kind: 'email', identifier: 'junjcchen204@gmail.com' }, fresh: false,
     });
     expect(resOld.headers.get('cache-control')).toBe('no-store');
     // Real-time session: inside the window.
@@ -100,7 +101,44 @@ describe('native session info', () => {
     expect((await resLive.json()).fresh).toBe(true);
   });
 
-  it('401 when the session user has no verified email identity - never a guess', async () => {
+  it.each(['wallet_evm','wallet_solana'])('recognizes wallet-only %s without inventing an email', async (kind) => {
+    await db.prepare('DELETE FROM auth_identities').bind().run();
+    const address = kind === 'wallet_evm' ? '0x1111111111111111111111111111111111111111' : 'So11111111111111111111111111111111111111112';
+    await db.prepare('INSERT INTO auth_identities (id,user_id,kind,identifier,verified_at,metadata) VALUES (?,?,?,?,?,?)')
+      .bind('w1','u1',kind,address,now.toISOString(),'{"private":"not for display"}').run();
+    const session = await createSession(db, 'u1');
+    const res = await handleNativeSessionInfo(req(session.id), { ...ON, PORTFOLIO_ACCOUNTS_DB: db });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control')).toBe('no-store');
+    expect(await res.json()).toEqual({ status:'ok', identity:{kind,identifier:address}, fresh:true });
+  });
+  it('prefers verified email over a newer wallet and never exposes passkey credential metadata', async () => {
+    await db.prepare("INSERT INTO auth_identities (id,user_id,kind,identifier,verified_at) VALUES ('w1','u1','wallet_evm','0x1111111111111111111111111111111111111111',?)").bind(new Date().toISOString()).run();
+    const session = await createSession(db,'u1');
+    const res = await handleNativeSessionInfo(req(session.id),{ ...ON, PORTFOLIO_ACCOUNTS_DB:db });
+    expect((await res.json()).identity).toEqual({kind:'email',identifier:'junjcchen204@gmail.com'});
+  });
+
+  it('does not expose a passkey-only credential as a display identity', async () => {
+    await db.prepare('DELETE FROM auth_identities').bind().run();
+    await db.prepare("INSERT INTO auth_identities (id,user_id,kind,identifier,verified_at,metadata) VALUES ('pk','u1','passkey','private-credential-id',?,'{}')").bind(now.toISOString()).run();
+    const session = await createSession(db,'u1');
+    const res = await handleNativeSessionInfo(req(session.id),{ ...ON, PORTFOLIO_ACCOUNTS_DB:db });
+    expect(res.status).toBe(401);
+    expect(await res.text()).not.toContain('private-credential-id');
+  });
+  it('uses a stable kind/identifier tie-breaker for equally recent wallets',async()=>{
+    await db.prepare('DELETE FROM auth_identities').bind().run();
+    for(const [id,address] of [['wb','0x2222222222222222222222222222222222222222'],['wa','0x1111111111111111111111111111111111111111']])
+      await db.prepare("INSERT INTO auth_identities (id,user_id,kind,identifier,verified_at) VALUES (?,'u1','wallet_evm',?,?)").bind(id,address,now.toISOString()).run();
+    const session = await createSession(db,'u1');
+    for(let i=0;i<3;i++) {
+      const res=await handleNativeSessionInfo(req(session.id),{...ON,PORTFOLIO_ACCOUNTS_DB:db});
+      expect((await res.json()).identity).toEqual({kind:'wallet_evm',identifier:'0x1111111111111111111111111111111111111111'});
+    }
+  });
+
+  it('401 when the session user has no verified display identity - never a guess', async () => {
     await db.prepare(`DELETE FROM auth_identities`).bind().run();
     const s = await createSession(db, 'u1', now);
     const res = await handleNativeSessionInfo(req(s.id), { ...ON, PORTFOLIO_ACCOUNTS_DB: db });

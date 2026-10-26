@@ -14,7 +14,7 @@ import { ClaimSection, claimSectionLive } from '../claim/claim-section';
  *   loading        -> checking, no content flash
  *   no session     -> client redirect to /sign-in?next=/account (data routes
  *                     independently 401 server-side; this page never shows data)
- *   native off     -> this host has native sign-in disabled (production today)
+ *   native off     -> this host has native sign-in disabled
  *   session, 403   -> signed in but NOT invited: say exactly that. Never empty
  *                     holdings, never zeros, never generic success.
  *   session, ok    -> the real address book.
@@ -83,6 +83,8 @@ export function AccountGate() {
   }, [native.kind, router]);
 
   if (native.kind === 'none') return <p><em>Taking you to sign in…</em></p>;
+  if (native.kind === 'error')
+    return <div className="panel"><p role="alert">Your sign-in could not be checked. Reload to try again.</p><LegacyTrackLink /></div>;
   if (native.kind === 'off')
     return (
       <div className="panel">
@@ -103,9 +105,8 @@ export function AccountGate() {
       <div className="panel">
         <h2>Not invited yet</h2>
         <p>
-          You are signed in{native.kind === 'ok' ? ` as ${native.email}` : ''}. This email
-          does not have preview access. Sign out to use the email your invitation was sent
-          to.
+          You are signed in{native.kind === 'ok' ? ` as ${native.displayLabel}` : ''}. This account
+          does not have preview access. Sign out to use an invited sign-in method.
         </p>
         <p className="actions">
           <button type="button" className="button secondary" onClick={signOut}>
@@ -132,7 +133,7 @@ export function AccountGate() {
     <>
       <div className="panel">
         <p>
-          <em>Signed in{native.kind === 'ok' ? ` as ${native.email}` : ''}.</em>
+          <em>Signed in{native.kind === 'ok' ? ` as ${native.displayLabel}` : ''}.</em>
         </p>
       </div>
       {/* Claim integration (LOCAL prep, review pending): renders NOTHING unless
