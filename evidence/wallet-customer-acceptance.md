@@ -43,3 +43,9 @@ Twelve synthetic cases: EVM/Solana x desktop/phone x uninvited sign-in/invited e
 Success copy now says Continue checks preview access, not that invitation is guaranteed. HTML denial is a minimal fixed403 document with a public sign-in recovery link, no reflected path/identity/data/scripts/styles and a strict CSP. Plain denial remains for RSC/non-HTML/explicit data suffixes. Entitlement status and admission behavior are unchanged. Invited risk-route HTML acceptance is not balances-provider acceptance: unrelated data APIs are deliberately unavailable in the local harness. The test then visits the actual account page to confirm the signed-in shell.
 
 This is local middleware/direct-handler proof, not exact Cloudflare route mounting or production deployment. Physical extension/device/passkey and D1-specific concurrency remain separate.
+
+## Combined virtual passkey regression
+
+The previously accepted actual-customer virtual-authenticator scenario is included on this combined local branch with desktop and390px phone cases. The harness automatically creates/removes a temporary localhost certificate, admits HTML through current middleware, seeds only a local invited session/entitlement for registration, and uses actual passkey handlers. Covers no-credential honest error, account-menu registration, stale registration reauthentication refusal, discoverable login from cleared browser cookies, final protected Overview HTML200 and native label, stored secure cookie fields and zero page errors. Run `npx vitest run --config e2e/vitest.ui.config.mjs` after build; uses HTTPS8787 and static3099.
+
+This is Chromium's virtual authenticator at two viewport sizes, not a real phone/passkey provider. A virtual registration context and local seed route are test-only. Unrelated portfolio-provider APIs are unavailable in this harness; the recorded Overview error does not claim balances acceptance. No functions files or production effects are added.
