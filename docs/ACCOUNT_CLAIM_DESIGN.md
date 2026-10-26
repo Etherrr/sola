@@ -1,7 +1,8 @@
 # Account-data claiming: Access-era rows to native accounts (B.3) - REVISED DRAFT v2
 
-Status: DESIGN DRAFT for independent whole-head review, 2026-10-26 (supersedes
-the 5c041a6 v1 draft). No implementation, route activation, real-data
+Status: DESIGN DRAFT for independent whole-head review, 2026-10-26 v3
+(supersedes 5c041a6 v1 and the unreviewed v2 commit a7c16da; v3 folds in the
+reviewer 02:07 rollback-consistency rulings). No implementation, route activation, real-data
 re-keying, or production access is authorized. Synthetic staging rehearsal
 only, after review. The SQL-shaped construction in section 5 is REVIEW INPUT
 (reviewer 02:06), not an approved algorithm; the open questions in sections
@@ -36,7 +37,9 @@ New claim tables (proposed, migration 0004 - not written):
   copy INCLUDING `updated_at` (which the native schema drops).
 - `claims_ledger_rows(ledger_id, network, address, disposition
   CHECK(disposition IN ('copied','skipped_live_dup','skipped_tombstone_dup')),
-  PRIMARY KEY(ledger_id, network, address))` - exact per-row provenance.
+  state TEXT NOT NULL CHECK(state IN ('claimed','rolled_back','residue_hold')),
+  PRIMARY KEY(ledger_id, network, address))` - exact per-row provenance AND
+  per-row rollback state (residue_hold: see §6).
 
 ## 2. Continuity and threat model (unchanged from v1, reviewer-verified)
 
@@ -160,26 +163,36 @@ enumerated sets - rows to copy, live duplicates (kept native, legacy label
 preserved in before-image only), tombstone duplicates (stay deleted). No
 silent resurrect, no silent label overwrite, no silent drop.
 
-Rollback (a separate, explicit, guarded batch):
-  R1: DELETE FROM portfolio_addresses WHERE (portfolio_id,network,address) IN
-    (SELECT P, r.network, r.address FROM claims_ledger_rows r JOIN
-     claim_before_images b ON b.ledger_id=r.ledger_id AND b.network=r.network
-     AND b.address=r.address WHERE r.ledger_id=ATT AND r.disposition='copied')
-    AND (label, created_at) match the before-image exactly   -- I2: row
-    -- unmodified since claim. Modified rows are NOT deleted.
-  R2: UPDATE claims_ledger SET state='rolled_back', rolled_back_at=now
-    WHERE id=ATT AND state='claimed'.
-Policy when a copied row was natively modified after the claim: the rollback
-batch FAILS CLOSED (guard detects the mismatch) and reports the modified rows;
-it never restores over user edits (I2). A separate explicit "detach edited
-rows and roll back the rest" action is a UX policy question (§8), not part of
-the base protocol. After rollback, previously-hidden legacy rows are visible
-again; rollback restores the PRE-CLAIM observable world, including any
-pre-existing same-address presence in both lists - the residue report says so
-per row (this is the pre-claim world, not a new mixed state; I1 constrains
-the FORWARD claim's intermediate instants, which are inside one batch).
-Rollback is idempotent: R2's state guard makes a second rollback a no-op.
+Rollback (a separate, explicit, guarded batch) - per-row RESIDUE-HOLD
+policy (reviewer 02:07 ruling; chosen over all-or-nothing because even a
+"clean" rollback can otherwise re-expose a legacy twin next to a live native
+duplicate - an I1 mixed-ownership violation in BOTH directions):
 
+  R1: for every provenance row of attempt ATT with disposition='copied':
+      DELETE the native row ONLY IF it still matches its before-image exactly
+      (label, created_at) - otherwise flip the provenance row to
+      state='residue_hold' (native edit is kept; never restore over it, I2).
+      For every provenance row with disposition='skipped_live_dup' or
+      'skipped_tombstone_dup' whose native twin is still in the same state as
+      at claim time: flip the provenance row to state='residue_hold' (the
+      native row is untouched; the legacy twin must NOT re-expose beside it).
+      If the native twin has CHANGED state since the claim (e.g. the user
+      removed the live duplicate natively), no hold is needed: the legacy row
+      simply re-exposes, exactly restoring the pre-claim world.
+  R2: UPDATE claims_ledger SET state='rolled_back', rolled_back_at=now
+      WHERE id=ATT AND state='claimed' (idempotent: second rollback no-ops).
+
+Legacy per-row visibility after R2: a legacy row is visible iff NOT
+EXISTS(claims_ledger for K with state='claimed') AND NOT EXISTS
+(claims_ledger_rows residue_hold for that (K, network, address)). The
+before-image remains dispute/provenance evidence, not a normal-restore
+source (rows were retained, never deleted).
+
+Residue remedy: every residue_hold row is enumerated to the user with its
+remedy - remove or reconcile the native row; when the native twin no longer
+conflicts (on-write check or sweep), the hold clears and the legacy row
+re-exposes. No silent resurrect, no silent delete, no silent label overwrite,
+no mixed-ownership instant in either direction (I1 forward AND rollback).
 ## 7. Reclaim after rollback, and D1 proof obligations
 
 Reclaim: the partial unique index `claims_one_active ... WHERE
@@ -198,6 +211,9 @@ results do NOT establish D1 behavior):
  D4 statement ordering within a batch is preserved (S3's pre-copy snapshot).
  D5 guarded legacy write during a claim attempt: rejected honestly AFTER the
     ledger commit, accepted BEFORE it (no hidden stragglers).
+ D6 partial unique index (claims_one_active ... WHERE state='claimed')
+    behaves as SQLite documents on actual D1: racing 'claimed' inserts
+    collide, a 'rolled_back' row does not block a re-claim.
 
 ## 8. Rehearsal matrix (synthetic staging rows only, after design approval)
 
@@ -218,12 +234,21 @@ results do NOT establish D1 behavior):
    after commit -> claim-complete; recovery sweep finds no partial state.
 9. Legacy write during claim window: frozen with honest error after ledger
    commit (D5); succeeds before it and is then included in the claim.
-10. Rollback unmodified: full restore of the pre-claim world; idempotent
-    second rollback.
-11. Rollback with natively-modified copied row: fail-closed abort + named
-    rows; no restore over edits (I2).
-12. Reclaim after rollback with a fresh ATT: succeeds, provenance disjoint
-    (or, if policy picks one-claim-ever, honest refusal).
+10. Rollback, all rows clean: full restore of the pre-claim world;
+    idempotent second rollback (R2 state guard).
+11. Rollback with a natively-modified copied row: native edit kept,
+    provenance flips to residue_hold, legacy twin stays hidden, residue
+    enumerated with its remedy; NO restore over edits (I2), no mixed
+    ownership (I1).
+12. Rollback re-exposure of claim-time duplicates: live-dup and
+    tombstone-dup twins still in claim-time state get residue_hold; a twin
+    the user changed since the claim needs no hold and the legacy row
+    re-exposes cleanly.
+13. Reclaim after rollback with a fresh ATT (partial unique index, D6):
+    succeeds with disjoint provenance; a second 'claimed' row for K is
+    impossible while one is active.
+14. Residue remedy: removing/reconciling the native twin clears the hold and
+    re-exposes the legacy row; sweep and on-write paths both pinned.
 
 ## 9. Environment inventory (read-only, counts/keying only, 2026-10-26)
 
@@ -237,9 +262,10 @@ seeds its own synthetic keys. Production: not inspected; never test-written.
 1. S1-S4 soundness under actual D1 semantics (D1-D5) - the atomicity and
    read-your-writes questions stay UNRESOLVED until proven; the construction
    is not adopted as sound on documentation alone.
-2. Reclaim policy: partial-unique-index reclaim vs one-claim-ever (§7).
-3. Rollback-with-edits UX: fail-closed only, or an explicit detach-edited
-   path (§6).
+2. Residue-hold policy details: exact hold-clearing trigger set (on-write
+   vs sweep cadence) and the residue UI copy.
+3. Whether residue_hold rows carry an expiry or persist until resolved
+   (they gate legacy visibility, so silent expiry would re-expose).
 4. Whether 'rolled_back' ledger rows need retention limits/purge gating.
 5. Claim entry surface placement (/account claim panel) - UX only, no route
    exists or is authorized.
