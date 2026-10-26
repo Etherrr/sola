@@ -136,3 +136,59 @@ test('the native combined view reads the native book only: empty book, zero prov
   expect(resolve).toBe(0);
   expect(legacy).toBe(0);
 });
+
+test('non-empty native book: one click loads combined balances through the native book', async ({
+  page,
+}) => {
+  await mockSession(page, 'ok');
+  const eth = '0x' + 'a'.repeat(40);
+  const sol = 'So1DemoAddr9' + 'z'.repeat(31);
+  const rows = [
+    { network: 'ethereum', address: eth, label: 'Cold wallet', verification: 'watched', createdAt: '2026-10-25T00:00:00Z', lastObservedAt: null },
+    { network: 'solana', address: sol, label: 'Solar', verification: 'watched', createdAt: '2026-10-25T00:00:00Z', lastObservedAt: null },
+  ];
+  await page.route(ADDR, (r) => r.fulfill({ status: 200, json: { status: 'ok', addresses: rows } }));
+  let legacy = 0;
+  await page.route('**/api/v1/portfolio/accounts', (r) => {
+    legacy++;
+    return r.fulfill({ status: 500, json: {} });
+  });
+  const seen: { network: string; addresses: string[] }[] = [];
+  await page.route('**/api/v1/portfolio/resolve', async (route) => {
+    const body = JSON.parse(route.request().postData() ?? '{}') as { network: string; addresses: string[] };
+    seen.push(body);
+    const isEth = body.network === 'ethereum';
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        schemaVersion: 1, requestId: 'r',
+        generatedAt: '2026-10-25T05:58:00Z', observedAt: '2026-10-25T05:58:00Z',
+        provider: 'test-live', chainId: isEth ? 1 : null, network: body.network,
+        mode: 'live', simulated: false,
+        wallets: [{
+          address: body.addresses[0],
+          assets: [{
+            assetId: isEth ? 'eip155:1/native' : 'solana:mainnet/native',
+            symbol: isEth ? 'ETH' : 'SOL', decimals: 18,
+            amount: isEth ? '1.5' : '20', price: '1', value: isEth ? '4500' : '3000',
+            priceSource: 'test-feed', priceObservedAt: '2026-10-25T05:55:00Z',
+          }],
+          partial: false, warnings: [],
+        }],
+        totals: { recognizedPricedSubtotalUsd: null, unpricedAssetCount: 0, note: 'test' },
+        partial: false, warnings: [],
+      }),
+    });
+  });
+  await page.goto('/account/');
+  await expect(page.getByRole('heading', { name: 'All saved addresses' })).toBeVisible();
+  await page.getByRole('button', { name: 'Load combined balances' }).click();
+  // 4500 + 3000 across two networks, from the NATIVE book's own addresses.
+  await expect(page.getByText('$7,500.00').first()).toBeVisible();
+  await expect(page.getByText(/wallet balances only/i).first()).toBeVisible();
+  expect(seen.map((x) => x.network).sort()).toEqual(['ethereum', 'solana']);
+  expect(seen.find((x) => x.network === 'ethereum')?.addresses).toEqual([eth]);
+  expect(seen.find((x) => x.network === 'solana')?.addresses).toEqual([sol]);
+  expect(legacy).toBe(0);
+});
