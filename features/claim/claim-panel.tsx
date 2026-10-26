@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { announceAddressesChanged } from '../portfolio-v2/address-events';
 import type {
   ClaimApi,
   ClaimAttemptBody,
@@ -141,6 +142,11 @@ export function ClaimPanel({ api }: { api: ClaimApi }) {
   const [phase, setPhase] = useState<Phase>({ kind: 'loading' });
   const [round, setRound] = useState(0);
 
+  const confirmedAddressState = (next: Phase) => {
+    announceAddressesChanged();
+    setPhase(next);
+  };
+
   useEffect(() => {
     let live = true;
     (async () => {
@@ -171,8 +177,8 @@ export function ClaimPanel({ api }: { api: ClaimApi }) {
             const rb = rr.body as ClaimReportBody;
             if (isReport(rb.report)) {
               if (rb.state === 'claimed')
-                return setPhase({ kind: 'claimed', attemptId: b.activeAttemptId, report: rb.report, recovered: true });
-              if (rb.state === 'rolled_back') return setPhase({ kind: 'rolled-back', report: rb.report, earlier: true });
+                return confirmedAddressState({ kind: 'claimed', attemptId: b.activeAttemptId, report: rb.report, recovered: true });
+              if (rb.state === 'rolled_back') return confirmedAddressState({ kind: 'rolled-back', report: rb.report, earlier: true });
             }
           }
           return setPhase({ kind: 'recovery-failed' });
@@ -206,8 +212,8 @@ export function ClaimPanel({ api }: { api: ClaimApi }) {
           const b = r.body as ClaimReportBody;
           if (isReport(b.report)) {
             if (b.state === 'claimed')
-              return setPhase({ kind: 'claimed', attemptId, report: b.report, recovered: true });
-            if (b.state === 'rolled_back') return setPhase({ kind: 'rolled-back', report: b.report });
+              return confirmedAddressState({ kind: 'claimed', attemptId, report: b.report, recovered: true });
+            if (b.state === 'rolled_back') return confirmedAddressState({ kind: 'rolled-back', report: b.report });
           }
         }
         setPhase({ kind: 'undo-unknown', attemptId, report });
@@ -225,7 +231,7 @@ export function ClaimPanel({ api }: { api: ClaimApi }) {
           // A 200 without a readable attempt id + report means the answer is
           // unusable: outcome UNKNOWN, not failure and not success.
           if (typeof b.attemptId === 'string' && b.attemptId && isReport(b.report))
-            return setPhase({ kind: 'claimed', attemptId: b.attemptId, report: b.report });
+            return confirmedAddressState({ kind: 'claimed', attemptId: b.attemptId, report: b.report });
           return setPhase({ kind: 'move-unknown' });
         }
         const body = (r.body ?? {}) as ClaimErrorBody;
@@ -245,7 +251,7 @@ export function ClaimPanel({ api }: { api: ClaimApi }) {
         if (r.status === 200) {
           const b = (r.body ?? {}) as { state?: string; report?: unknown };
           if (b.state === 'rolled_back' && isReport(b.report))
-            return setPhase({ kind: 'rolled-back', report: b.report });
+            return confirmedAddressState({ kind: 'rolled-back', report: b.report });
           return setPhase({ kind: 'undo-unknown', attemptId, report });
         }
         const body = (r.body ?? {}) as ClaimErrorBody;
@@ -255,7 +261,7 @@ export function ClaimPanel({ api }: { api: ClaimApi }) {
         if (r.status === 409 && code === 'already_rolled_back')
           // The undo DID complete earlier (e.g. its answer was lost): render
           // the undone state with the authoritative report already in hand.
-          return setPhase({ kind: 'rolled-back', report, earlier: true });
+          return confirmedAddressState({ kind: 'rolled-back', report, earlier: true });
         if (r.status >= 400 && r.status < 500 && UNDO_CONFIRMED_NOOP.has(code))
           return setPhase({ kind: 'undo-failed', code, attemptId, report });
         setPhase({ kind: 'undo-unknown', attemptId, report });

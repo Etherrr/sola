@@ -1,5 +1,5 @@
 'use client';
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import {
   addressBookRequest,
   addressRenameRequest,
@@ -15,9 +15,8 @@ import { SYNCED_EVENT } from './snapshot-consent';
 
 /** Dispatched after a saved address is added, renamed or removed, so readers of
  *  the saved list (the combined view) drop now-stale results immediately. */
-export const ADDRESSES_CHANGED_EVENT = 'sola:addresses-changed';
-const announceAddressesChanged = () =>
-  window.dispatchEvent(new CustomEvent(ADDRESSES_CHANGED_EVENT));
+import { ADDRESSES_CHANGED_EVENT, announceAddressesChanged } from './address-events';
+export { ADDRESSES_CHANGED_EVENT } from './address-events';
 import { assetLabel } from './asset-label';
 import { fmtTimestamp } from './format-time';
 
@@ -88,17 +87,36 @@ export function AddressBook() {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
 
-  const refresh = (signal?: AbortSignal) =>
-    addressBookRequest('GET', undefined, signal)
+  const addressGeneration = useRef(0);
+  const refresh = useCallback((signal?: AbortSignal) => {
+    const generation = ++addressGeneration.current;
+    return addressBookRequest('GET', undefined, signal)
       .then(statusOf)
-      .then(setLoad)
-      .catch(() => setLoad({ kind: 'failed' }));
+      .then((next) => {
+        if (!signal?.aborted && generation === addressGeneration.current) setLoad(next);
+      })
+      .catch(() => {
+        if (!signal?.aborted && generation === addressGeneration.current) setLoad({ kind: 'failed' });
+      });
+  }, []);
 
   useEffect(() => {
     const ctl = new AbortController();
-    refresh(ctl.signal);
-    return () => ctl.abort();
-  }, []);
+    void refresh(ctl.signal);
+    const onAddresses = () => {
+      histGen.current++;
+      invalidateOverview();
+      setHist(null);
+      setOpen(null);
+      setLoad({ kind: 'loading' });
+      void refresh(ctl.signal);
+    };
+    window.addEventListener(ADDRESSES_CHANGED_EVENT, onAddresses);
+    return () => {
+      ctl.abort();
+      window.removeEventListener(ADDRESSES_CHANGED_EVENT, onAddresses);
+    };
+  }, [refresh]);
 
   // A sync, refresh, or recording withdrawal can change or delete recorded
   // balances. Drop the cached overview and collapse the open row so stale or

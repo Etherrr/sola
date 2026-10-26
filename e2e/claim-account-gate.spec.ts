@@ -260,3 +260,41 @@ describe('real /account integration (production seams, mocked wire)', () => {
     await page.close();
   });
 });
+
+// Mounted account + book, wire-only fixtures. No financial provider calls.
+describe('claim updates mounted authoritative address readers', () => {
+  for (const ambiguous of [false, true]) {
+    it(`move and undo refresh book without navigation (ambiguous=${ambiguous})`, async () => {
+      const { page } = await openAccount({ session: OK_SESSION, addresses: HEALTHY_BOOK, features: { status: 200, body: { claim: true } } });
+      let moved = false;
+      let bookReads = 0;
+      const copy = { network: 'solana', address: '11111111111111111111111111111111', label: 'Imported test', verification: 'watched', createdAt: '2026-10-20T00:00:00Z', lastObservedAt: null };
+      const report = [ { network: copy.network, address: copy.address, disposition: 'copied' } ];
+      await page.route('**/api/v1/portfolio/addresses', (r) => {
+        bookReads++;
+        return json(r, 200, { status: 'ok', addresses: [...HEALTHY_BOOK.body.addresses, ...(moved ? [copy] : [])] });
+      });
+      await page.route('**/api/v1/claim/preview', (r) => json(r, 200, { advisory: true, alreadyClaimed: moved, activeAttemptId: moved ? 'ATT-mounted' : null, toCopy: moved ? [] : [copy], liveDuplicates: [], tombstoneDuplicates: [], mergedCount: { ethereum: 1, solana: 1 } }));
+      await page.route('**/api/v1/claim/attempt', (r) => { moved = true; return json(r, 200, ambiguous ? {} : { attemptId: 'ATT-mounted', report }); });
+      await page.route('**/api/v1/claim/report/**', (r) => json(r, 200, { attemptId: 'ATT-mounted', state: moved ? 'claimed' : 'rolled_back', report }));
+      await page.route('**/api/v1/claim/rollback/**', (r) => { moved = false; return json(r, 200, ambiguous ? {} : { state: 'rolled_back', report }); });
+      await page.getByRole('button', { name: 'Check for saved addresses' }).click();
+      await page.getByRole('button', { name: 'Move 1 address', exact: true }).click();
+      if (ambiguous) {
+        await page.getByText("The move's outcome is unknown", { exact: false }).waitFor();
+        await page.getByRole('button', { name: 'Check status', exact: true }).click();
+      }
+      await page.getByRole('button', { name: 'Undo this move', exact: true }).waitFor();
+      await page.getByRole('cell', { name: 'Imported test', exact: true }).waitFor();
+      expect(bookReads).toBeGreaterThan(0);
+      const readsAfterMove = bookReads;
+      await page.getByRole('button', { name: 'Undo this move', exact: true }).click();
+      if (ambiguous) await page.getByRole('button', { name: 'Check status', exact: true }).click();
+      await page.getByText('Move undone.', { exact: false }).waitFor();
+      await page.waitForFunction(() => ![...document.querySelectorAll('td')].some(e => e.textContent === 'Imported test'));
+      expect(bookReads).toBeGreaterThan(readsAfterMove);
+      expect(await page.getByRole('cell', { name: 'Savings', exact: true }).count()).toBe(1);
+      await page.close();
+    });
+  }
+});
