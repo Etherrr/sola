@@ -405,3 +405,80 @@ test('an unavailable aave section says nothing was substituted and changes no to
   ).toBeVisible();
   await expect(section.locator('.aave-table')).toHaveCount(0);
 });
+
+test('aave caption wraps within the region at every pan position; every debt digit pan-reachable', async ({ page }, info) => {
+  test.skip(info.project.name !== 'mobile', 'phone panning behavior');
+  await stubAccounts(page, [mkRow('ethereum', ETH1, 'Cold wallet')]);
+  await stubResolve(page, {
+    ethWallets: [
+      walletWithAave(wallet(ETH1, [asset('eip155:1/native', 'ETH', '1.5', '4500')]) as Record<string, unknown>, {
+        status: 'ok',
+        positions: [
+          AAVE_OK.positions[0],
+          {
+            underlyingAsset: '0x' + 'd'.repeat(40),
+            symbol: 'DAI',
+            decimals: 18,
+            supplied: '0',
+            variableDebt: '1234567.891234567890123456',
+            suppliedValueUsd: '0',
+            variableDebtValueUsd: '1234567.89',
+            priceSource: 'chainlink:DAI/USD',
+            priceObservedAt: '2026-10-23T11:58:00Z',
+            observedAt: '2026-10-23T11:58:00Z',
+            usageAsCollateralEnabled: false,
+            reserveNote: 'This reserve is frozen on Aave.',
+          },
+        ],
+      }),
+    ],
+  });
+  await page.goto('/portfolio');
+  const section = page.locator('#main .combined');
+  await section.getByRole('button', { name: 'Load saved addresses, combined' }).click();
+  const scroller = section.locator('.aave-scroll');
+  await scroller.scrollIntoViewIfNeeded();
+
+  // Caption: never wider than the visible region, and pinned while panning (no truncation).
+  const capBox = await section.locator('.aave-table caption').boundingBox();
+  const scBox = await scroller.boundingBox();
+  expect(capBox!.width).toBeLessThanOrEqual(scBox!.width + 1);
+  const capX0 = capBox!.x;
+  await scroller.evaluate((el) => {
+    el.scrollLeft = el.scrollWidth;
+  });
+  const capBox2 = await section.locator('.aave-table caption').boundingBox();
+  expect(Math.abs(capBox2!.x - capX0)).toBeLessThanOrEqual(2);
+
+  // Full-value access: the DOM holds the whole formatted debt (selection copy is complete),
+  // and the union of pan positions covers every rendered pixel - no digit is unreachable.
+  const span = section.locator('.aave-table .amt-num', { hasText: '1,234,567' });
+  await expect(span).toHaveText('1,234,567.891234567890123456');
+  const intervals: [number, number][] = [];
+  let totalW = 0;
+  for (const f of [0, 0.25, 0.5, 0.75, 1]) {
+    await scroller.evaluate((el, frac) => {
+      el.scrollLeft = (el.scrollWidth - el.clientWidth) * frac;
+    }, f);
+    const m = await scroller.evaluate((el) => {
+      const sc = el.getBoundingClientRect();
+      const sp = el.querySelector('td[data-unit="DAI"] .amt-num')!.getBoundingClientRect();
+      return { vis: [Math.max(sp.left, sc.left), Math.min(sp.right, sc.right)] as [number, number], total: sp.width };
+    });
+    intervals.push(m.vis);
+    totalW = m.total;
+  }
+  intervals.sort((a, b) => a[0] - b[0]);
+  let covered = 0;
+  let curS = intervals[0][0];
+  let curE = intervals[0][1];
+  for (const [s, e] of intervals) {
+    if (s > curE + 1) {
+      covered += curE - curS;
+      curS = s;
+    }
+    curE = Math.max(curE, e);
+  }
+  covered += curE - curS;
+  expect(covered).toBeGreaterThanOrEqual(totalW - 2);
+});

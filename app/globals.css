@@ -3697,10 +3697,21 @@ html {
   font-variant-numeric: tabular-nums;
 }
 /* The caption inherits nowrap from the global table rule; a long caption line would force the
-   table wider than its scroll region at every viewport. */
+   table wider than its scroll region at every viewport. It is sized to the SCROLL REGION
+   (100cqi of the .aave-scroll container) and pinned to the leading edge while panning, so the
+   provenance note wraps and stays readable at every pan position instead of scrolling away
+   truncated. */
+.aave-scroll {
+  container-type: inline-size;
+}
 .aave-table caption {
   white-space: normal;
   overflow-wrap: anywhere;
+  position: sticky;
+  left: 0;
+  inline-size: 100cqi;
+  max-inline-size: 100cqi;
+  text-align: left;
 }
 /* The aave table keeps its 38rem floor at every width (see the min-width comment above);
    on phones the section pans sideways inside its focusable scroll region instead of
