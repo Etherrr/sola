@@ -1,6 +1,6 @@
 'use client';
 /** Message-only wallet discovery. No automatic connect, RPC reads or transactions. */
-import { createStore } from 'mipd';
+import { requestProviders } from 'mipd';
 import { getWallets } from '@wallet-standard/app';
 import type { Wallet, WalletAccount } from '@wallet-standard/base';
 import type { StandardConnectFeature, StandardEventsFeature } from '@wallet-standard/features';
@@ -73,21 +73,42 @@ export async function connectSolana(wallet:Wallet):Promise<PublicWalletConnectio
   dispose(){off();listeners.clear();changed=true;},
  };
 }
-/** Discovery listeners only. Caller must display a choice and invoke connect on click. */
+/** Discovery listeners only. Untrusted announcements are validated before storage. */
 export function discoverWallets(update:(choices:WalletChoice[])=>void):()=>void{
- const evm=createStore();const sol=getWallets();
+ const sol=getWallets();
+ const providers=new Map<object,{id:string;name:string;provider:MessageProvider}>();
+ const keys=new WeakMap<object,string>();let nextId=0;
+ const key=(value:object,prefix:string)=>{let id=keys.get(value);if(!id){id=prefix+':'+(++nextId);keys.set(value,id);}return id;};
+ const label=(value:unknown)=>typeof value==='string'?Array.from(value).filter(c=>{const n=c.codePointAt(0)!;return n>=32&&!(n>=127&&n<=159)&&!(n>=0x202a&&n<=0x202e)&&!(n>=0x2066&&n<=0x2069);}).join('').trim().slice(0,64):'';
  const refresh=()=>{
   const choices:WalletChoice[]=[];
-  for(const detail of evm.getProviders().slice(0,20)){
-   if(!detail.provider||typeof detail.provider.request!=='function')continue;
-   choices.push({id:'evm:'+detail.info.uuid,name:String(detail.info.name).slice(0,64),network:'evm',connect:()=>connectEvm(detail.provider as unknown as MessageProvider)});
-  }
-  for(const wallet of sol.get().slice(0,20)){
-   if(!wallet.features['standard:connect']||!wallet.features['solana:signMessage'])continue;
-   choices.push({id:'solana:'+choices.length,name:String(wallet.name).slice(0,64),network:'solana',connect:()=>connectSolana(wallet)});
+  for(const detail of providers.values())choices.push({id:detail.id,name:detail.name,network:'evm',connect:()=>connectEvm(detail.provider)});
+  for(const value of sol.get().slice(0,20)){
+   // A broken wallet entry must never suppress the remaining valid wallets.
+   try{
+    if(!value||typeof value!=='object')continue;
+    const name=label(value.name);const f=value.features;
+    if(!name||!f||typeof f!=='object')continue;
+    const c=f['standard:connect'] as Partial<StandardConnectFeature['standard:connect']>|undefined;
+    const m=f['solana:signMessage'] as Partial<SolanaSignMessageFeature['solana:signMessage']>|undefined;
+    const e=f['standard:events'] as Partial<StandardEventsFeature['standard:events']>|undefined;
+    if(typeof c?.connect!=='function'||typeof m?.signMessage!=='function'||typeof e?.on!=='function')continue;
+    choices.push({id:key(value,'solana'),name,network:'solana',connect:()=>connectSolana(value)});
+   }catch{continue;}
   }
   update(choices);
  };
- const offEvm=evm.subscribe(refresh);const offRegister=sol.on('register',refresh);const offUnregister=sol.on('unregister',refresh);refresh();
- return ()=>{offEvm();offRegister();offUnregister();evm.destroy();};
+ // mipd.createStore indexes info.uuid before validation. Use its lower-level
+ // listener and keep only validated object identities here instead.
+ const stop=requestProviders((raw)=>{
+  try{
+   if(!raw||typeof raw!=='object'||!raw.info||typeof raw.info!=='object'||!raw.provider||typeof raw.provider!=='object')return;
+   const p=raw.provider as unknown as MessageProvider;const name=label(raw.info.name);
+   if(!name||typeof raw.info.uuid!=='string'||raw.info.uuid.length>128||typeof p.request!=='function'||typeof p.on!=='function'||typeof p.removeListener!=='function')return;
+   if(providers.size>=20&&!providers.has(p))return;
+   providers.set(p,{id:key(p,'evm'),name,provider:p});refresh();
+  }catch{return;}
+ });
+ const offRegister=sol.on('register',refresh);const offUnregister=sol.on('unregister',refresh);refresh();
+ return ()=>{stop?.();offRegister();offUnregister();providers.clear();};
 }

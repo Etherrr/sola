@@ -38,4 +38,19 @@ describe('unmounted explicit wallet flow',()=>{
   const s=setup();s.request.mockImplementation(async()=>new Response(JSON.stringify({message:message().replace('Sign in to Sola.','Approve everything.')})));await s.flow.connect(s.choice);await s.flow.sign(false);expect(s.connection.signMessage).not.toHaveBeenCalled();s.flow.dispose();
  });
 
+ it.each(['before-sign','during-sign'])('discovery removal invalidates exact selected wallet %s',async phase=>{
+  const s=setup();await s.flow.connect(s.choice);
+  if(phase==='before-sign'){s.flow.invalidate();await s.flow.sign(false);expect(s.request).not.toHaveBeenCalled();}
+  else{let resolve:(x:string)=>void=()=>{};s.connection.signMessage=()=>new Promise(r=>{resolve=r;});const signing=s.flow.sign(false);await new Promise(r=>setTimeout(r,0));s.flow.invalidate();resolve('signature');await signing;expect(s.request).toHaveBeenCalledTimes(1);}
+  s.flow.dispose();
+ });
+ it('ambiguous verify network failure locks retry until account reconciliation',async()=>{
+  const s=setup();s.request.mockImplementation(async(_chain,action)=>{if(action==='verify')throw Error('network');return new Response(JSON.stringify({message:message()}));});
+  await s.flow.connect(s.choice);await s.flow.sign(true);expect(s.states.at(-1)).toEqual({kind:'uncertain',linked:true});s.flow.disconnect();await s.flow.sign(true);expect(s.request).toHaveBeenCalledTimes(2);s.flow.dispose();
+ });
+ it('clearing during verification cannot imply cancellation or trigger another proof',async()=>{
+  const s=setup();let resolve:(r:Response)=>void=()=>{};s.request.mockImplementation(async(_chain,action)=>action==='challenge'?new Response(JSON.stringify({message:message()})):new Promise(r=>{resolve=r;}));
+  await s.flow.connect(s.choice);const signing=s.flow.sign(true);await new Promise(r=>setTimeout(r,0));expect(s.states.at(-1)?.kind).toBe('verifying');s.flow.disconnect();expect(s.states.at(-1)?.kind).toBe('verifying');s.flow.invalidate();expect(s.states.at(-1)).toEqual({kind:'uncertain',linked:true});resolve(new Response(JSON.stringify({status:'ok'})));await signing;expect(s.states.at(-1)?.kind).toBe('uncertain');s.flow.dispose();
+ });
+
 });
