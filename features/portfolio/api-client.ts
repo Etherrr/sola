@@ -949,3 +949,11 @@ export async function snapshotConsentChangeRequest(action: 'grant' | 'withdraw',
 export async function syncRequest(signal?: AbortSignal): Promise<Response> {
   return portfolioActionRequest('/api/v1/portfolio/sync', 'POST', {}, signal);
 }
+
+/** Wallet auth is message-only and same-origin. No provider or transaction call. */
+export async function walletAuthRequest(
+  chain: 'evm' | 'solana', action: 'challenge' | 'verify', link: boolean,
+  body: unknown, signal?: AbortSignal,
+): Promise<Response> {
+  return passkeyRequest(`/api/v1/auth/wallet/${chain}/${link ? 'link/' : ''}${action}`, body, signal);
+}
