@@ -18,6 +18,8 @@ import {
   type NetworkResults,
 } from './combined-load';
 import { money, summarize } from './model';
+import { differsWhenRounded } from './format';
+import { AaveSection } from './aave-section';
 
 type Phase =
   | { kind: 'idle' }
@@ -115,6 +117,19 @@ export function CombinedWallets() {
   }
 
   const ready = phase.kind === 'ready' ? phase : null;
+  // Aave V3 sections pass through per address (server includes them only when its flag is
+  // on); they are rendered separately and never enter any aggregate above.
+  const aaveRows = ready ? ready.result.perAddress.filter((a) => a.aave !== null) : [];
+  // Full precision whenever rounding would change a shown Aave digit (same rule as Track).
+  const aaveExact = aaveRows.some(
+    (a) =>
+      a.aave?.status === 'ok' &&
+      a.aave.positions.some(
+        (pos) =>
+          differsWhenRounded(pos.supplied, null, pos.suppliedValueUsd) ||
+          differsWhenRounded(pos.variableDebt, null, pos.variableDebtValueUsd),
+      ),
+  );
   const totals = ready ? summarize(ready.result.positions) : null;
   const totalUnpriced = ready
     ? ready.result.perAddress.reduce((n, a) => n + a.unpricedAssets, 0)
@@ -188,6 +203,12 @@ export function CombinedWallets() {
               <strong>{contributing === 0 ? 'n/a' : money(totals.net)}</strong>
               <small>Priced holdings across all saved addresses</small>
               <small>Wallet balances only - not net worth.</small>
+              {aaveRows.length > 0 ? (
+                <small>
+                  Aave V3 positions are listed separately below and are never added to this
+                  total.
+                </small>
+              ) : null}
               {ready.result.incomplete ? (
                 <small className="warn-text">
                   Incomplete: {totalUnpriced} unpriced {totalUnpriced === 1 ? 'asset' : 'assets'},{' '}
@@ -300,6 +321,12 @@ export function CombinedWallets() {
               Only values read at each source&apos;s own observation time are included; nothing
               is back-filled from older or last-known snapshots.
             </li>
+            {aaveRows.length > 0 ? (
+              <li>
+                Aave V3 (Ethereum): supplied and variable-debt positions only, listed per
+                address below; never added to wallet balances or the combined total.
+              </li>
+            ) : null}
             <li>Refreshes only when you ask. No alerts, no automatic updates.</li>
             {ready.providers.length > 0 ? (
               <li>Sources: {ready.providers.join(', ')} via the read-only API.</li>
@@ -307,6 +334,20 @@ export function CombinedWallets() {
           </ul>
             </details>
           </div>
+          {aaveRows.length > 0 ? (
+            <div className="combined-aave">
+              {aaveRows.map((a) => (
+                <div key={`aave-${a.network}:${a.address}`}>
+                  <p className="fine muted">
+                    {a.label ?? short(a.address)}{' '}
+                    <span className="fine muted">{short(a.address)}</span> - listed separately,
+                    never added to the combined total
+                  </p>
+                  {a.aave ? <AaveSection section={a.aave} exact={aaveExact} /> : null}
+                </div>
+              ))}
+            </div>
+          ) : null}
           <button
             type="button"
             className="button secondary"

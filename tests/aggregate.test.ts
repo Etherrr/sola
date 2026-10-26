@@ -228,3 +228,70 @@ describe('known zero vs no priced observation', () => {
     expect(r.observedRange).toEqual({ earliest: '2026-10-24T10:00:00Z', latest: '2026-10-24T10:00:00Z' });
   });
 });
+
+// Aave V3 Phase 1 (fixture-only, flag-off by default): the server attaches one aave section
+// per wallet only when PORTFOLIO_AAVE_V3='1'. The aggregate passes it through per address
+// and NEVER lets it touch pricedValueCents, incomplete, or any total.
+describe('aggregateAddresses aave passthrough', () => {
+  const aaveOk = {
+    status: 'ok' as const,
+    positions: [
+      {
+        underlyingAsset: '0x' + 'c'.repeat(40),
+        symbol: 'USDC',
+        decimals: 6,
+        supplied: '11392.069003',
+        variableDebt: '0',
+        suppliedValueUsd: '11390.54',
+        variableDebtValueUsd: '0',
+        priceSource: 'chainlink:USDC/USD',
+        priceObservedAt: '2026-10-23T11:58:00Z',
+        observedAt: '2026-10-23T11:58:00Z',
+        usageAsCollateralEnabled: true,
+        reserveNote: null,
+      },
+    ],
+  };
+  const aaveDown = { status: 'unavailable' as const, reason: 'rate_limited' as const };
+
+  it('passes an ok aave section through per address without changing any aggregate value', () => {
+    const withAave = { ...wallet(ETH1, [asset('eip155:1/native', 'ETH', '1.5', '4500')]), aave: aaveOk };
+    const r = aggregateAddresses([input('ethereum', ETH1, ok([withAave], '2026-10-25T05:58:00Z'))]);
+    expect(r.perAddress[0].aave).toEqual(aaveOk);
+    expect(r.perAddress[0].pricedValueCents).toBe(450000n); // wallet assets only, Aave never summed
+    expect(r.perAddress[0].unpricedAssets).toBe(0);
+    expect(r.incomplete).toBe(false);
+    expect(r.positions).toHaveLength(1); // no Aave position becomes an aggregate position
+  });
+
+  it('passes an unavailable aave section through without marking the address incomplete', () => {
+    const withAave = { ...wallet(ETH2, [asset('eip155:1/native', 'ETH', '0.25', '750')]), aave: aaveDown };
+    const r = aggregateAddresses([input('ethereum', ETH2, ok([withAave], '2026-10-25T05:58:00Z'))]);
+    expect(r.perAddress[0].aave).toEqual(aaveDown);
+    expect(r.perAddress[0].status).toBe('ok');
+    expect(r.incomplete).toBe(false);
+  });
+
+  it('keeps aave null when the server sent no section (flag off) and on failed addresses', () => {
+    const r = aggregateAddresses([
+      input('ethereum', ETH1, ok([wallet(ETH1, [asset('eip155:1/native', 'ETH', '1', '3000')])], '2026-10-25T05:58:00Z')),
+      input('ethereum', ETH2, { kind: 'error', message: 'boom', retryable: true }),
+    ]);
+    expect(r.perAddress[0].aave).toBeNull();
+    expect(r.perAddress[1].aave).toBeNull();
+  });
+
+  it('carries each address its own aave section independently across addresses', () => {
+    const w1 = { ...wallet(ETH1, [asset('eip155:1/native', 'ETH', '1.5', '4500')]), aave: aaveOk };
+    const w2 = wallet(ETH2, [asset('eip155:1/native', 'ETH', '0.25', '750')]);
+    // Each AggregateInput carries its own narrowed one-wallet answer (combinedInputs shape).
+    const r = aggregateAddresses([
+      input('ethereum', ETH1, ok([w1], '2026-10-25T05:58:00Z')),
+      input('ethereum', ETH2, ok([w2], '2026-10-25T05:58:00Z')),
+    ]);
+    expect(r.perAddress[0].aave).toEqual(aaveOk);
+    expect(r.perAddress[1].aave).toBeNull();
+    expect(r.perAddress[0].pricedValueCents).toBe(450000n);
+    expect(r.perAddress[1].pricedValueCents).toBe(75000n);
+  });
+});

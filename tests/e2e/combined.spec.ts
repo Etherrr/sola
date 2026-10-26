@@ -325,3 +325,68 @@ test('a signed-out visitor on /portfolio gets no account pointer and no account 
   await expect(page.getByText(/your address book and its combined view live on/)).toHaveCount(0);
   expect(nativeBookReads).toBe(0);
 });
+
+// Aave V3 Phase 1 (fixture-only): the server includes aave sections only when its flag is
+// on; the combined view must render them per address, separately, and never add them to
+// any total. Stubs below stand in for flag-on answers; no chain is read.
+const AAVE_OK = {
+  status: 'ok',
+  positions: [
+    {
+      underlyingAsset: '0x' + 'c'.repeat(40),
+      symbol: 'USDC',
+      decimals: 6,
+      supplied: '11392.069003',
+      variableDebt: '0',
+      suppliedValueUsd: '11390.54',
+      variableDebtValueUsd: '0',
+      priceSource: 'chainlink:USDC/USD',
+      priceObservedAt: '2026-10-23T11:58:00Z',
+      observedAt: '2026-10-23T11:58:00Z',
+      usageAsCollateralEnabled: true,
+      reserveNote: null,
+    },
+  ],
+};
+const walletWithAave = (w: Record<string, unknown>, aave: unknown) => ({ ...w, aave });
+
+test('aave sections render per address, separately, and never enter the combined total', async ({ page }) => {
+  await stubAccounts(page, SEED);
+  await stubResolve(page, {
+    ethWallets: [walletWithAave(ETH_WALLETS[0] as Record<string, unknown>, AAVE_OK), ETH_WALLETS[1]],
+  });
+  await page.goto('/portfolio');
+  const section = page.locator('#main .combined');
+  await section.getByRole('button', { name: 'Load saved addresses, combined' }).click();
+  // Combined total unchanged by Aave: ETH1 4500+2500, ETH2 750, SOL 3000 = $10,750.00.
+  await expect(section.getByText('$10,750.00')).toBeVisible();
+  await expect(
+    section.getByText(/Aave V3 positions are listed separately below and are never added to this total/),
+  ).toBeVisible();
+  await expect(section.getByRole('heading', { name: 'Aave V3 positions (Ethereum)' })).toBeVisible();
+  await expect(section.locator('.combined-aave').getByText('Cold wallet')).toBeVisible();
+  await expect(section.locator('.aave-table').getByText('USDC')).toBeVisible();
+  // Only the flagged address carries a section; the other two do not.
+  await expect(section.getByRole('heading', { name: 'Aave V3 positions (Ethereum)' })).toHaveCount(1);
+});
+
+test('an unavailable aave section says nothing was substituted and changes no total', async ({ page }) => {
+  await stubAccounts(page, SEED);
+  await stubResolve(page, {
+    ethWallets: [
+      walletWithAave(ETH_WALLETS[0] as Record<string, unknown>, {
+        status: 'unavailable',
+        reason: 'rate_limited',
+      }),
+      ETH_WALLETS[1],
+    ],
+  });
+  await page.goto('/portfolio');
+  const section = page.locator('#main .combined');
+  await section.getByRole('button', { name: 'Load saved addresses, combined' }).click();
+  await expect(section.getByText('$10,750.00')).toBeVisible();
+  await expect(
+    section.getByText(/Aave positions could not be read\. Nothing was substituted\./),
+  ).toBeVisible();
+  await expect(section.locator('.aave-table')).toHaveCount(0);
+});

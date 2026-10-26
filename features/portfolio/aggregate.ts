@@ -10,7 +10,7 @@
 // - Unknown price stays unknown (valueCents null); it is never guessed or zero-filled.
 // - Every source keeps its OWN observedAt; the aggregate reports the range, never "now".
 // - Quantity strings pass through verbatim; USD values convert exactly (see usdToCents).
-import type { ApiSuccess } from './api-client';
+import type { ApiAaveSection, ApiSuccess } from './api-client';
 import type { Position } from './model';
 
 export type AddressNetwork = 'ethereum' | 'solana';
@@ -34,6 +34,9 @@ export type AddressStatus = {
   /** The source's own observation time for this address; null when no data was read. */
   observedAt: string | null;
   unpricedAssets: number;
+  /** This address's own Aave V3 section when the server included it (flag on, Ethereum
+   *  only); null otherwise. Rendered separately, NEVER aggregated into pricedValueCents. */
+  aave: ApiAaveSection | null;
   /**
    * Sum of this address's priced values; null when nothing priced was observed:
    * failed/duplicate, or an answer with no asset carrying a readable value (an unread
@@ -96,6 +99,7 @@ export function aggregateAddresses(inputs: readonly AggregateInput[]): Aggregate
         warnings: ['Same address submitted twice; counted once.'],
         observedAt: null,
         unpricedAssets: 0,
+        aave: null,
         pricedValueCents: null,
       });
       continue;
@@ -111,6 +115,7 @@ export function aggregateAddresses(inputs: readonly AggregateInput[]): Aggregate
         warnings: [input.outcome.message],
         observedAt: null,
         unpricedAssets: 0,
+        aave: null,
         pricedValueCents: null,
       });
       continue;
@@ -161,6 +166,9 @@ export function aggregateAddresses(inputs: readonly AggregateInput[]): Aggregate
       warnings,
       observedAt: data.observedAt,
       unpricedAssets: unpriced,
+      // The shared answer was narrowed to this address's own wallet by combinedInputs;
+      // pass its Aave section through verbatim - never summed anywhere in this model.
+      aave: data.wallets[0]?.aave ?? null,
       // No priced observation at all (empty answer, or every value unknown - typical for
       // an unread balance) is null, never 0n: $0.00 would claim a known-empty wallet.
       pricedValueCents: pricedObserved === 0 ? null : pricedSum,
