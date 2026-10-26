@@ -90,10 +90,16 @@ describe('learning and safety boundaries', () => {
     expect(readFileSync(API_CLIENT, 'utf8')).toMatch(/\/api\/v1\/portfolio\/risk/);
     expect(readFileSync(API_CLIENT, 'utf8')).toMatch(/\/api\/v1\/portfolio\/summary/);
     // Transaction, approval and arbitrary network operations remain forbidden everywhere.
-    expect(source).not.toMatch(/window\.(ethereum|solana)|signTransaction|signAllTransactions|sendTransaction|eth_sendTransaction|eth_signTypedData|wallet_sendCalls|fetch\s*\(/);
+    expect(source + readFileSync(API_CLIENT,'utf8')).not.toMatch(/window\.(ethereum|solana)|signTransaction|signAllTransactions|sendTransaction|eth_sendTransaction|eth_signTypedData|wallet_sendCalls/);
+    expect(source).not.toMatch(/fetch\s*\(/);
     const approvedMessagePaths = new Set(['features/auth-v2/wallet-connectors.ts','features/auth-v2/wallet-flow.ts']);
     for (const path of paths.filter(path => !approvedMessagePaths.has(path)))
       expect(readFileSync(path,'utf8')).not.toMatch(/eth_requestAccounts|method:\s*'personal_sign'|signMessage\s*\(/);
+    const apiSource = readFileSync(API_CLIENT,'utf8');
+    const walletTransport = apiSource.slice(apiSource.indexOf('export async function walletAuthRequest('));
+    expect(walletTransport).toContain("chain: 'evm' | 'solana', action: 'challenge' | 'verify', link: boolean");
+    expect(walletTransport).toContain("return passkeyRequest(`/api/v1/auth/wallet/${chain}/${link ? 'link/' : ''}${action}`, body, signal);");
+    expect(walletTransport).not.toMatch(/fetch\s*\(|https?:|provider\.request|signTransaction|sendTransaction/);
     const connector = readFileSync('features/auth-v2/wallet-connectors.ts','utf8');
     expect(connector.match(/method:'personal_sign'/g)).toHaveLength(1);
     expect(connector.match(/await signer\.signMessage\(/g)).toHaveLength(1);
