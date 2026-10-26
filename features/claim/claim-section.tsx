@@ -70,10 +70,17 @@ export function ClaimSection({ discover, makeApi }: Props) {
           <em>Saved addresses under your old sign-in</em>
         </p>
         <p className="claim-note">
-          If you used Sola Lens before accounts, your saved addresses can be moved here.
+          Moving older saved addresses requires both your Sola account and your previous Cloudflare sign-in. Open the protected migration page first; no addresses move until you confirm.
         </p>
+        <p><a href="/account/legacy-bridge/">Open protected migration page</a></p>
         <p className="actions">
-          <button type="button" className="button secondary" onClick={() => setApi(makeApi())}>
+          <button type="button" className="button secondary" onClick={() => {
+              if (window.location.pathname !== '/account/legacy-bridge/' && window.location.pathname !== '/account/legacy-bridge') {
+                window.location.assign('/account/legacy-bridge/');
+                return;
+              }
+              setApi(makeApi());
+            }}>
             Check for saved addresses
           </button>
         </p>

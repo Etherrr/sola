@@ -8,7 +8,7 @@ import { AccountMenu } from './account-menu';
 import { fetchHealth } from '@/features/portfolio/api-client';
 import { SessionProvider } from '@/features/portfolio/session-context';
 import { TrackNetworkProvider } from '@/features/portfolio/track-network-context';
-// The legacy Track saved-address list stays reachable without any account: in the desktop
+// Legacy Track requires the previous Cloudflare sign-in and full navigation: in the desktop
 // sidebar (below) and in the mobile More disclosure. Its store is untouched.
 const legacyLink = { href: '/portfolio', label: 'Legacy Track list', icon: '⧉', cls: 'legacy-desktop' };
 const sections = [
@@ -127,7 +127,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   {sec.label}
                 </p>
                 {sec.items.map((i) => (
-                  <Link
+                  <a
                     key={i.href}
                     href={i.href}
                     data-section={sec.id}
@@ -136,7 +136,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   >
                     <span aria-hidden="true">{i.icon}</span>
                     {i.label}
-                  </Link>
+                  </a>
                 ))}
               </div>
             ))}
@@ -167,14 +167,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               {moreOpen ? (
                 <div role="group" aria-label="More" className="more-menu">
                   {[educationLink, legacyLink].map((t) => (
-                    <Link
+                    <a
                       key={t.href}
                       href={t.href}
                       aria-current={path.startsWith(t.href) ? 'page' : undefined}
                     >
                       <span aria-hidden="true">{t.icon}</span>
                       {t.label}
-                    </Link>
+                    </a>
                   ))}
                 </div>
               ) : null}

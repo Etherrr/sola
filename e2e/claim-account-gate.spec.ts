@@ -37,8 +37,8 @@ const waitFor = async (url: string, ms: number) => {
 };
 
 beforeAll(async () => {
-  dev = spawn('npm', ['start'], { cwd: process.cwd(), stdio: 'ignore' });
-  await waitFor('http://127.0.0.1:3000/account/', 30000);
+  dev = spawn('npm', ['start'], { cwd: process.cwd(), stdio: 'ignore', env: { ...process.env, PORT: '3017' } });
+  await waitFor('http://127.0.0.1:3017/account/', 30170);
   browser = await chromium.launch();
 }, 60000);
 
@@ -87,7 +87,7 @@ const openAccount = async (
     calls.rollback++;
     return json(route, 503, { error: { code: 'disabled' } });
   });
-  await page.goto('http://127.0.0.1:3000/account/', { waitUntil: 'domcontentloaded' });
+  await page.goto('http://127.0.0.1:3017/account/', { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(900); // let gate effects settle
   return { page, calls };
 };
@@ -156,10 +156,14 @@ describe('real /account integration (production seams, mocked wire)', () => {
     expect(calls).toEqual({ ...ZERO, features: 1 });
     expect(await page.locator('.claim-panel').count()).toBe(0);
     await page.getByRole('button', { name: 'Check for saved addresses' }).click();
+    await page.waitForURL('**/account/legacy-bridge/');
+    await page.getByRole('button', { name: 'Check for saved addresses' }).click();
+    expect(page.url()).toContain('/account/legacy-bridge/');
+    expect(await page.getByText('requires your previous Cloudflare sign-in.', { exact: false }).count()).toBeGreaterThan(0);
     // The panel mounts and its first (and only) automatic call is the preview;
     // the mocked 503 disabled answer renders the honest could-not-check state.
     await page.waitForSelector('text=Could not check your old saved addresses.');
-    expect(calls).toEqual({ ...ZERO, features: 1, preview: 1 });
+    expect(calls).toEqual({ ...ZERO, features: 2, preview: 1 });
     await page.close();
   });
 
@@ -214,7 +218,7 @@ describe('real /account integration (production seams, mocked wire)', () => {
       calls.features++;
       return json(route, 200, { claim: true });
     });
-    await page.goto('http://127.0.0.1:3000/account/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://127.0.0.1:3017/account/', { waitUntil: 'domcontentloaded' });
     await page.waitForSelector('text=Checking your sign-in');
     await page.waitForTimeout(1500); // still loading; discovery must NOT have fired
     expect(calls).toEqual(ZERO);
@@ -252,7 +256,7 @@ describe('real /account integration (production seams, mocked wire)', () => {
       calls.features++;
       return route.fulfill({ status: 200, contentType: 'application/json', body: 'this is not json{{' });
     });
-    await page.goto('http://127.0.0.1:3000/account/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://127.0.0.1:3017/account/', { waitUntil: 'domcontentloaded' });
     await page.waitForSelector('text=Signed in as u@x.test.');
     await page.waitForTimeout(900);
     expect(await page.getByRole('button', { name: 'Check for saved addresses' }).count()).toBe(0);
@@ -279,6 +283,8 @@ describe('claim updates mounted authoritative address readers', () => {
       await page.route('**/api/v1/claim/report/**', (r) => json(r, 200, { attemptId: 'ATT-mounted', state: moved ? 'claimed' : 'rolled_back', report }));
       await page.route('**/api/v1/claim/rollback/**', (r) => { moved = false; return json(r, 200, ambiguous ? {} : { state: 'rolled_back', report }); });
       await page.getByRole('button', { name: 'Check for saved addresses' }).click();
+    await page.waitForURL('**/account/legacy-bridge/');
+    await page.getByRole('button', { name: 'Check for saved addresses' }).click();
       await page.getByRole('button', { name: 'Move 1 address', exact: true }).click();
       if (ambiguous) {
         await page.getByText("The move's outcome is unknown", { exact: false }).waitFor();

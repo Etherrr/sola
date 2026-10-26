@@ -28,11 +28,11 @@ type Gate =
 
 
 /** The legacy Track saved-address list stays reachable from every rendered gate
- *  state, with no redirect. Loading it still needs a verified session. */
+ *  state, with no redirect. Loading it requires the older Cloudflare Access sign-in. */
 function LegacyTrackLink() {
   return (
     <p className="notice">
-      Looking for the older Track address list? Use the{' '}
+      The older Track address list requires your previous Cloudflare sign-in. Open the{' '}
       <a href="/portfolio">Legacy Track list</a> page.
     </p>
   );
