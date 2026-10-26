@@ -12,8 +12,7 @@ export function AccountBookPointer() {
   return (
     <p className="notice">
       Signed in as {native.email} - your address book and its combined view live on{' '}
-      <Link href="/account">Account</Link>. The list below is the separate legacy Track
-      list, not your account book.
+      <Link href="/account">Account</Link>.
     </p>
   );
 }

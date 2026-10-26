@@ -13,11 +13,9 @@ export default function Page() {
     <div className="page-container">
       <PageIntro eyebrow="LEGACY TRACK · ALL NETWORKS" title="Legacy Track list">
         <p>
-          Combine the public addresses saved in your legacy Track list, loaded only when you ask.
-          The Portfolio tab leads to the address book on your{' '}
-          <Link href="/account">Account</Link> page; this page keeps the older legacy list, separate
-          from that account book. The invented sample portfolio lives under{' '}
-          <Link href="/demo">Demo</Link>.
+          This page keeps the older Track address list. The Portfolio tab leads to the address book
+          on your <Link href="/account">Account</Link> page; the invented sample portfolio lives
+          under <Link href="/demo">Demo</Link>.
         </p>
       </PageIntro>
       <AccountBookPointer />

@@ -12,7 +12,8 @@ export default function SignIn() {
         <SignInForm />
       </section>
       <p className="notice">
-        No account? The <a href="/portfolio">Legacy Track list</a> stays open without one.
+        Looking for the older Track list? Use the{' '}
+        <a href="/portfolio">Legacy Track list</a> page.
       </p>
     </div>
   );

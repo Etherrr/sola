@@ -140,10 +140,7 @@ export function CombinedWallets() {
             : 'COMBINED VIEW · READ-ONLY'}
       </span>
       <h2 id="combined-h">Saved addresses, combined</h2>
-      <p className="fine muted">
-        The legacy Track address list - separate from the address book on your Account page.
-        Wallet balances only, not net worth.
-      </p>
+      <p className="fine muted">Wallet balances only, not net worth.</p>
       {phase.kind === 'idle' ? (
         <>
           <p>

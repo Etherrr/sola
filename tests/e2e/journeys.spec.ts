@@ -2020,6 +2020,8 @@ test('shell nav is keyboard-reachable in DOM order', async ({ page, isMobile }) 
     await page.keyboard.press('Tab');
     await expect(nav.getByRole(tab.role, { name: tab.name })).toBeFocused();
   }
+  // Pin the routing contract: the Portfolio tab leads to the native account book.
+  await expect(nav.getByRole('link', { name: 'Portfolio' })).toHaveAttribute('href', '/account/');
 });
 
 test('account menu: native signed-out branch keyboard order and back', async ({ page }) => {
@@ -2134,6 +2136,8 @@ test('at 320px the tab bar shows four fitting tabs and the account menu stays on
     expect(box!.x + box!.width).toBeLessThanOrEqual(320);
   }
   // More opens to Education and the Legacy Track list, and the popover stays inside the viewport.
+  // Pin the routing contract on the narrow bar too.
+  await expect(nav.getByRole('link', { name: 'Portfolio' })).toHaveAttribute('href', '/account/');
   const more = nav.getByRole('button', { name: 'More' });
   await more.click();
   const moreGroup = page.getByRole('group', { name: 'More' });

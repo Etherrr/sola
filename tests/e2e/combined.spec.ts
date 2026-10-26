@@ -108,7 +108,7 @@ test('loads nothing until asked, then renders the real combined view with per-ad
   // section, and no demo fixture on this page at all - it moved to /demo.
   await expect(page.locator('.sim-pill')).toContainText('MODE SHOWN PER SECTION');
   await expect(
-    page.locator('#main').getByText(/Combine the public addresses saved in your legacy Track list/),
+    page.locator('#main').getByText(/This page keeps the older Track address list/),
   ).toBeVisible();
   await expect(page.locator('#main .mode-marker')).toHaveCount(0);
   // Idle: honest read-only framing, explicit action, and no automatic fetch.
@@ -291,7 +291,7 @@ test('the /portfolio overview carries no demo fixture - the invented sample live
   await expect(page.getByRole('heading', { name: 'Legacy Track list' })).toBeVisible();
   await expect(page.locator('#main')).not.toContainText('$12,000');
   await expect(page.locator('#main')).not.toContainText('SIMULATED');
-  await expect(page.getByText(/legacy Track address list/)).toBeVisible();
+  await expect(page.getByText(/older Track address list/).first()).toBeVisible();
   await page.goto('/demo');
   await expect(page.locator('#main')).toContainText('$11,000.00');
   await expect(page.locator('#main .mode-marker')).toContainText('SIMULATED');

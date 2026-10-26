@@ -27,12 +27,12 @@ type Gate =
 
 
 /** The legacy Track saved-address list stays reachable from every rendered gate
- *  state, with no account and no redirect. */
+ *  state, with no redirect. Loading it still needs a verified session. */
 function LegacyTrackLink() {
   return (
     <p className="notice">
-      Looking for the legacy Track address list? It stays on the{' '}
-      <a href="/portfolio">Legacy Track list</a> page - no sign-in needed.
+      Looking for the older Track address list? Use the{' '}
+      <a href="/portfolio">Legacy Track list</a> page.
     </p>
   );
 }
