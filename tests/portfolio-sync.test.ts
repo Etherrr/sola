@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createSqliteD1 } from './helpers/d1-sqlite';
 import { handleSync, type SyncDeps, type SyncEnv } from '../server/portfolio/sync';
-import { grantSnapshotConsent } from '../server/portfolio/snapshots';
+import { grantSnapshotConsent, withdrawSnapshotConsent } from '../server/portfolio/snapshots';
+import { loadBalanceHistory } from '../server/portfolio/history';
 import { createSession } from '../server/auth/sessions';
 import { SESSION_COOKIE, type NativeAuthEnv } from '../server/auth/email';
 import type { PortfolioProvider, ProviderResult } from '../server/portfolio/provider';
@@ -105,7 +106,7 @@ describe('observation sync', () => {
     expect(calls.n).toBe(0);
   });
 
-  it('records one run + balance snapshot for a consented live read; identical re-sync is deduplicated', async () => {
+  it('records one run + balance snapshot for a consented live read; identical re-sync writes the new run its own rows', async () => {
     await grantSnapshotConsent(db, 'u1');
     await addAddress('ethereum', EVM);
     const calls = { n: 0 };
@@ -117,8 +118,10 @@ describe('observation sync', () => {
     expect(raw.prepare('SELECT COUNT(*) AS n FROM balance_snapshots').get() as { n: number }).toEqual({ n: 1 });
     const r2 = await handleSync(post(cookie), env, d);
     const b2 = (await r2.json()) as { runs: Array<{ balances: number; skippedDuplicates: number }> };
-    expect(b2.runs[0]).toMatchObject({ balances: 0, skippedDuplicates: 1 });
-    expect(raw.prepare('SELECT COUNT(*) AS n FROM balance_snapshots').get() as { n: number }).toEqual({ n: 1 });
+    // Option-3 run membership (2026-10-26): dedup is WITHIN-RUN only; a new
+    // run always writes its own rows so every baseline is self-contained.
+    expect(b2.runs[0]).toMatchObject({ balances: 1, skippedDuplicates: 0 });
+    expect(raw.prepare('SELECT COUNT(*) AS n FROM balance_snapshots').get() as { n: number }).toEqual({ n: 2 });
   });
 
   it('SIMULATED results are refused even with consent and live flag', async () => {
@@ -132,7 +135,7 @@ describe('observation sync', () => {
     expect(raw.prepare('SELECT COUNT(*) AS n FROM balance_snapshots').get() as { n: number }).toEqual({ n: 0 });
   });
 
-  it('a failed provider read is an honest per-network state, not recorded', async () => {
+  it('a failed provider read is an honest per-network state: bounded error row, no content', async () => {
     await grantSnapshotConsent(db, 'u1');
     await addAddress('ethereum', EVM);
     const bad: ProviderResult = { ok: false, provider: 'fake', kind: 'unavailable', diag: { step: 'rpc_error' } } as ProviderResult;
@@ -140,6 +143,28 @@ describe('observation sync', () => {
     const body = (await r.json()) as { recorded: boolean; runs: Array<{ recorded: boolean; reason: string }> };
     expect(body.recorded).toBe(false);
     expect(body.runs[0]).toMatchObject({ recorded: false, reason: 'unavailable' });
+    // The ATTEMPT is recorded as bounded operational metadata (reviewer
+    // amendments A3/A4): no holdings content, no provider detail.
+    const run = raw
+      .prepare('SELECT status, error, completeness, network, observed_at FROM sync_runs')
+      .get() as { status: string; error: string; completeness: string | null; network: string; observed_at: string | null };
+    expect(run).toEqual({ status: 'error', error: 'unavailable', completeness: null, network: 'ethereum', observed_at: null });
+    for (const t of ['balance_snapshots', 'position_snapshots', 'price_observations'])
+      expect(raw.prepare(`SELECT COUNT(*) AS n FROM ${t}`).get() as { n: number }).toEqual({ n: 0 });
+  });
+
+  it('error rows never advance baselines, never set flags, and withdrawal deletes them', async () => {
+    await grantSnapshotConsent(db, 'u1');
+    await addAddress('ethereum', EVM);
+    const bad: ProviderResult = { ok: false, provider: 'fake', kind: 'unavailable', diag: { step: 'rpc_error' } } as ProviderResult;
+    await handleSync(post(cookie), env, deps(provider(bad, { n: 0 })));
+    // a subsequent GOOD sync is the baseline; the older error row is inert
+    await handleSync(post(cookie), env, deps(provider(liveOk(EVM), { n: 0 })));
+    const h = await loadBalanceHistory(db, 'u1');
+    expect(h.latest).toHaveLength(1);
+    expect(h.newerPartial).toBe(false);
+    // withdrawal deletes the error row too (A3: no history/network/time trace)
+    await withdrawSnapshotConsent(db, 'u1');
     expect(raw.prepare('SELECT COUNT(*) AS n FROM sync_runs').get() as { n: number }).toEqual({ n: 0 });
   });
 

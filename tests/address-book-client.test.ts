@@ -52,12 +52,14 @@ describe('overview history response mapping', () => {
     const latest = [{ assetId: 'eip155:1/native', network: 'ethereum', address: '0xAbC', kind: 'native', amount: '1.5', observedAt: '2026-10-25T00:00:00Z' }];
     const res = new Response(
       JSON.stringify({ status: 'ok', scope: 'spot_balances_only', latestCompleteObservedAt: '2026-10-25T00:00:00Z', newerPartial: true, latest, prior: null,
+        recordedRunMembership: 'exact',
         networks: [{ network: 'ethereum', latestObservedAt: '2026-10-25T00:00:00Z', latest, prior: null }] }),
       { status: 200, headers: { 'content-type': 'application/json' } },
     );
     expect(await mapOverviewResponse(res)).toEqual({
       kind: 'ok', at: '2026-10-25T00:00:00Z', newerPartial: true, latest, prior: null,
       networks: [{ network: 'ethereum', at: '2026-10-25T00:00:00Z', latest, prior: null }],
+      recordedRunMembership: 'exact',
     });
   });
   it('maps per-network slices with their own timestamps; Solana keeps its own baseline', async () => {
@@ -68,6 +70,7 @@ describe('overview history response mapping', () => {
       JSON.stringify({
         status: 'ok', scope: 'spot_balances_only', latestCompleteObservedAt: '2026-10-25T01:05:00Z', newerPartial: false,
         latest: [...ethLatest, ...solLatest], prior: ethPrior,
+        recordedRunMembership: 'exact',
         networks: [
           { network: 'ethereum', latestObservedAt: '2026-10-25T01:00:00Z', latest: ethLatest, prior: ethPrior },
           { network: 'solana', latestObservedAt: '2026-10-25T01:05:00Z', latest: solLatest, prior: null },
@@ -77,6 +80,7 @@ describe('overview history response mapping', () => {
     );
     const r = await mapOverviewResponse(res);
     if (r.kind !== 'ok') throw new Error('expected ok');
+    expect(r.recordedRunMembership).toBe('exact');
     expect(r.networks).toHaveLength(2);
     expect(r.networks[0]).toEqual({ network: 'ethereum', at: '2026-10-25T01:00:00Z', latest: ethLatest, prior: ethPrior });
     // Solana first observation: its own prior is null even though ETH has one.
@@ -100,5 +104,19 @@ describe('overview history response mapping', () => {
       { status: 200, headers: { 'content-type': 'application/json' } },
     );
     expect(await mapOverviewResponse(missing)).toEqual({ kind: 'failed' });
+  });
+  it('fails closed on a missing or unknown recordedRunMembership - never silently exact', async () => {
+    const base = {
+      status: 'ok', latestCompleteObservedAt: '2026-10-25T01:00:00Z', latest: [], prior: null,
+      networks: [{ network: 'ethereum', latestObservedAt: '2026-10-25T01:00:00Z', latest: [], prior: null }],
+    };
+    const mk = (extra: Record<string, unknown>) =>
+      new Response(JSON.stringify({ ...base, ...extra }), { status: 200, headers: { 'content-type': 'application/json' } });
+    expect(await mapOverviewResponse(mk({}))).toEqual({ kind: 'failed' });
+    expect(await mapOverviewResponse(mk({ recordedRunMembership: 'precise' }))).toEqual({ kind: 'failed' });
+    // Legacy marker passes through for the consumer caveat.
+    const legacy = await mapOverviewResponse(mk({ recordedRunMembership: 'best_effort_legacy' }));
+    if (legacy.kind !== 'ok') throw new Error('expected ok');
+    expect(legacy.recordedRunMembership).toBe('best_effort_legacy');
   });
 });

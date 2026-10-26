@@ -57,9 +57,9 @@ describe('snapshot consent routes', () => {
     await handleSnapshotConsentChange(post({ action: 'grant' }, cookie), env);
     const w = await handleSnapshotConsentChange(post({ action: 'withdraw' }, cookie), env);
     expect(w.status).toBe(200);
-    const body = (await w.json()) as { consented: boolean; deleted: { balances: number; positions: number; prices: number } };
+    const body = (await w.json()) as { consented: boolean; deleted: { balances: number; positions: number; prices: number; runs: number } };
     expect(body.consented).toBe(false);
-    expect(body.deleted).toEqual({ balances: 0, positions: 0, prices: 0 });
+    expect(body.deleted).toEqual({ balances: 0, positions: 0, prices: 0, runs: 0 });
     const s = await handleSnapshotConsentStatus(get(cookie), env);
     expect(((await s.json()) as { consented: boolean }).consented).toBe(false);
   });

@@ -56,6 +56,9 @@ export async function handleOverview(req: Request, env: OverviewEnv): Promise<Re
       solanaScope: 'sol_only',
       latestCompleteObservedAt: h.latestObservedAt,
       newerPartial: h.newerPartial,
+      // 'exact' claims RECORDED-RUN MEMBERSHIP only; 'best_effort_legacy' =
+      // a legacy latest/prior baseline may under-serve (never phantom).
+      recordedRunMembership: h.recordedRunMembership,
       latest: h.latest,
       prior: h.prior,
       // Per-network slices with their own timestamps: the honest baseline for

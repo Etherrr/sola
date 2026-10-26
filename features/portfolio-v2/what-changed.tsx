@@ -20,7 +20,15 @@ type Load =
   | { kind: 'notinvited' }
   | { kind: 'off' }
   | { kind: 'empty' }
-  | { kind: 'ok'; at: string; newerPartial: boolean; latest: ObservedAmount[]; prior: ObservedAmount[] | null; networks: NetworkSlice[] }
+  | {
+      kind: 'ok';
+      at: string;
+      newerPartial: boolean;
+      latest: ObservedAmount[];
+      prior: ObservedAmount[] | null;
+      networks: NetworkSlice[];
+      recordedRunMembership: 'exact' | 'best_effort_legacy';
+    }
   | { kind: 'failed' };
 
 const short = (a: string) => (a.length > 16 ? `${a.slice(0, 8)}…${a.slice(-6)}` : a);
@@ -45,7 +53,15 @@ export function WhatChanged() {
       if (!live) return;
       if (r.kind === 'empty') setLoad({ kind: 'empty' });
       else if (r.kind === 'ok')
-        setLoad({ kind: 'ok', at: r.at, newerPartial: r.newerPartial, latest: r.latest, prior: r.prior, networks: r.networks });
+        setLoad({
+          kind: 'ok',
+          at: r.at,
+          newerPartial: r.newerPartial,
+          latest: r.latest,
+          prior: r.prior,
+          networks: r.networks,
+          recordedRunMembership: r.recordedRunMembership,
+        });
       else setLoad({ kind: r.kind });
     });
     return () => { live = false; };
@@ -86,6 +102,13 @@ export function WhatChanged() {
       {newerPartial && (
         <p>
           <em>A newer partial observation exists but is not a trustworthy baseline.</em>
+        </p>
+      )}
+      {load.recordedRunMembership === 'best_effort_legacy' && (
+        // Older observations predate exact run tracking and may UNDER-SERVE
+        // holdings/diffs; they are never presented as exact.
+        <p>
+          <em>Older observations may be incomplete - recorded before exact run tracking.</em>
         </p>
       )}
       {sections.map((sec) => {

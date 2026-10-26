@@ -10,7 +10,9 @@ export function createSqliteD1(): { db: D1Like; raw: DatabaseSync } {
   const raw = new DatabaseSync(':memory:');
   // 0004 included: the legacy-visibility read path (d1.ts list) references claims_ledger,
   // so the adapter world is the post-0004 schema - the same order production must deploy in.
-  for (const f of ['0001_accounts_and_counters.sql', '0002_native_auth.sql', '0003_portfolio_user_unique.sql', '0004_claims.sql']) {
+  // 0005 included: sync_runs.network/observed_at attribution columns; run-baseline read
+  // paths are written against the post-0005 schema (legacy NULL attribution still tested).
+  for (const f of ['0001_accounts_and_counters.sql', '0002_native_auth.sql', '0003_portfolio_user_unique.sql', '0004_claims.sql', '0005_run_attribution.sql']) {
     raw.exec(readFileSync(resolve(__dirname, '../../migrations/' + f), 'utf8'));
   }
   const db: D1Like = {

@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { tick } from './helpers/tick';
 import { createSqliteD1 } from './helpers/d1-sqlite';
 import { handleOverview } from '../server/portfolio/overview-handler';
 import { createSession } from '../server/auth/sessions';
@@ -6,7 +7,6 @@ import { SESSION_COOKIE } from '../server/auth/email';
 import { grantSnapshotConsent, recordObservation } from '../server/portfolio/snapshots';
 import type { ProviderResult } from '../server/portfolio/provider';
 
-const net = (a: string): 'ethereum' | 'solana' => (a.startsWith('0x') ? 'ethereum' : 'solana');
 
 let db: ReturnType<typeof createSqliteD1>['db'];
 let cookie: string;
@@ -65,8 +65,10 @@ describe('overview read route', () => {
 
   it('returns latest+prior COMPLETE-run slices, labeled spot-only, after recorded observations', async () => {
     await grantSnapshotConsent(db, 'u1', NOW);
-    await recordObservation(db, 'u1', obs('1.0', '2026-10-25T10:00:00Z'), net);
-    await recordObservation(db, 'u1', obs('1.5', '2026-10-25T11:00:00Z'), net);
+    await tick();
+    await recordObservation(db, 'u1', 'ethereum', obs('1.0', '2026-10-25T10:00:00Z'));
+    await tick();
+    await recordObservation(db, 'u1', 'ethereum', obs('1.5', '2026-10-25T11:00:00Z'));
     const r = await handleOverview(get(cookie), envOn());
     expect(r.status).toBe(200);
     const body = (await r.json()) as {
@@ -84,7 +86,8 @@ describe('overview read route', () => {
     await db.prepare("INSERT INTO users (id, status, created_at, updated_at) VALUES ('u2','active',?,?)").bind(NOW, NOW).run();
     await db.prepare("INSERT INTO portfolios (id, user_id, display_prefs, created_at) VALUES ('pf2','u2',NULL,?)").bind(NOW).run();
     await grantSnapshotConsent(db, 'u2', NOW);
-    await recordObservation(db, 'u2', obs('9.9', '2026-10-25T12:00:00Z'), net);
+    await tick();
+    await recordObservation(db, 'u2', 'ethereum', obs('9.9', '2026-10-25T12:00:00Z'));
     const r = await handleOverview(get(cookie), envOn());
     const body = (await r.json()) as { status: string };
     expect(body.status).toBe('empty');

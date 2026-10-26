@@ -21,7 +21,7 @@ import type { NativeAuthEnv } from '../auth/email';
 import type { PortfolioProvider, ProviderResult } from './provider';
 import { createLiveProvider } from './live-provider';
 import { createSolanaLiveProvider } from './live-provider-solana';
-import { hasSnapshotConsent, recordObservation, type RecordOutcome } from './snapshots';
+import { hasSnapshotConsent, recordObservation, recordSyncError, type RecordOutcome, type SyncErrorKind } from './snapshots';
 
 const json = (status: number, body: unknown, headers?: HeadersInit): Response =>
   new Response(JSON.stringify(body), {
@@ -59,7 +59,7 @@ async function readNetwork(
   addresses: string[],
   network: Network,
   timeoutMs: number,
-): Promise<Extract<ProviderResult, { ok: true }> | { error: string }> {
+): Promise<Extract<ProviderResult, { ok: true }> | { error: SyncErrorKind }> {
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), timeoutMs);
   try {
@@ -123,10 +123,14 @@ export async function handleSync(
     if (addresses.length === 0) continue;
     const result = await readNetwork(deps[network], addresses, network, deps.timeoutMs);
     if ('error' in result) {
+      // Record the ATTEMPT as bounded operational metadata (no holdings
+      // content, no provider detail) so read paths can distinguish
+      // attempted-and-failed from never-attempted (reviewer amendments A3/A4).
+      await recordSyncError(db, userId, network, result.error);
       runs.push({ network, recorded: false, reason: result.error });
       continue;
     }
-    const outcome: RecordOutcome = await recordObservation(db, userId, result, () => network);
+    const outcome: RecordOutcome = await recordObservation(db, userId, network, result);
     runs.push(
       outcome.recorded
         ? {

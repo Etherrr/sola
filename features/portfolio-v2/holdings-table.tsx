@@ -26,7 +26,14 @@ type Load =
   | { kind: 'notinvited' }
   | { kind: 'off' }
   | { kind: 'empty'; newerPartial: boolean }
-  | { kind: 'ok'; at: string; newerPartial: boolean; rows: ObservedAmount[]; networks: NetworkSlice[] }
+  | {
+      kind: 'ok';
+      at: string;
+      newerPartial: boolean;
+      rows: ObservedAmount[];
+      networks: NetworkSlice[];
+      recordedRunMembership: 'exact' | 'best_effort_legacy';
+    }
   | { kind: 'failed' };
 
 const short = (a: string) => (a.length > 12 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a);
@@ -34,7 +41,14 @@ const short = (a: string) => (a.length > 12 ? `${a.slice(0, 6)}…${a.slice(-4)}
 const toLoad = (r: OverviewResult): Load => {
   if (r.kind === 'empty') return { kind: 'empty', newerPartial: r.newerPartial };
   if (r.kind === 'ok')
-    return { kind: 'ok', at: r.at, newerPartial: r.newerPartial, rows: r.latest, networks: r.networks };
+    return {
+      kind: 'ok',
+      at: r.at,
+      newerPartial: r.newerPartial,
+      rows: r.latest,
+      networks: r.networks,
+      recordedRunMembership: r.recordedRunMembership,
+    };
   return { kind: r.kind };
 };
 
@@ -116,6 +130,11 @@ export function HoldingsTable() {
         ))}
         {load.newerPartial ? ' A newer observation is still partial.' : ''}
       </em></p>
+      {load.recordedRunMembership === 'best_effort_legacy' && (
+        // Older observations predate exact run tracking and may under-serve;
+        // they are never presented as exact.
+        <p><em>Older observations may be incomplete - recorded before exact run tracking.</em></p>
+      )}
     </>
   );
 }

@@ -43,6 +43,11 @@ export type OverviewResult =
       prior: ObservedAmount[] | null;
       /** Per-network slices; Solana rows cover the SOL balance only. */
       networks: NetworkSlice[];
+      /** 'exact' = recorded-run membership only (every serving run owns its
+       *  rows) - NOT portfolio completeness or valuation truth.
+       *  'best_effort_legacy' = a pre-run-tracking baseline may under-serve;
+       *  show the caveat. */
+      recordedRunMembership: 'exact' | 'best_effort_legacy';
     };
 
 /** Pure response mapping, exported for tests. */
@@ -87,6 +92,11 @@ export async function mapOverviewResponse(res: Response): Promise<OverviewResult
       latest: n.latest as ObservedAmount[],
       prior: Array.isArray(n.prior) ? (n.prior as ObservedAmount[]) : null,
     }));
+    // Recorded-run membership marker (2026-10-26): legacy-era baselines may
+    // UNDER-SERVE holdings/diffs; consumers must show the caveat. A missing
+    // or unknown value is a broken payload - fail, never silently exact.
+    const m = b.recordedRunMembership;
+    if (m !== 'exact' && m !== 'best_effort_legacy') return { kind: 'failed' };
     return {
       kind: 'ok',
       at: b.latestCompleteObservedAt,
@@ -94,6 +104,7 @@ export async function mapOverviewResponse(res: Response): Promise<OverviewResult
       latest: b.latest as ObservedAmount[],
       prior: Array.isArray(b.prior) ? (b.prior as ObservedAmount[]) : null,
       networks,
+      recordedRunMembership: m,
     };
   }
   return { kind: 'failed' };

@@ -87,6 +87,23 @@ export const subDecimal = (a: string, b: string): string =>
 export const isZero = (s: string): boolean => DEC_RE.test(s) && BigInt(s.replace('-', '').replace('.', '') || '0') === 0n;
 
 /** Exact a / b truncated to 8 fractional digits (positive decimals only). */
+/** Exact a x b for decimal strings, truncated to 6 fractional digits (the
+ *  same truncation units.valueUsd applies). Used on the RECORDED read path
+ *  where amounts are already normalized decimals - no raw/decimals math. */
+export function mulDecimal(a: string, b: string): string {
+  const x = splitDec(a);
+  const y = splitDec(b);
+  const neg = x.neg !== y.neg;
+  const digits = (BigInt(x.digits) * BigInt(y.digits)).toString();
+  const scale = x.fracLen + y.fracLen;
+  const padded = digits.padStart(scale + 1, '0');
+  const whole = scale ? padded.slice(0, padded.length - scale) : padded;
+  const frac = scale ? padded.slice(padded.length - scale) : '';
+  const f6 = frac.slice(0, 6).replace(/0+$/, '');
+  const zero = isZero(whole + (f6 ? '.' + f6 : ''));
+  return `${neg && !zero ? '-' : ''}${whole || '0'}${f6 ? '.' + f6 : ''}`;
+}
+
 export function divDecimal(a: string, b: string): string {
   const x = splitDec(a);
   const y = splitDec(b);

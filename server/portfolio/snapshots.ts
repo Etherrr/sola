@@ -13,17 +13,18 @@
  *   insert). No post-withdrawal history can survive.
  * - Snapshots are value-only observations - never P&L, never backfilled with
  *   fabricated history, never UPDATEd once written.
- * - Idempotent + concurrency-safe: ids are deterministic content hashes and
- *   every insert is ON CONFLICT(id) DO NOTHING; a redelivered or concurrently
- *   delivered identical observation is skipped, never duplicated, never an
- *   error. Address identity inside the hash is the central chain-aware
- *   addressKey (EVM case-insensitive, Solana base58 EXACT) so case-distinct
- *   Solana addresses keep distinct history.
+ * - Run-scoped idempotent writes: ids are deterministic hashes whose FIRST
+ *   component is the sync_run id, and every insert is ON CONFLICT(id) DO
+ *   NOTHING; a redelivered row WITHIN one run is skipped, never duplicated,
+ *   never an error, while each run owns its rows exactly (run-membership
+ *   verdict, 2026-10-26). Address identity inside the hash is the central
+ *   chain-aware addressKey (EVM case-insensitive, Solana base58 EXACT) so
+ *   case-distinct Solana addresses keep distinct history.
  * - A partial provider failure records what arrived with its sync_run status;
  *   it never erases or overwrites previously stored history.
  */
 import type { ChallengeDb } from '../auth/challenges';
-import { addressKey, fromWalletResult, isZero } from './domain';
+import { addressKey, fromWalletResult, isZero, type Network } from './domain';
 import type { ProviderResult } from './provider';
 
 export const SNAPSHOT_CONSENT_KIND = 'portfolio_snapshots';
@@ -71,13 +72,15 @@ export async function grantSnapshotConsent(
 }
 
 /** Consent WITHDRAWAL: revoke FIRST, then delete ALL snapshot history for the
- *  user's portfolios. Revoke-first ordering plus consent-conditional inserts
- *  guarantees no row can be written after the delete. Sync runs stay as audit
- *  metadata (no balance content). */
+ *  user - INCLUDING the sync_runs rows (reviewer amendment A3, 2026-10-26):
+ *  run metadata would leak that history existed, its networks and its times,
+ *  so after withdrawal the account must be indistinguishable from
+ *  never-observed. Revoke-first ordering plus consent-conditional inserts
+ *  guarantees no row can be written after the delete. */
 export async function withdrawSnapshotConsent(
   db: ChallengeDb,
   userId: string,
-): Promise<{ balances: number; positions: number; prices: number }> {
+): Promise<{ balances: number; positions: number; prices: number; runs: number }> {
   const now = new Date().toISOString();
   await db
     .prepare(
@@ -89,9 +92,11 @@ export async function withdrawSnapshotConsent(
   return deleteSnapshots(db, userId);
 }
 
-/** Delete all snapshot CONTENT for the user's portfolios (consent must already
- *  be revoked when this is called as part of withdrawal). */
-export async function deleteSnapshots(db: ChallengeDb, userId: string): Promise<{ balances: number; positions: number; prices: number }> {
+/** Delete all snapshot history for the user: portfolio content rows, price
+ *  rows AND the sync_runs themselves - nothing about the user's observation
+ *  history (content, networks, times) survives (reviewer amendment A3).
+ *  Consent must already be revoked when this is called as part of withdrawal. */
+export async function deleteSnapshots(db: ChallengeDb, userId: string): Promise<{ balances: number; positions: number; prices: number; runs: number }> {
   const portfolios = await db
     .prepare(`SELECT id FROM portfolios WHERE user_id = ?`)
     .bind(userId)
@@ -106,12 +111,50 @@ export async function deleteSnapshots(db: ChallengeDb, userId: string): Promise<
     .prepare(`DELETE FROM price_observations WHERE sync_run_id IN (SELECT id FROM sync_runs WHERE user_id = ?)`)
     .bind(userId)
     .run()).meta?.changes ?? 0;
-  return { balances: b, positions: p, prices: pr };
+  // then the runs themselves: prices/content are gone first (FK order), and
+  // with the runs goes every remaining trace (attribution, times, errors).
+  const runs =
+    (await db.prepare(`DELETE FROM sync_runs WHERE user_id = ?`).bind(userId).run()).meta?.changes ?? 0;
+  return { balances: b, positions: p, prices: pr, runs };
 }
 
 export type RecordOutcome =
+  // skippedDuplicates counts WITHIN-run duplicate inserts only (run-scoped
+  // ids, 2026-10-26 verdict); an identical LATER run writes its own fresh rows.
   | { recorded: true; syncRunId: string; balances: number; positions: number; prices: number; skippedDuplicates: number }
   | { recorded: false; reason: 'no_consent' | 'no_portfolio' | 'provider_error' };
+
+/** Bounded error kinds for failed sync attempts - NEVER a raw provider error
+ *  string, payload, address or response fragment (reviewer amendment A4). */
+export type SyncErrorKind =
+  | 'rate_limited'
+  | 'timeout'
+  | 'unavailable'
+  | 'bad_response'
+  | 'provider_error'
+  | 'simulated_refused';
+
+/** Record a FAILED sync attempt as operational metadata ONLY: the fact that an
+ *  attempt on this network failed at this wall-clock time, with a bounded
+ *  error kind. No holdings content, no provider detail. Consent-conditional
+ *  like every write here. Error rows never advance read baselines, never set
+ *  newerPartial/newerUnattributed, and never surface in view responses. */
+export async function recordSyncError(
+  db: ChallengeDb,
+  userId: string,
+  network: Network,
+  kind: SyncErrorKind,
+): Promise<void> {
+  const now = new Date().toISOString();
+  await db
+    .prepare(
+      `INSERT INTO sync_runs (id, user_id, requested_at, started_at, completed_at, provider, status, error, completeness, network, observed_at)
+       SELECT ?, ?, ?, ?, ?, NULL, 'error', ?, NULL, ?, NULL
+       WHERE EXISTS (${ACTIVE_CONSENT})`,
+    )
+    .bind(crypto.randomUUID(), userId, now, now, now, kind, network, userId)
+    .run();
+}
 
 /** Record one provider result as snapshots for the user's portfolio. Records
  *  NOTHING when consent is absent (checked atomically inside every insert),
@@ -119,8 +162,8 @@ export type RecordOutcome =
 export async function recordObservation(
   db: ChallengeDb,
   userId: string,
+  network: Network,
   result: Extract<ProviderResult, { ok: true }>,
-  networkOf: (address: string) => 'ethereum' | 'solana',
 ): Promise<RecordOutcome> {
   const portfolio = await db
     .prepare(`SELECT id FROM portfolios WHERE user_id = ?`)
@@ -135,11 +178,11 @@ export async function recordObservation(
   // withdrawn at this exact point, NO run (and therefore no content) appears.
   const r = await db
     .prepare(
-      `INSERT INTO sync_runs (id, user_id, requested_at, started_at, completed_at, provider, status, error, completeness)
-       SELECT ?, ?, ?, ?, ?, ?, ?, NULL, ?
+      `INSERT INTO sync_runs (id, user_id, requested_at, started_at, completed_at, provider, status, error, completeness, network, observed_at)
+       SELECT ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?
        WHERE EXISTS (${ACTIVE_CONSENT})`,
     )
-    .bind(syncRunId, userId, now, now, now, result.provider, anyPartial ? 'partial' : 'live', anyPartial ? 'partial' : 'complete', userId)
+    .bind(syncRunId, userId, now, now, now, result.provider, anyPartial ? 'partial' : 'live', anyPartial ? 'partial' : 'complete', network, result.observedAt, userId)
     .run();
   if (!r.success) throw new Error('sync_run_insert_failed');
   if ((r.meta?.changes ?? 0) === 0) return { recorded: false, reason: 'no_consent' };
@@ -151,11 +194,16 @@ export async function recordObservation(
   const seenPrices = new Set<string>();
 
   for (const w of result.wallets) {
-    const network = networkOf(w.address);
     for (const p of fromWalletResult(network, w, result.observedAt)) {
       if (isZero(p.amount)) continue;
+      // RUN-SCOPED id (reviewer run-membership verdict, 2026-10-26): the run
+      // id is the FIRST hash component, so every run owns its rows exactly -
+      // cross-run identical re-observations write FRESH rows and strict
+      // run-id reads are exact in both directions (no resurrection, no false
+      // empty). ON CONFLICT still guards WITHIN-run redelivery (same run ->
+      // same hash -> skip), incl. case-variant EVM address collisions.
       const id = await sha256(
-        [portfolio.id, p.kind, p.protocol ?? '', p.asset.assetId, addressKey(p.network, p.address), p.amount, p.observedAt].join('|'),
+        [syncRunId, portfolio.id, p.kind, p.protocol ?? '', p.asset.assetId, addressKey(p.network, p.address), p.amount, p.observedAt].join('|'),
       );
       if (p.kind === 'wallet_balance') {
         const ins = await db
@@ -192,12 +240,19 @@ export async function recordObservation(
         if ((ins.meta?.changes ?? 0) === 1) positions += 1;
         else skipped += 1;
       }
-      // price observations: one per distinct asset+quote per run
+      // price observations: one per distinct asset+quote per run. MULTIPLE
+      // quotes per (run, asset) are LEGAL storage - each wallet's resolve can
+      // record its own quote - and every quote stays recorded; the READ side
+      // picks the most recently observed recorded quote per (run, asset) as
+      // the documented presentation rule (reviewer R1 fix, 2026-10-26).
       if (p.price) {
         const pk = [p.asset.assetId, p.price.usd, p.price.observedAt].join('|');
         if (!seenPrices.has(pk)) {
           seenPrices.add(pk);
-          const priceId = await sha256(['price', ...pk].join('|'));
+          // run-scoped TOO: prices join per (sync_run_id, asset) on read, so a
+          // cross-run-deduped identical quote would leave the baseline run's
+          // holdings falsely UNPRICED (reviewer consistency point).
+          const priceId = await sha256(['price', syncRunId, ...pk].join('|'));
           const ins = await db
             .prepare(
               `INSERT INTO price_observations (id, sync_run_id, asset_id, usd, source, price_observed_at)
