@@ -30,7 +30,7 @@ describe('learning and safety boundaries', () => {
     ]);
     expect(officialLinks.every((link) => link.url.startsWith('https://'))).toBe(true);
   });
-  it('keeps wallet libraries and signing/lookup operations out of application code', () => {
+  it('keeps transaction operations forbidden and message signing confined to reviewed wallet paths', () => {
     function files(dir: string): string[] {
       return readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
         entry.isDirectory() ? files(join(dir, entry.name)) : [join(dir, entry.name)],
@@ -38,10 +38,10 @@ describe('learning and safety boundaries', () => {
     }
     // The single approved network call is a same-origin POST to our own read-only API.
     const API_CLIENT = join('features', 'portfolio', 'api-client.ts');
-    const source = ['app', 'components', 'features', 'lib']
+    const paths = ['app', 'components', 'features', 'lib']
       .flatMap(files)
-      .filter((file) => /\.(ts|tsx)$/.test(file) && file !== API_CLIENT)
-      .map((file) => readFileSync(file, 'utf8'))
+      .filter((file) => /\.(ts|tsx)$/.test(file) && file !== API_CLIENT);
+    const source = paths.map((file) => readFileSync(file, 'utf8'))
       .join('\n');
     // Exactly eighteen fetch call sites exist: the single-address lookup POST and its multi-address
     // variant (same resolve endpoint, same transport guarantees), the same-origin session GET,
@@ -89,9 +89,15 @@ describe('learning and safety boundaries', () => {
     expect(readFileSync(API_CLIENT, 'utf8')).toMatch(/\/api\/v1\/portfolio\/positions/);
     expect(readFileSync(API_CLIENT, 'utf8')).toMatch(/\/api\/v1\/portfolio\/risk/);
     expect(readFileSync(API_CLIENT, 'utf8')).toMatch(/\/api\/v1\/portfolio\/summary/);
-    expect(source).not.toMatch(
-      /window\.(ethereum|solana)|eth_requestAccounts|signTransaction|signMessage|sendTransaction|fetch\s*\(/,
-    );
+    // Transaction, approval and arbitrary network operations remain forbidden everywhere.
+    expect(source).not.toMatch(/window\.(ethereum|solana)|signTransaction|signAllTransactions|sendTransaction|eth_sendTransaction|eth_signTypedData|wallet_sendCalls|fetch\s*\(/);
+    const approvedMessagePaths = new Set(['features/auth-v2/wallet-connectors.ts','features/auth-v2/wallet-flow.ts']);
+    for (const path of paths.filter(path => !approvedMessagePaths.has(path)))
+      expect(readFileSync(path,'utf8')).not.toMatch(/eth_requestAccounts|personal_sign|signMessage/);
+    const connector = readFileSync('features/auth-v2/wallet-connectors.ts','utf8');
+    expect(connector.match(/method:'personal_sign'/g)).toHaveLength(1);
+    expect(connector.match(/await signer\.signMessage\(/g)).toHaveLength(1);
+    expect(connector).not.toMatch(/method:'eth_sign'|method:'eth_signTypedData/);
     const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
     // jose (MIT, no dependencies, exact-pinned) verifies Access JWTs on the server only.
     // @noble/curves + @noble/hashes (exact-pinned) verify SIWE/SIWS SIGN-IN signatures
@@ -99,7 +105,8 @@ describe('learning and safety boundaries', () => {
     // approval signing, and never imported by application code.
     // @simplewebauthn/server (exact-pinned, WebCrypto-based) verifies passkey
     // ceremonies in server/auth only; never imported by application code.
-    expect(Object.keys(pkg.dependencies).sort()).toEqual(['@noble/curves', '@noble/hashes', '@simplewebauthn/server', 'jose', 'next', 'react', 'react-dom']);
+    expect(Object.keys(pkg.dependencies).sort()).toEqual(['@noble/curves', '@noble/hashes', '@simplewebauthn/server', '@solana/wallet-standard-features', '@wallet-standard/app', '@wallet-standard/features', 'jose', 'mipd', 'next', 'react', 'react-dom']);
+    for(const dependency of ['mipd','@wallet-standard/app','@wallet-standard/features','@solana/wallet-standard-features']) expect(pkg.dependencies[dependency]).toMatch(/^\d+\.\d+\.\d+$/);
     expect(pkg.dependencies['@simplewebauthn/server']).toMatch(/^\d+\.\d+\.\d+$/);
     expect(pkg.dependencies.jose).toMatch(/^\d+\.\d+\.\d+$/);
     expect(pkg.dependencies['@noble/curves']).toMatch(/^\d+\.\d+\.\d+$/);
