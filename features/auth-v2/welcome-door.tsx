@@ -39,7 +39,7 @@ export function WelcomeDoor() {
         <p>
           <em>Lessons and exercises - no Sola account needed in the native journey
           (this staging host still has its own access gate).</em>{' '}
-          <a href="/education">Open Education</a>
+          <a href="/learn">Open Education</a>
         </p>
       </div>
     </>

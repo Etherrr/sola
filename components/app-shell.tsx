@@ -26,7 +26,7 @@ const sections = [
   },
 ];
 // The only education trace in the app: one button leading to the separate Education area.
-const educationLink = { href: '/education', label: 'Education', icon: '◎', cls: 'nav-settings edu-desktop' };
+const educationLink = { href: '/learn', label: 'Education', icon: '◎', cls: 'nav-settings edu-desktop' };
 const settingsLink = { href: '/settings', label: 'Settings', icon: '⚙', cls: 'nav-settings' };
 export function AppShell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
@@ -138,7 +138,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 ref={moreBtnRef}
                 aria-expanded={moreOpen}
                 aria-current={
-                  path.startsWith('/education') || path.startsWith('/portfolio')
+                  path.startsWith('/learn') || path.startsWith('/portfolio')
                     ? 'page'
                     : undefined
                 }

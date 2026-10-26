@@ -166,11 +166,12 @@ describe('the DeFi app carries no education traces beyond one button to the sepa
   const shell = readFileSync('components/app-shell.tsx', 'utf8');
   const track = readFileSync('app/track/page.tsx', 'utf8');
   it('the shell keeps single Education and legacy destinations and drops Learn, Start and Explore', () => {
-    expect(shell).toContain("href: '/education'");
-    expect(shell).not.toMatch(/href: '\/(learn|start|explore)'/);
+    expect(shell).toContain("href: '/learn'");
+    expect(shell).not.toMatch(/href: '\/(education|start|explore)'/);
     // One Education destination total: the desktop sidebar link and the mobile More
-    // disclosure both point at the same single educationLink entry.
-    expect((shell.match(/href: '\/education'/g) || []).length).toBe(1);
+    // disclosure both point at the same single educationLink entry (E3: repointed to
+    // the canonical /learn shell; /education is a compatibility stub).
+    expect((shell.match(/href: '\/learn'/g) || []).length).toBe(1);
     // The Portfolio tab leads to the native account book; the legacy Track list keeps
     // exactly one destination entry, shared by the sidebar and the More disclosure.
     expect(shell).toContain("href: '/account'");

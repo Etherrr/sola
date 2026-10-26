@@ -124,7 +124,7 @@ test('real back navigation after logout (HTML no-store) shows no stale identity 
   await expect(page.getByText('Cold wallet')).toBeVisible();
 
   // Navigate away (the real logout target is off-app), revoke, then go back.
-  await page.goto('/education/');
+  await page.goto('/learn/');
   await showIdentity(page);
   session.verified = false;
   await page.goBack();

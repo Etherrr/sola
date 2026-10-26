@@ -38,7 +38,7 @@ export const lessons: Lesson[] = [
       },
       {
         title: 'Observation comes first',
-        body: 'Sola Lens v0.1 is a learning preview. Every portfolio is an invented example. You can explore without installing anything.',
+        body: 'Sola Lens is a learning preview. Demo portfolios are invented examples, always labeled as simulations. You can explore without installing anything.',
       },
     ],
     question: 'What do you need to explore this preview?',

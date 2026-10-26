@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 const routes = [
   '/',
-  '/education',
+  '/learn',
   '/markets',
   '/learn/start-here',
   '/learn/wallets',
@@ -56,9 +56,10 @@ test('all routes render, remain responsive, and pass WCAG automated checks', asy
 test('beginner, experienced and demo entry points work', async ({ page, isMobile }) => {
   await page.goto('/');
   await page.getByRole('link', { name: /^Education/ }).click();
-  await expect(page).toHaveURL(/\/education\/?$/);
-  await page.getByRole('link', { name: /I’m new to DeFi/ }).click();
-  // /start is a compatibility stub: the client redirect lands on the canonical /learn path.
+  // E3: the entrance Education card leads straight to the canonical /learn library;
+  // /education remains as a compatibility stub redirecting here.
+  await expect(page).toHaveURL(/\/learn\/?$/);
+  await page.getByRole('link', { name: /A clearer view of DeFi/ }).first().click();
   await expect(page).toHaveURL(/\/learn\/start-here\/?$/);
   await page.getByRole('link', { name: 'Skip this lesson' }).click();
   await expect(page).toHaveURL(/\/learn\/wallets\/?$/);

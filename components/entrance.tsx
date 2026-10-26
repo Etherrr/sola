@@ -77,7 +77,7 @@ export function Entrance() {
             : 'Accounts are invitation-only while in preview.'}
         </p>
         <div className="entrance-split">
-          <Link href="/education" className="entrance-card edu">
+          <Link href="/learn" className="entrance-card edu">
             <span className="entrance-h">Education</span>
             <span className="card-kicker">LEARN DEFI AT YOUR OWN PACE</span>
             <span className="entrance-p">
