@@ -17,7 +17,7 @@ export function SignedOutGate({ children }: { children: ReactNode }) {
     <div className="ov2-signedout">
       <p className="ov2-signedout-line">Sign in to see your holdings, addresses and recorded history.</p>
       <p className="actions">
-        <a className="button primary" href="/dev/sign-in">
+        <a className="button primary" href="/sign-in">
           Sign in
         </a>
       </p>

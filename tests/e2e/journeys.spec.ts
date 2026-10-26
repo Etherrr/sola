@@ -739,8 +739,8 @@ test('native welcome door: real 48px actions, visible keyboard focus, nothing se
   const main = page.locator('#main');
   const signIn = main.getByRole('link', { name: 'Sign in', exact: true });
   const create = main.getByRole('link', { name: 'Create account' });
-  await expect(signIn).toHaveAttribute('href', '/dev/sign-in');
-  await expect(create).toHaveAttribute('href', '/dev/create-account');
+  await expect(signIn).toHaveAttribute('href', '/sign-in');
+  await expect(create).toHaveAttribute('href', '/create-account');
   // Touch targets: both entry actions meet the 48px minimum.
   for (const action of [signIn, create]) {
     const box = await action.boundingBox();
@@ -781,7 +781,7 @@ test('v2 overview: signed-out shows one honest card; live session keeps sections
   ).toBeVisible();
   await expect(main.getByRole('link', { name: 'Sign in', exact: true })).toHaveAttribute(
     'href',
-    '/dev/sign-in',
+    '/sign-in',
   );
   await expect(main).not.toContainText('Sign in to load your recorded holdings.');
   await page.unroute('**/api/v1/auth/email/session');

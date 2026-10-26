@@ -51,7 +51,7 @@ test('open-redirect next values fall back to the default destination', async ({ 
     await page.getByRole('button', { name: 'Send sign-in code' }).click();
     await page.getByLabel(/code sent to/i).fill('123456');
     await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-    await expect(page.getByRole('link', { name: 'Continue' })).toHaveAttribute('href', '/dev/overview-v2');
+    await expect(page.getByRole('link', { name: 'Continue' })).toHaveAttribute('href', '/account');
   }
 });
 

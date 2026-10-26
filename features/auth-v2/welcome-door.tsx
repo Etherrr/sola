@@ -16,7 +16,7 @@ export function WelcomeDoor() {
   const router = useRouter();
 
   useEffect(() => {
-    if (native.kind === 'ok') router.replace('/dev/overview-v2');
+    if (native.kind === 'ok') router.replace('/account');
   }, [native.kind, router]);
 
   if (native.kind === 'loading' || native.kind === 'ok') {
@@ -27,8 +27,8 @@ export function WelcomeDoor() {
     <>
       <div className="panel">
         <p className="actions">
-          <a className="button primary" href="/dev/sign-in">Sign in</a>{' '}
-          <a className="button secondary" href="/dev/create-account">Create account</a>
+          <a className="button primary" href="/sign-in">Sign in</a>{' '}
+          <a className="button secondary" href="/create-account">Create account</a>
         </p>
         <p>
           <em>Invite-only preview. One email code, no password.</em>
