@@ -153,9 +153,13 @@ describe('wallet link (authenticated, fresh challenge, no auto-transfer)', () =>
     raw.exec("CREATE TRIGGER fail_links BEFORE INSERT ON wallet_links BEGIN SELECT RAISE(ABORT, 'forced failure'); END");
     const ch = await handleWalletLinkChallenge(post({ address: evmAddress }, cookie), env, 'evm');
     const { message } = (await ch.json()) as { message: string };
-    await expect(
-      handleWalletLinkVerify(post({ address: evmAddress, message, signature: signEvm(evmPriv)(message) }, cookie), env, 'evm'),
-    ).rejects.toThrow();
+    const failed = await handleWalletLinkVerify(post({ address: evmAddress, message, signature: signEvm(evmPriv)(message) }, cookie), env, 'evm');
+    expect(failed.status).toBe(503);
+    expect(failed.headers.get('cache-control')).toBe('no-store');
+    expect(failed.headers.get('set-cookie')).toBeNull();
+    expect(await failed.json()).toMatchObject({error:'unavailable',freshChallengeRequired:true});
+    const replay = await handleWalletLinkVerify(post({ address: evmAddress, message, signature: signEvm(evmPriv)(message) }, cookie), env, 'evm');
+    expect(replay.status).toBe(401);
     const ident = await db
       .prepare("SELECT user_id FROM auth_identities WHERE kind='wallet_evm' AND identifier=?")
       .bind(evmAddress.toLowerCase()).first<{ user_id: string }>();

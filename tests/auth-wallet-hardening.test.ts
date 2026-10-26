@@ -81,6 +81,30 @@ describe('wallet creation atomicity and burned challenge',()=>{
   expect(raw.prepare('SELECT count(*) n FROM users').get()).toMatchObject({n:1});
   expect(raw.prepare('SELECT user_id FROM sessions').get()).toMatchObject({user_id:'winner'});raw.close();
  });
+ it.each(['signin','link-new','link-repair','link-no-batch'])('post-claim %s failure is bounded and a fresh challenge recovers',async mode=>{
+  const {db,raw}=createSqliteD1();
+  const now=new Date().toISOString();raw.prepare("INSERT INTO users VALUES ('owner','active',?,?)").run(now,now);
+  const session=await createSession(db,'owner');const headers={cookie:SESSION_COOKIE+'='+session.id};
+  if(mode==='link-repair')raw.prepare("INSERT INTO auth_identities (id,user_id,kind,identifier,verified_at) VALUES ('partial','owner','wallet_evm',?,?)").run(address.toLowerCase(),now);
+  const env={NATIVE_AUTH_ENABLED:'true',PORTFOLIO_ACCOUNTS_DB:db};
+  const issue=mode==='signin'?handleWalletChallenge:handleWalletLinkChallenge;
+  const verify=mode==='signin'?handleWalletVerify:handleWalletLinkVerify;
+  const {message}=await (await issue(post({address},headers),env,'evm')).json() as {message:string};
+  const original=db.prepare; const originalBatch=db.batch;
+  if(mode==='signin') db.prepare=(sql:string)=>{if(sql.trimStart().startsWith('SELECT id FROM challenges'))throw new Error('forced lookup failure');return original(sql);};
+  else if(mode==='link-no-batch') (db as unknown as {batch:unknown}).batch=undefined;
+  else raw.exec("CREATE TRIGGER fail_link BEFORE INSERT ON wallet_links BEGIN SELECT RAISE(ABORT,'storage unavailable'); END");
+  const failed=await verify(post({address,message,signature:sign(message)},headers),env,'evm');
+  expect(failed.status).toBe(503);expect(failed.headers.get('cache-control')).toBe('no-store');expect(failed.headers.get('set-cookie')).toBeNull();
+  expect(await failed.json()).toMatchObject({error:'unavailable',freshChallengeRequired:true});
+  expect(raw.prepare('SELECT count(*) n FROM sessions').get()).toMatchObject({n:1});
+  expect(raw.prepare('SELECT count(*) n FROM wallet_links').get()).toMatchObject({n:0});
+  db.prepare=original;db.batch=originalBatch;raw.exec('DROP TRIGGER IF EXISTS fail_link');
+  expect((await verify(post({address,message,signature:sign(message)},headers),env,'evm')).status).toBe(401);
+  const fresh=await (await issue(post({address},headers),env,'evm')).json() as {message:string};
+  expect((await verify(post({address,message:fresh.message,signature:sign(fresh.message)},headers),env,'evm')).status).toBe(200);
+  expect(raw.prepare('SELECT count(*) n FROM wallet_links').get()).toMatchObject({n:1});raw.close();
+ });
  it('missing batch capability fails closed without partial new account',async()=>{
   const {db,raw}=createSqliteD1();const env={NATIVE_AUTH_ENABLED:'true',PORTFOLIO_ACCOUNTS_DB:{prepare:db.prepare}};
   const {message}=await (await handleWalletChallenge(post({address}),env,'evm')).json() as {message:string};

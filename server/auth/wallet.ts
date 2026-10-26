@@ -183,19 +183,19 @@ export async function handleWalletVerify(
     return json(401, { error: 'invalid_or_consumed_challenge', requestId });
   }
 
-  const challenge = await db
-    .prepare(`SELECT id FROM challenges WHERE kind = ? AND subject = ? AND claim_attempt_id = ?`)
-    .bind(kindOf(chain), addr.subject, attemptId)
-    .first<{ id: string }>();
-  if (!challenge) return json(503, { error: 'unavailable', requestId });
   let userId: string;
   let session: Awaited<ReturnType<typeof createSession>>;
   try {
+    const challenge = await db
+      .prepare(`SELECT id FROM challenges WHERE kind = ? AND subject = ? AND claim_attempt_id = ?`)
+      .bind(kindOf(chain), addr.subject, attemptId)
+      .first<{ id: string }>();
+    if (!challenge) return json(503, { error: 'unavailable', requestId, freshChallengeRequired: true });
     userId = await findOrCreateWalletUser(db, chain, addr, challenge.id);
     session = await createSession(db, userId);
   } catch {
     // A post-claim failure burns the nonce. Never issue a cookie or unconsume.
-    return json(503, { error: 'unavailable', requestId });
+    return json(503, { error: 'unavailable', requestId, freshChallengeRequired: true });
   }
   const cookie =
     `${SESSION_COOKIE}=${session.id}; Path=/; Max-Age=${SESSION_MAX_AGE_S};` +
@@ -418,10 +418,12 @@ export async function handleWalletLinkVerify(
     return json(401, { error: 'invalid_or_consumed_challenge', requestId });
   }
 
+  try {
   const challenge = await db
     .prepare(`SELECT id FROM challenges WHERE kind = ? AND subject = ? AND claim_attempt_id = ?`)
     .bind(kind, subject, attemptId)
     .first<{ id: string }>();
+  if (!challenge) return json(503, { error: 'unavailable', requestId, freshChallengeRequired: true });
 
   // No automatic transfer: a wallet already verified on another account stays there.
   const identityKind = kindOf(chain);
@@ -537,4 +539,7 @@ export async function handleWalletLinkVerify(
   if (!admitted)
     return json(409, { error: 'too_many_addresses', max: MAX_ADDRESSES_PER_NETWORK, requestId });
   return json(200, { status: 'ok', linked: 'added', requestId });
+  } catch {
+    return json(503, { error: 'unavailable', requestId, freshChallengeRequired: true });
+  }
 }
