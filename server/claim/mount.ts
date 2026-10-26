@@ -1,7 +1,7 @@
 /**
- * Routing-layer plumbing for the claim endpoints (plan B.3 slice: LOCAL route
- * mounting; independent review of this package pending; uncommitted, unpushed,
- * NEVER deployed).
+ * Routing-layer plumbing for the claim endpoints (plan B.3 slice: route
+ * mounting). These mounts are DEPLOYED in 79ececa, flag-gated (CLAIM_ENABLED
+ * absent/OFF on every environment).
  *
  * DEPLOYMENT-ORDER HARD GATE: these mounts may only serve traffic when ALL of:
  *   1. migration 0004 applied AND verified on the target database (the handlers'

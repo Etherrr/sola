@@ -316,3 +316,74 @@ describe('rollback', () => {
     expect((raw.prepare("SELECT removed_at FROM portfolio_addresses WHERE address='0xbbb'").get() as { removed_at: string | null }).removed_at).toBe('2026-10-26T07:05:00Z');
   });
 });
+
+describe('fresh-session requirement on claim mutations', () => {
+  const makeStale = (userId: string) =>
+    raw.prepare('UPDATE sessions SET created_at = ? WHERE user_id = ?')
+      .run(new Date(Date.now() - 11 * 60 * 1000).toISOString(), userId);
+
+  it('attempt: stale session gets 403 reauth_required, NOTHING mutated', async () => {
+    seedLegacy(LEG);
+    makeStale('u1');
+    const r = await handleClaimAttempt(req('POST', '/api/v1/claim', cookieU1, jwt), env, deps);
+    expect(r.status).toBe(403);
+    expect((await r.json()).error.code).toBe('reauth_required');
+    expect((raw.prepare('SELECT COUNT(*) c FROM claims_ledger').get() as { c: number }).c).toBe(0);
+    expect((raw.prepare('SELECT COUNT(*) c FROM portfolio_addresses').get() as { c: number }).c).toBe(0);
+    const vis = (raw.prepare(`SELECT COUNT(*) c FROM tracked_addresses WHERE owner_issuer_subject = ? ${LEGACY_VISIBILITY_GUARD_SQL}`).get(K) as { c: number }).c;
+    expect(vis).toBe(3); // legacy rows untouched
+  });
+
+  it('rollback: stale session gets 403 reauth_required, claim state untouched', async () => {
+    seedLegacy(LEG);
+    const a = await (await handleClaimAttempt(req('POST', '/api/v1/claim', cookieU1, jwt), env, deps)).json();
+    makeStale('u1');
+    const r = await handleClaimRollback(req('POST', '/x', cookieU1, null), env, deps, a.attemptId);
+    expect(r.status).toBe(403);
+    expect((await r.json()).error.code).toBe('reauth_required');
+    const led = raw.prepare('SELECT state FROM claims_ledger WHERE id = ?').get(a.attemptId) as { state: string };
+    expect(led.state).toBe('claimed'); // not rolled back
+  });
+
+  it('fresh session passes (the happy paths above all run on fresh sessions)', async () => {
+    seedLegacy(LEG);
+    const r = await handleClaimAttempt(req('POST', '/api/v1/claim', cookieU1, jwt), env, deps);
+    expect(r.status).toBe(200);
+  });
+});
+
+describe('claim binding (both credentials at claim time; the claim is the sole bridge)', () => {
+  it('rejects a forged Access assertion at claim time: 401, nothing mutated', async () => {
+    seedLegacy(LEG);
+    const r = await handleClaimAttempt(req('POST', '/api/v1/claim', cookieU1, 'forged.jwt.value'), env, deps);
+    expect(r.status).toBe(401);
+    expect((raw.prepare('SELECT COUNT(*) c FROM claims_ledger').get() as { c: number }).c).toBe(0);
+  });
+
+  it('rejects an Access assertion for a DIFFERENT key owner than the legacy rows: 409 no_legacy_rows', async () => {
+    seedLegacy(LEG); // rows owned by K = ISS#SUB
+    const s = await signer();
+    const otherJwt = await s.sign(jwtPayload({ sub: 'someone-else' }));
+    const deps2 = { ...deps, fetchKeys: async () => s.keys as never };
+    const r = await handleClaimAttempt(req('POST', '/api/v1/claim', cookieU1, otherJwt), env, deps2);
+    expect(r.status).toBe(409);
+    expect((await r.json()).error.code).toBe('no_legacy_rows');
+    expect((raw.prepare('SELECT COUNT(*) c FROM claims_ledger').get() as { c: number }).c).toBe(0);
+  });
+
+  it('entitlement mismatch: an UNENTITLED native session 403s before any claim work', async () => {
+    const now = NOW.toISOString();
+    await env.PORTFOLIO_ACCOUNTS_DB!.prepare('INSERT INTO users (id, status, created_at, updated_at) VALUES (?,?,?,?)')
+      .bind('u9', 'active', now, now).run();
+    await env.PORTFOLIO_ACCOUNTS_DB!.prepare("INSERT INTO auth_identities (id, user_id, kind, identifier, verified_at) VALUES ('i9','u9','email','u9@x.test',?)")
+      .bind(now).run();
+    const s9 = await createSession(env.PORTFOLIO_ACCOUNTS_DB!, 'u9');
+    const c9 = `${SESSION_COOKIE}=${s9.id}`;
+    const rp = await handleClaimPreview(req('GET', '/api/v1/claim', c9, jwt), env, deps);
+    expect(rp.status).toBe(403);
+    seedLegacy(LEG);
+    const ra = await handleClaimAttempt(req('POST', '/api/v1/claim', c9, jwt), env, deps);
+    expect(ra.status).toBe(403);
+    expect((raw.prepare('SELECT COUNT(*) c FROM claims_ledger').get() as { c: number }).c).toBe(0);
+  });
+});

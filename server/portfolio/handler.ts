@@ -12,7 +12,7 @@ import { mockProvider, solanaMockProvider, type Diag, type PortfolioProvider } f
 import { createLimiter, LOOKUP_WINDOWS } from '../accounts/limiter';
 import { createD1Limiter } from '../accounts/d1-limiter';
 import type { D1Like } from '../accounts/d1';
-import { readOwnerKey } from '../accounts/handler';
+import { dualGate, dualLimiterKey } from '../auth/dual-gate';
 import { createLiveProvider } from './live-provider';
 import { createSolanaLiveProvider } from './live-provider-solana';
 
@@ -26,6 +26,9 @@ export type Env = {
   PORTFOLIO_LOOKUP_LIMIT?: string;
   /** Optional approved D1 binding; when present the limiter adds a durable global counter layer. */
   PORTFOLIO_ACCOUNTS_DB?: D1Like;
+  /** Native sign-in (dual-gate Phase 0): 'true' lets a live entitled native session
+   *  through the shared-data handlers (resolve/health/networks) without an Access JWT. */
+  NATIVE_AUTH_ENABLED?: string;
   /** Aave V3 read-only positions on Ethereum lookups. Only the exact string '1' turns it on. */
   PORTFOLIO_AAVE_V3?: string;
 };
@@ -171,13 +174,26 @@ export async function handleResolve(
   const requestId = d.id();
   if (req.method !== 'POST')
     return err(405, 'method_not_allowed', 'Use POST.', requestId, { allow: 'POST' });
-  const blocked = await gate(req, env, d, requestId);
-  if (blocked) return blocked;
+  if (env.PORTFOLIO_API_ENABLED !== 'true')
+    return err(503, 'disabled', 'This feature is switched off.', requestId);
+  const verdict = await dualGate(req, env, d);
+  if (!verdict.ok) {
+    logOnce(`auth_reject:${verdict.reason}`, d.now().getTime()); // finite category only
+    const msg =
+      verdict.code === 'not_configured'
+        ? 'Access verification is not configured.'
+        : verdict.code === 'not_entitled'
+          ? 'This account is not invited yet.'
+          : 'Authentication required.';
+    return err(verdict.status, verdict.code, msg, requestId);
+  }
+  const identity = verdict;
   // Optional first-layer per-identity limit (per-isolate, best-effort; the durable global
   // counter reuses the approved D1 binding). Off unless the flag is exactly '1'. The client
-  // already honors 429 Retry-After. The key is the verified iss#sub, never an email or token.
+  // already honors 429 Retry-After. The key is the verified iss#sub on the Access path and
+  // the native user id on the native path - never an email, token, or IP.
   if (env.PORTFOLIO_LOOKUP_LIMIT === '1') {
-    const key = readOwnerKey(req.headers.get('cf-access-jwt-assertion'));
+    const key = dualLimiterKey(identity);
     // Fail closed: with the limiter enabled, an authenticated token WITHOUT a user subject
     // (e.g. a service token) cannot be accounted for, so it is denied rather than throttled
     // into an unbounded identity class (reviewer safety finding).
@@ -346,8 +362,18 @@ export async function handleHealth(
   const requestId = d.id();
   if (req.method !== 'GET')
     return err(405, 'method_not_allowed', 'Use GET.', requestId, { allow: 'GET' });
-  const blocked = await gate(req, env, d, requestId);
-  if (blocked) return blocked;
+  if (env.PORTFOLIO_API_ENABLED !== 'true')
+    return err(503, 'disabled', 'This feature is switched off.', requestId);
+  const hv = await dualGate(req, env, d);
+  if (!hv.ok) {
+    const msg =
+      hv.code === 'not_configured'
+        ? 'Access verification is not configured.'
+        : hv.code === 'not_entitled'
+          ? 'This account is not invited yet.'
+          : 'Authentication required.';
+    return err(hv.status, hv.code, msg, requestId);
+  }
   return reply(200, {
     status: 'ok',
     mode: pick(env, d).simulated ? 'mock' : 'live',
@@ -364,8 +390,18 @@ export async function handleNetworks(
   const requestId = d.id();
   if (req.method !== 'GET')
     return err(405, 'method_not_allowed', 'Use GET.', requestId, { allow: 'GET' });
-  const blocked = await gate(req, env, d, requestId);
-  if (blocked) return blocked;
+  if (env.PORTFOLIO_API_ENABLED !== 'true')
+    return err(503, 'disabled', 'This feature is switched off.', requestId);
+  const nv = await dualGate(req, env, d);
+  if (!nv.ok) {
+    const msg =
+      nv.code === 'not_configured'
+        ? 'Access verification is not configured.'
+        : nv.code === 'not_entitled'
+          ? 'This account is not invited yet.'
+          : 'Authentication required.';
+    return err(nv.status, nv.code, msg, requestId);
+  }
   return reply(200, {
     networks: [
       { id: 'ethereum', chainId: 1, status: pick(env, d).simulated ? 'mock' : 'live' },

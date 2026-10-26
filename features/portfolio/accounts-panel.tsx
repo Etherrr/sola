@@ -1,6 +1,7 @@
 'use client';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSession } from './session-context';
+import { useNativeSession } from '../auth-v2/native-session';
 import { useTrackNetwork } from './track-network-context';
 import {
   ACCOUNTS_MAX_PER_NETWORK,
@@ -47,6 +48,7 @@ function failureText(f: AccountsFailure, maxPerNetwork: number): string {
 
 export function AccountsPanel() {
   const session = useSession();
+  const native = useNativeSession();
   const { network, prefillAddress } = useTrackNetwork();
   const [load, setLoad] = useState<Load>({ kind: 'idle' });
   const [failure, setFailure] = useState<AccountsFailure | null>(null);
@@ -209,7 +211,27 @@ export function AccountsPanel() {
         <p className="fine">Checking your sign-in…</p>
       </section>
     );
-  if (session.kind !== 'verified')
+  if (session.kind !== 'verified') {
+    // This list is bound to the OLD Access sign-in. A natively signed-in user is
+    // never told to "sign in again" for it: the honest state explains the bridge
+    // and points at /account, where the claim section appears when claiming opens
+    // (CLAIM_ENABLED is off everywhere, so no import action is offered here).
+    if (native.kind === 'ok')
+      return (
+        <section className="accounts" aria-labelledby="accounts-h">
+          <h2 id="accounts-h" tabIndex={-1} ref={headingRef}>Saved addresses</h2>
+          <p className="fine">
+            Saved addresses from the older sign-in need a one-time import. Import is not enabled
+            yet. Your current address book is on <a href="/account">Account</a>.
+          </p>
+        </section>
+      );
+    if (native.kind === 'loading')
+      return (
+        <section className="accounts" aria-label="Saved addresses">
+          <p className="fine">Checking your sign-in…</p>
+        </section>
+      );
     return (
       <section className="accounts" aria-labelledby="accounts-h">
         <h2 id="accounts-h" tabIndex={-1} ref={headingRef}>Saved addresses</h2>
@@ -218,6 +240,7 @@ export function AccountsPanel() {
         </p>
       </section>
     );
+  }
 
   const ready = load.kind === 'ready' ? load : null;
   const maxPerNetwork = ready?.maxPerNetwork ?? ACCOUNTS_MAX_PER_NETWORK;

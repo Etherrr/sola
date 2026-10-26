@@ -189,7 +189,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </Link>
           </nav>
           <p className="side-foot">
-            v0.1 · PREVIEW
+            v0.2 · PREVIEW
             <br />
             {mode === 'mock' ? 'Demo data.' : null}
             <br />

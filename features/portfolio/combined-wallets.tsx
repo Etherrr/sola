@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { evmCoverageLabel, SUPPORTED_EVM_SYMBOLS } from '@/lib/supported-evm-tokens';
 import { useEffect, useRef, useState } from 'react';
 import { useSession } from './session-context';
+import { useNativeSession } from '../auth-v2/native-session';
 import { listAccounts, type AccountsFailure } from './accounts-client';
 import { lookupAddresses } from './api-client';
 import { aggregateAddresses, type AggregateResult } from './aggregate';
@@ -59,6 +60,7 @@ function accountsFailureText(f: AccountsFailure): string {
 
 export function CombinedWallets() {
   const session = useSession();
+  const native = useNativeSession();
   const email = session.kind === 'verified' ? session.email : null;
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
   const [busy, setBusy] = useState(false);
@@ -168,6 +170,17 @@ export function CombinedWallets() {
             <button type="button" className="button primary" onClick={() => void onLoad()}>
               Load saved addresses, combined
             </button>
+          ) : native.kind === 'ok' ? (
+            // A natively signed-in user is never told to "sign in again" for this
+            // Access-bound list: the honest state explains the bridge and points at
+            // /account (import is off, so no import action is offered here).
+            <p className="fine muted">
+              Saved addresses from the older sign-in need a one-time import. Import is not
+              enabled yet. Your current address book is on{' '}
+              <Link href="/account">Account</Link>.
+            </p>
+          ) : native.kind === 'loading' ? (
+            <p className="fine muted">Verifying your sign-in…</p>
           ) : (
             <p className="fine muted">
               Your sign-in could not be verified. Sign in to load saved addresses.

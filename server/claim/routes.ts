@@ -1,8 +1,7 @@
 /**
  * Claim endpoints (plan B.3, design v4 = docs/ACCOUNT_CLAIM_DESIGN.md @ e297033).
- * REACHABILITY: functions/api/v1/claim/* mounts exist (slice: LOCAL route mounting;
- * independent review of the mounting package pending; uncommitted, unpushed,
- * never deployed). The deployment-order hard gate stands: nothing ships before
+ * REACHABILITY: functions/api/v1/claim/* mounts are DEPLOYED in 79ececa, flag-gated
+ * (CLAIM_ENABLED absent/OFF everywhere). The deployment-order hard gate stands: nothing ships before
  * migration 0004 is applied AND verified on the target database AND the isolated
  * rehearsal of this exact code passes on fresh disposable D1. CLAIM_ENABLED ships
  * absent/OFF on every environment; with it absent the routing layer 503s BEFORE
@@ -21,14 +20,18 @@
  * - Report/rollback scope by SESSION user_id (reviewer B5): a guessed foreign
  *   attempt id is indistinguishable from unknown (404), never an existence oracle.
  *
- * DRAFT choices flagged for the reviewer (not in v4's text):
- *  D-a: fresh-session reauth NOT required for claim (matches address-add); revisit.
- *  D-b: rate windows below are placeholders.
- *  D-c: no_legacy_rows answered 409 (not 404) so the UI can render the empty state.
+ * Security invariants beyond v4's text:
+ *  - Claim mutations require a FRESH session (SENSITIVE_REAUTH_MS, the same
+ *    pattern as passkey registration): claim moves a person's address data
+ *    across identity spaces, so an old session cannot start it. A stale
+ *    session gets 403 reauth_required.
+ *  - Rate windows below are placeholders.
+ *  - no_legacy_rows is answered 409 (not 404) so the UI can render the empty state.
  */
 import { checkAccessJwt, isValidTeamHost, type KeyFetcher } from '../portfolio/access';
 import { readOwnerKey } from '../accounts/handler';
 import { requireSameOrigin, requireEntitledSession, type NativeIdentity } from '../auth/guards';
+import { recentlyAuthenticated } from '../auth/sessions';
 import type { NativeAuthEnv } from '../auth/email';
 import { createD1Limiter } from '../accounts/d1-limiter';
 import type { LimitWindow } from '../accounts/limiter';
@@ -229,6 +232,9 @@ export async function handleClaimAttempt(req: Request, env: ClaimEnv, deps: Clai
   if (csrf) return csrf;
   const g = await gate(req, env, requestId);
   if (!g.ok) return g.res;
+  // Claim moves address data across identity spaces: an old session cannot start
+  // it. Fresh-session re-auth, same pattern as passkey registration.
+  if (!recentlyAuthenticated(g.identity.session)) return err(403, 'reauth_required', requestId);
   const rl = await rateLimit(g.db, 'claim_write', CLAIM_WRITE_WINDOWS, g.identity.userId, requestId);
   if (rl) return rl;
   const k = await ownerKeyOr401(req, env, deps, requestId);
@@ -332,6 +338,8 @@ export async function handleClaimRollback(
   if (csrf) return csrf;
   const g = await gate(req, env, requestId);
   if (!g.ok) return g.res;
+  // Same fresh-session requirement as attempt (see above).
+  if (!recentlyAuthenticated(g.identity.session)) return err(403, 'reauth_required', requestId);
   const rl = await rateLimit(g.db, 'claim_write', CLAIM_WRITE_WINDOWS, g.identity.userId, requestId);
   if (rl) return rl;
   let ledRb: { results: { owner_key: string; state: string }[] };

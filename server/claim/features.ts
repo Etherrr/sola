@@ -1,6 +1,6 @@
 /**
  * Claim FEATURE DISCOVERY (plan B.3 /account integration prep, LOCAL ONLY -
- * uncommitted, unpushed, never deployed).
+ * deployed in 79ececa, flag-gated (CLAIM_ENABLED absent/OFF everywhere).
  *
  * The /account page must NEVER call a claim endpoint while the feature is off
  * (reviewer integration requirement: flag OFF or pre-0004 -> no claim fetch on

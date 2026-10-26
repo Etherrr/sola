@@ -200,7 +200,7 @@ export function LearnShell({ children }: { children: React.ReactNode }) {
           </Link>
         </nav>
         <p className="side-foot">
-          v0.1 · PREVIEW
+          v0.2 · PREVIEW
           <br />
           Practice exercises are simulated.
         </p>
