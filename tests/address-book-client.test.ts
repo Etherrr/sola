@@ -21,6 +21,13 @@ describe('address book rate-limit state mapping', () => {
     expect(s).toEqual({ kind: 'failed', retryAfter: undefined });
   });
 
+  it('maps a list-path 403 to notinvited, never a transient failure', async () => {
+    // Same contract as the overview mapping (reviewer alignment rule
+    // 2026-10-25): an unentitled account is a persistent state, so the copy
+    // must not read as "unavailable right now".
+    expect(await statusOf(new Response('{}', { status: 403 }))).toEqual({ kind: 'notinvited' });
+  });
+
   it('keeps the other state mappings exact', async () => {
     expect(await statusOf(new Response('{}', { status: 401 }))).toEqual({ kind: 'signin' });
     expect(await statusOf(new Response('{}', { status: 503 }))).toEqual({ kind: 'off' });

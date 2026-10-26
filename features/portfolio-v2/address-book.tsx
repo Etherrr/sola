@@ -26,8 +26,10 @@ import { fmtTimestamp } from './format-time';
  * Overview until holdings load. Terse, action-first (user steering 2026-10-25);
  * every state honest:
  *   401 -> sign-in required; 503 -> feature off on this build;
- *   429 -> rate limited (retryAfter echoed); 403 reauth_required on remove ->
- *   "sign in again to remove" (fresh-session bar, same as wallet linking).
+ *   429 -> rate limited (retryAfter echoed); 403 on list -> no portfolio
+ *   access (same contract as the overview, never framed as transient);
+ *   403 reauth_required on remove -> "sign in again to remove"
+ *   (fresh-session bar, same as wallet linking).
  * Watched addresses carry no ownership proof - one short badge per row, no wall.
  */
 
@@ -43,6 +45,7 @@ type Entry = {
 type Load =
   | { kind: 'loading' }
   | { kind: 'signin' }
+  | { kind: 'notinvited' }
   | { kind: 'off' }
   | { kind: 'ok'; addresses: Entry[] }
   | { kind: 'failed'; retryAfter?: number };
@@ -51,6 +54,10 @@ const short = (a: string) => (a.length > 12 ? `${a.slice(0, 6)}…${a.slice(-4)}
 
 export async function statusOf(res: Response): Promise<Load> {
   if (res.status === 401) return { kind: 'signin' };
+  // Reviewer alignment rule (2026-10-25, applied to the list path 2026-10-26):
+  // 403 on a GET means this account has no portfolio access - a persistent
+  // state, never the transient "unavailable right now" framing.
+  if (res.status === 403) return { kind: 'notinvited' };
   if (res.status === 503) return { kind: 'off' };
   if (res.status === 429) {
     // The limiter's body field is retryAfterSec (server/portfolio/addresses.ts);
@@ -254,6 +261,7 @@ export function AddressBook() {
     <div className="accounts">
       {load.kind === 'loading' && <p><em>Loading addresses…</em></p>}
       {load.kind === 'signin' && <p><em>Sign in to manage your addresses.</em></p>}
+      {load.kind === 'notinvited' && <p><em>This account has no portfolio access yet.</em></p>}
       {load.kind === 'off' && <p><em>The address book is off on this preview build.</em></p>}
       {load.kind === 'failed' && (
         <p><em>

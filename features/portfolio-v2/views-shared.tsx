@@ -20,7 +20,7 @@ export function StateBlock({ kind, reason }: { kind: string; reason?: string }) 
     return (
       <p className="muted">
         No recorded observations yet. This page fills in after the first complete recorded
-        observation of your saved addresses.
+        observation.
       </p>
     );
   if (kind === 'empty')
