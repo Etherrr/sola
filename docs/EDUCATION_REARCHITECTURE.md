@@ -59,9 +59,12 @@ auth - a later phase, not this one.
   into the Fundamentals module (registry member). Update journeys/bfcache/copy pins in
   the SAME commit (redirect + destination assertions).
 - **E2 - shell navigation.** `/learn` landing grouped by the five plan sections with a
-  return-to-portfolio action; app-shell "Education" button repointed to `/learn`.
-- **E3 - retire `/education`.** Redirect `/education` -> `/learn`; entrance card
-  repointed; remove the duplicate landing page. Update the journeys nav assertions.
+  return-to-portfolio action. The app-shell "Education" button stays on `/education`:
+  `tests/copy-claims.test.ts` pins `/education` as the reviewed single education
+  destination, so the repoint waits for the grouped entry to be reviewed.
+- **E3 - retire `/education` + repoint.** Redirect `/education` -> `/learn`; entrance card
+  and app-shell button repointed; remove the duplicate landing page; update the
+  copy-claims shell pin and journeys nav assertions in the same commit.
 - **E4 (later, with native auth)** - server-side progress persistence for signed-in
   users; guest behavior unchanged.
 

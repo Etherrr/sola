@@ -1,5 +1,14 @@
+export type LessonSection =
+  | 'Start Here'
+  | 'Fundamentals'
+  | 'Wallets & Networks'
+  | 'DeFi Strategies'
+  | 'Risk & Security';
+
 export type Lesson = {
   id: string;
+  /** The plan §8 learning-shell section this module belongs to (drives /learn grouping). */
+  section: LessonSection;
   path: string;
   title: string;
   eyebrow: string;
@@ -13,6 +22,7 @@ export type Lesson = {
 export const lessons: Lesson[] = [
   {
     id: 'basics',
+    section: 'Start Here',
     path: '/learn/start-here',
     title: 'A clearer view of DeFi.',
     eyebrow: '01 / BLOCKCHAIN BASICS',
@@ -38,6 +48,7 @@ export const lessons: Lesson[] = [
   },
   {
     id: 'wallets',
+    section: 'Wallets & Networks',
     path: '/learn/wallets',
     title: 'Choose how to hold your keys.',
     eyebrow: '02 / WALLET GUIDE',
@@ -68,6 +79,7 @@ export const lessons: Lesson[] = [
   },
   {
     id: 'security',
+    section: 'Risk & Security',
     path: '/learn/security',
     title: 'Build your security habits.',
     eyebrow: '03 / SECURITY FIRST',
@@ -98,6 +110,7 @@ export const lessons: Lesson[] = [
   },
   {
     id: 'addresses',
+    section: 'Fundamentals',
     path: '/learn/addresses',
     title: 'Read a portfolio with context.',
     eyebrow: '04 / ADDRESSES & NETWORKS',
@@ -124,6 +137,7 @@ export const lessons: Lesson[] = [
   },
   {
     id: 'defi',
+    section: 'DeFi Strategies',
     path: '/learn/defi-strategies',
     title: 'Explore a swap, safely.',
     eyebrow: '05 / SOLANA & SWAP EDUCATION',
@@ -154,6 +168,7 @@ export const lessons: Lesson[] = [
   },
   {
     id: 'risks',
+    section: 'DeFi Strategies',
     path: '/learn/lending-and-risk',
     title: 'Look beyond the yield.',
     eyebrow: '06 / LENDING, STAKING & LIQUIDITY',
