@@ -4,11 +4,11 @@ const routes = [
   '/',
   '/education',
   '/markets',
-  '/start',
-  '/start/wallets',
-  '/start/security',
-  '/start/networks',
-  '/start/defi',
+  '/learn/start-here',
+  '/learn/wallets',
+  '/learn/security',
+  '/learn/networks',
+  '/learn/defi-strategies',
   '/connect',
   '/portfolio',
   '/demo',
@@ -18,7 +18,7 @@ const routes = [
   '/explore',
   '/learn',
   '/learn/addresses',
-  '/learn/risks',
+  '/learn/lending-and-risk',
   '/learn/security-lab',
   '/settings',
   '/onboarding',
@@ -58,9 +58,10 @@ test('beginner, experienced and demo entry points work', async ({ page, isMobile
   await page.getByRole('link', { name: /^Education/ }).click();
   await expect(page).toHaveURL(/\/education\/?$/);
   await page.getByRole('link', { name: /I’m new to DeFi/ }).click();
-  await expect(page).toHaveURL(/\/start\/?$/);
+  // /start is a compatibility stub: the client redirect lands on the canonical /learn path.
+  await expect(page).toHaveURL(/\/learn\/start-here\/?$/);
   await page.getByRole('link', { name: 'Skip this lesson' }).click();
-  await expect(page).toHaveURL(/\/start\/wallets\/?$/);
+  await expect(page).toHaveURL(/\/learn\/wallets\/?$/);
   await page.getByRole('radio', { name: 'Keeping keys on a separate device' }).check();
   await expect(page.locator('#main').getByRole('status')).toContainText('Research hardware');
   await page.goto('/connect');
@@ -79,7 +80,7 @@ test('beginner, experienced and demo entry points work', async ({ page, isMobile
 test('security quiz gives feedback and optional local progress can be cleared', async ({
   page,
 }) => {
-  await page.goto('/start/security');
+  await page.goto('/learn/security');
   await page.getByRole('radio', { name: 'Enter it to verify the account' }).check();
   await page.getByRole('button', { name: 'Check answer' }).click();
   await expect(page.locator('#main').getByText(/Try again\./)).toBeVisible();
@@ -89,7 +90,7 @@ test('security quiz gives feedback and optional local progress can be cleared', 
   expect(await page.evaluate(() => localStorage.length)).toBe(0);
   await page.goto('/settings');
   await page.getByRole('checkbox').check();
-  await page.goto('/start/security');
+  await page.goto('/learn/security');
   await page.getByRole('radio', { name: 'Stop and leave the site' }).check();
   await page.getByRole('button', { name: 'Check answer' }).click();
   await page.reload();
@@ -106,7 +107,7 @@ test('swap exercise is educational and never exposes a signing action', async ({
     if (!new URL(request.url()).hostname.match(/^(127\.0\.0\.1|localhost)$/))
       external.push(request.url());
   });
-  await page.goto('/start/defi');
+  await page.goto('/learn/defi-strategies');
   await page.getByRole('button', { name: 'Next step' }).click();
   await expect(page.locator('#main').getByText(/148.50 USDC/)).toBeVisible();
   await page.getByRole('button', { name: 'Next step' }).click();
@@ -117,7 +118,7 @@ test('swap exercise is educational and never exposes a signing action', async ({
   expect(external).toEqual([]);
 });
 test('security quiz and swap exercise are fully keyboard operable', async ({ page }) => {
-  await page.goto('/start/security');
+  await page.goto('/learn/security');
   const quiz = page.locator('section.quiz');
   const radios = quiz.getByRole('radio');
   await expect(radios).toHaveCount(3);
@@ -145,7 +146,7 @@ test('security quiz and swap exercise are fully keyboard operable', async ({ pag
   await page.keyboard.press('Enter');
   await expect(page.locator('#main').getByText(/That\u2019s right\./)).toBeVisible();
 
-  await page.goto('/start/defi');
+  await page.goto('/learn/defi-strategies');
   const swap = page.locator('section.swap');
   const prev = swap.getByRole('button', { name: 'Previous step' });
   const next = swap.getByRole('button', { name: 'Next step' });
@@ -218,7 +219,7 @@ test('preview responses include privacy and framing protections', async ({ reque
 test('key screens reflow at narrow and tablet widths', async ({ page }) => {
   for (const width of [320, 768, 1024]) {
     await page.setViewportSize({ width, height: 900 });
-    for (const route of ['/', '/start/wallets', '/start/defi', '/portfolio', '/settings']) {
+    for (const route of ['/', '/learn/wallets', '/learn/defi-strategies', '/portfolio', '/settings']) {
       await page.goto(route);
       expect(
         await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
@@ -2491,4 +2492,24 @@ test('v2 combined balances: a partial address counts as loaded and explains itse
   await expect(alloc.locator('.cov-details')).toContainText(
     /Coverage: 1 of 1 address loaded \(1 partial - some sources did not answer\)/,
   );
+});
+
+// Education route consolidation (plan §8, E1): every pre-consolidation lesson path keeps
+// working. On the static export the stub pages redirect in the client (the local static
+// server does not evaluate _redirects; the Pages 308 layer is verified on the preview
+// deployment, not assumed here).
+test('old lesson routes land on their canonical /learn/* destinations', async ({ page }) => {
+  const moved: [string, string][] = [
+    ['/start', '/learn/start-here'],
+    ['/start/wallets', '/learn/wallets'],
+    ['/start/security', '/learn/security'],
+    ['/start/defi', '/learn/defi-strategies'],
+    ['/start/networks', '/learn/networks'],
+    ['/learn/risks', '/learn/lending-and-risk'],
+  ];
+  for (const [from, to] of moved) {
+    await page.goto(from);
+    await expect(page, from).toHaveURL(new RegExp(`${to}/?$`));
+    await expect(page.locator('#main h1'), from).toBeVisible();
+  }
 });

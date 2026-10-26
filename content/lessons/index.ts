@@ -13,7 +13,7 @@ export type Lesson = {
 export const lessons: Lesson[] = [
   {
     id: 'basics',
-    path: '/start',
+    path: '/learn/start-here',
     title: 'A clearer view of DeFi.',
     eyebrow: '01 / BLOCKCHAIN BASICS',
     summary: 'Start with the ideas. No wallet, account, or funds needed.',
@@ -38,7 +38,7 @@ export const lessons: Lesson[] = [
   },
   {
     id: 'wallets',
-    path: '/start/wallets',
+    path: '/learn/wallets',
     title: 'Choose how to hold your keys.',
     eyebrow: '02 / WALLET GUIDE',
     summary: 'Understand the two layers before comparing any product.',
@@ -68,7 +68,7 @@ export const lessons: Lesson[] = [
   },
   {
     id: 'security',
-    path: '/start/security',
+    path: '/learn/security',
     title: 'Build your security habits.',
     eyebrow: '03 / SECURITY FIRST',
     summary: 'Pause before you trust. A familiar logo is not proof of safety.',
@@ -124,7 +124,7 @@ export const lessons: Lesson[] = [
   },
   {
     id: 'defi',
-    path: '/start/defi',
+    path: '/learn/defi-strategies',
     title: 'Explore a swap, safely.',
     eyebrow: '05 / SOLANA & SWAP EDUCATION',
     summary: 'An interactive example of a Solana swap workflow. No transaction takes place.',
@@ -154,7 +154,7 @@ export const lessons: Lesson[] = [
   },
   {
     id: 'risks',
-    path: '/learn/risks',
+    path: '/learn/lending-and-risk',
     title: 'Look beyond the yield.',
     eyebrow: '06 / LENDING, STAKING & LIQUIDITY',
     summary: 'Different positions bring different ways to lose value.',

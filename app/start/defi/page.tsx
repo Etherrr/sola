@@ -1,6 +1,8 @@
-import { LessonPage } from '@/features/onboarding/lesson-page';
-import { getLesson } from '@/content/lessons';
-export const metadata = { title: getLesson('defi').title };
+import { MovedPage } from '@/features/education/moved-page';
+export const metadata = {
+  title: 'This lesson has moved',
+  alternates: { canonical: '/learn/defi-strategies/' },
+};
 export default function Page() {
-  return <LessonPage id="defi" />;
+  return <MovedPage to="/learn/defi-strategies/" title="Solana and swap education" />;
 }

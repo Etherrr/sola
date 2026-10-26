@@ -54,7 +54,7 @@ export function LessonPage({ id }: { id: string }) {
         {id === 'defi' && <SwapWalkthrough />}
         {id === 'addresses' && (
           <p className="notice">
-            <Link href="/start/networks">Explore Ethereum and Solana network concepts →</Link>
+            <Link href="/learn/networks">Explore Ethereum and Solana network concepts →</Link>
           </p>
         )}
         <Quiz lesson={lesson} />

@@ -1,5 +1,5 @@
 import { stat, readFile, readdir } from 'node:fs/promises';
-const routes=['/','/start/','/start/wallets/','/start/security/','/start/networks/','/start/defi/','/connect/','/account/','/portfolio/','/portfolio/assets/','/portfolio/positions/','/portfolio/risk/','/explore/','/track/','/markets/','/learn/network-journey/','/learn/security-lab/','/learn/','/learn/addresses/','/learn/risks/','/settings/','/education/','/sign-in/','/create-account/','/onboarding/','/demo/','/demo/assets/','/demo/positions/','/demo/risk/','/dev/create-account/','/dev/overview-v2/','/dev/sign-in/','/dev/wallet-test/','/dev/welcome/'];
+const routes=['/','/start/','/start/wallets/','/start/security/','/start/networks/','/start/defi/','/connect/','/account/','/portfolio/','/portfolio/assets/','/portfolio/positions/','/portfolio/risk/','/explore/','/track/','/markets/','/learn/network-journey/','/learn/security-lab/','/learn/','/learn/addresses/','/learn/risks/','/learn/start-here/','/learn/wallets/','/learn/security/','/learn/defi-strategies/','/learn/lending-and-risk/','/learn/networks/','/settings/','/education/','/sign-in/','/create-account/','/onboarding/','/demo/','/demo/assets/','/demo/positions/','/demo/risk/','/dev/create-account/','/dev/overview-v2/','/dev/sign-in/','/dev/wallet-test/','/dev/welcome/'];
 // Every exported page must be in the list above, so a new route cannot ship unchecked.
 async function pages(dir, base) {
   const out = [];
@@ -19,5 +19,9 @@ for(const route of routes){
   const file=await readFile(path,'utf8');
   if(!file.includes('<h1')) throw Error('No h1: '+path);
 }
-for(const path of ['out/404.html','out/_headers']) await stat(path);
+for(const path of ['out/404.html','out/_headers','out/_redirects']) await stat(path);
+// Every compatibility redirect the Education consolidation (plan §8) promises must be present.
+const redir = await readFile('out/_redirects', 'utf8');
+for (const rule of ['/start/ /learn/start-here/ 308','/start/wallets/ /learn/wallets/ 308','/start/security/ /learn/security/ 308','/start/defi/ /learn/defi-strategies/ 308','/start/networks/ /learn/networks/ 308','/learn/risks/ /learn/lending-and-risk/ 308'])
+  if (!redir.includes(rule)) throw Error('Missing _redirects rule: ' + rule);
 console.log('Static export verified: '+routes.length+' routes, 404 and headers');

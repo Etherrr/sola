@@ -1,0 +1,16 @@
+# Education route consolidation (plan §8): old lesson paths permanently moved to the
+# ONE /learn/* shell. Cloudflare Pages serves these as true 308s; the same paths also
+# export client-redirect stubs (features/education/moved-page.tsx) because the local
+# static server does not evaluate this file. Verified on the preview deployment.
+/start /learn/start-here/ 308
+/start/ /learn/start-here/ 308
+/start/wallets /learn/wallets/ 308
+/start/wallets/ /learn/wallets/ 308
+/start/security /learn/security/ 308
+/start/security/ /learn/security/ 308
+/start/defi /learn/defi-strategies/ 308
+/start/defi/ /learn/defi-strategies/ 308
+/start/networks /learn/networks/ 308
+/start/networks/ /learn/networks/ 308
+/learn/risks /learn/lending-and-risk/ 308
+/learn/risks/ /learn/lending-and-risk/ 308

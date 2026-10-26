@@ -1,6 +1,8 @@
-import { LessonPage } from '@/features/onboarding/lesson-page';
-import { getLesson } from '@/content/lessons';
-export const metadata = { title: getLesson('wallets').title };
+import { MovedPage } from '@/features/education/moved-page';
+export const metadata = {
+  title: 'This lesson has moved',
+  alternates: { canonical: '/learn/wallets/' },
+};
 export default function Page() {
-  return <LessonPage id="wallets" />;
+  return <MovedPage to="/learn/wallets/" title="Choose how to hold your keys" />;
 }
