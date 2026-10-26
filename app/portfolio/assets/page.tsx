@@ -1,6 +1,5 @@
-import { redirect } from 'next/navigation';
-
-/** The invented sample portfolio moved to /demo - keep old links working. */
+import { PortfolioMovedPage } from '@/features/portfolio-v2/moved-page';
+export const metadata = { title: 'Assets', alternates: { canonical: '/account/assets/' } };
 export default function Page() {
-  redirect('/demo/assets');
+  return <PortfolioMovedPage to="/account/assets/" title="Assets" />;
 }

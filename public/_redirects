@@ -16,3 +16,19 @@
 /learn/risks/ /learn/lending-and-risk/ 308
 /education /learn/ 308
 /education/ /learn/ 308
+
+# Retired sample portfolio views resume real native account views. No data moves.
+/demo /account/overview/ 308
+/demo/ /account/overview/ 308
+/demo/assets /account/assets/ 308
+/demo/assets/ /account/assets/ 308
+/demo/positions /account/defi/ 308
+/demo/positions/ /account/defi/ 308
+/demo/risk /account/risk/ 308
+/demo/risk/ /account/risk/ 308
+/portfolio/assets /account/assets/ 308
+/portfolio/assets/ /account/assets/ 308
+/portfolio/positions /account/defi/ 308
+/portfolio/positions/ /account/defi/ 308
+/portfolio/risk /account/risk/ 308
+/portfolio/risk/ /account/risk/ 308

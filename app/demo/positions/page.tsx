@@ -1,5 +1,5 @@
-import { Dashboard } from '@/features/portfolio/dashboard';
-export const metadata = { title: 'Demo portfolio - positions' };
+import { PortfolioMovedPage } from '@/features/portfolio-v2/moved-page';
+export const metadata = { title: 'DeFi', alternates: { canonical: '/account/defi/' } };
 export default function Page() {
-  return <Dashboard view="positions" />;
+  return <PortfolioMovedPage to="/account/defi/" title="DeFi" />;
 }

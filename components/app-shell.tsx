@@ -206,9 +206,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   ? '◇ MODE SHOWN IN PANEL'
                   : path.startsWith('/portfolio')
                     ? '◇ MODE SHOWN PER SECTION'
-                    : path.startsWith('/demo')
-                      ? '◇ SIMULATED'
-                      : '◇ READ-ONLY'}
+                    : '◇ READ-ONLY'}
             </span>
             <AccountMenu />
             <a

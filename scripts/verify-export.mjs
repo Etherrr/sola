@@ -34,3 +34,10 @@ const redir = await readFile('out/_redirects', 'utf8');
 for (const rule of ['/start/ /learn/start-here/ 308','/start/wallets/ /learn/wallets/ 308','/start/security/ /learn/security/ 308','/start/defi/ /learn/defi-strategies/ 308','/start/networks/ /learn/networks/ 308','/learn/risks/ /learn/lending-and-risk/ 308'])
   if (!redir.includes(rule)) throw Error('Missing _redirects rule: ' + rule);
 console.log('Static export verified ('+(includeDev?'dev':'production')+' mode): '+routes.length+' routes, 404 and headers');
+
+// Production portfolio routes must never contain invented fixture holdings.
+for (const route of ['/account/overview/','/account/assets/','/account/defi/','/account/risk/','/demo/','/demo/assets/','/demo/positions/','/demo/risk/','/portfolio/','/portfolio/assets/','/portfolio/positions/','/portfolio/risk/']) {
+  const html = await readFile('out'+route+'index.html','utf8');
+  if (/Priced net sample value|Priced sample assets|Sample borrowed debt|Invented Ethereum and Solana holdings|\$12,000|\$11,000/.test(html))
+    throw Error('Invented portfolio content exported: '+route);
+}

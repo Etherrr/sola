@@ -1,5 +1,5 @@
-import { Dashboard } from '@/features/portfolio/dashboard';
-export const metadata = { title: 'Demo portfolio - risk insights' };
+import { PortfolioMovedPage } from '@/features/portfolio-v2/moved-page';
+export const metadata = { title: 'Risk & Return', alternates: { canonical: '/account/risk/' } };
 export default function Page() {
-  return <Dashboard view="risk" />;
+  return <PortfolioMovedPage to="/account/risk/" title="Risk & Return" />;
 }
