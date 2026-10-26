@@ -58,7 +58,7 @@ describe('wallet challenge handler', () => {
     const { message, expiresAt } = await challenge('evm', evmAddress);
     expect(message).toContain('preview.test wants you to sign in with your Ethereum account:');
     expect(message).toContain(evmAddress);
-    expect(message).toContain('URI: https://preview.test/signin');
+    expect(message).toContain('URI: https://preview.test/sign-in');
     expect(message).toContain('Chain ID: 1');
     expect(Date.parse(expiresAt)).toBeGreaterThan(Date.now());
   });

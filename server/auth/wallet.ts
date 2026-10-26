@@ -19,7 +19,8 @@ import {
   type ChallengeDb,
 } from './challenges';
 import { createSession, readLiveSession, recentlyAuthenticated, type SessionRow } from './sessions';
-import { requireSameOrigin } from './guards';
+import { walletOrigin, walletAggregateLimit, readWalletBody, walletJson } from './wallet-request';
+import type { D1Like } from '../accounts/d1';
 import { createD1Limiter } from '../accounts/d1-limiter';
 import type { LimitWindow } from '../accounts/limiter';
 import { readSessionCookie, SESSION_COOKIE, type NativeAuthEnv } from './email';
@@ -47,11 +48,7 @@ const CHALLENGE_WINDOWS: LimitWindow[] = [
 ];
 const VERIFY_WINDOWS: LimitWindow[] = [{ limit: 15, windowMs: 600_000 }];
 
-const json = (status: number, body: unknown, headers?: HeadersInit): Response =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: { 'content-type': 'application/json', ...headers },
-  });
+const json = walletJson;
 
 const kindOf = (chain: WalletChain) => (chain === 'evm' ? 'wallet_evm' : 'wallet_solana');
 const linkChainOf = (chain: WalletChain) => (chain === 'evm' ? 'ethereum' : 'solana');
@@ -80,7 +77,7 @@ function expectedFrom(req: Request, address: string, nonce: string, chain: Walle
   const url = new URL(req.url);
   const base = {
     domain: url.host,
-    uri: `${url.origin}/signin`,
+    uri: `${url.origin}/sign-in`,
     nonce,
     address,
   };
@@ -99,19 +96,17 @@ export async function handleWalletChallenge(
   const requestId = crypto.randomUUID();
   if (req.method !== 'POST')
     return json(405, { error: 'method_not_allowed', requestId }, { allow: 'POST' });
-  const csrf = requireSameOrigin(req);
+  const csrf = walletOrigin(req);
   if (csrf) return csrf;
   if (env.NATIVE_AUTH_ENABLED !== 'true')
     return json(503, { error: 'disabled', message: 'Native sign-in is switched off.', requestId });
   if (!env.PORTFOLIO_ACCOUNTS_DB)
     return json(503, { error: 'not_configured', message: 'Native sign-in is not configured.', requestId });
 
-  let body: Record<string, unknown>;
-  try {
-    body = (await req.json()) as Record<string, unknown>;
-  } catch {
-    return json(400, { error: 'invalid_request', requestId });
-  }
+  const aggregate = await walletAggregateLimit(req, env.PORTFOLIO_ACCOUNTS_DB);
+  if (aggregate) return aggregate;
+  const body = await readWalletBody(req);
+  if (body instanceof Response) return body;
   const addr = normalizeAddress(chain, body?.address);
   if (!addr) return json(400, { error: 'invalid_address', requestId });
 
@@ -141,23 +136,21 @@ export async function handleWalletVerify(
   const requestId = crypto.randomUUID();
   if (req.method !== 'POST')
     return json(405, { error: 'method_not_allowed', requestId }, { allow: 'POST' });
-  const csrf = requireSameOrigin(req);
+  const csrf = walletOrigin(req);
   if (csrf) return csrf;
   if (env.NATIVE_AUTH_ENABLED !== 'true')
     return json(503, { error: 'disabled', message: 'Native sign-in is switched off.', requestId });
   if (!env.PORTFOLIO_ACCOUNTS_DB)
     return json(503, { error: 'not_configured', message: 'Native sign-in is not configured.', requestId });
 
-  let body: Record<string, unknown>;
-  try {
-    body = (await req.json()) as Record<string, unknown>;
-  } catch {
-    return json(400, { error: 'invalid_request', requestId });
-  }
+  const aggregate = await walletAggregateLimit(req, env.PORTFOLIO_ACCOUNTS_DB);
+  if (aggregate) return aggregate;
+  const body = await readWalletBody(req);
+  if (body instanceof Response) return body;
   const addr = normalizeAddress(chain, body?.address);
   const message = typeof body?.message === 'string' ? body.message : '';
   const signature = typeof body?.signature === 'string' ? body.signature : '';
-  if (!addr || !message || !signature) return json(400, { error: 'invalid_request', requestId });
+  if (!addr || !message || message.length > 2048 || !signature || signature.length > 256) return json(400, { error: 'invalid_request', requestId });
 
   const db = env.PORTFOLIO_ACCOUNTS_DB;
   const limiter = createD1Limiter(db as never, VERIFY_WINDOWS, `auth_wallet_verify_${chain}`);
@@ -194,8 +187,16 @@ export async function handleWalletVerify(
     .prepare(`SELECT id FROM challenges WHERE kind = ? AND subject = ? AND claim_attempt_id = ?`)
     .bind(kindOf(chain), addr.subject, attemptId)
     .first<{ id: string }>();
-  const userId = await findOrCreateWalletUser(db, chain, addr, challenge?.id ?? '');
-  const session = await createSession(db, userId);
+  if (!challenge) return json(503, { error: 'unavailable', requestId });
+  let userId: string;
+  let session: Awaited<ReturnType<typeof createSession>>;
+  try {
+    userId = await findOrCreateWalletUser(db, chain, addr, challenge.id);
+    session = await createSession(db, userId);
+  } catch {
+    // A post-claim failure burns the nonce. Never issue a cookie or unconsume.
+    return json(503, { error: 'unavailable', requestId });
+  }
   const cookie =
     `${SESSION_COOKIE}=${session.id}; Path=/; Max-Age=${SESSION_MAX_AGE_S};` +
     ' HttpOnly; Secure; SameSite=Lax';
@@ -218,28 +219,37 @@ async function findOrCreateWalletUser(
   if (existing) return existing.user_id;
   const now = new Date().toISOString();
   const userId = crypto.randomUUID();
-  const r1 = await db
-    .prepare(`INSERT INTO users (id, status, created_at, updated_at) VALUES (?, 'active', ?, ?)`)
-    .bind(userId, now, now)
-    .run();
-  if (!r1.success) throw new Error('user_insert_failed');
-  const r2 = await db
-    .prepare(
-      `INSERT INTO auth_identities (id, user_id, kind, identifier, verified_at)
-       VALUES (?, ?, ?, ?, ?)`,
-    )
-    .bind(crypto.randomUUID(), userId, kind, addr.subject, now)
-    .run();
-  if (!r2.success) throw new Error('identity_insert_failed');
-  const r3 = await db
-    .prepare(
-      `INSERT INTO wallet_links (chain, address, user_id, verified_at, challenge_id)
-       VALUES (?, ?, ?, ?, ?)`,
-    )
-    .bind(linkChainOf(chain), addr.display, userId, now, challengeId)
-    .run();
-  if (!r3.success) throw new Error('wallet_link_insert_failed');
-  return userId;
+  const batch = (db as D1Like).batch;
+  if (typeof batch !== 'function') throw new Error('atomic_store_required');
+  // Each insert is conditional on the previous winner. A competing verified
+  // login/link either wins the unique identity or is read back after rollback;
+  // we never create a second user and then transfer an identity onto it.
+  const userInsert = db.prepare(
+    `INSERT INTO users (id,status,created_at,updated_at)
+     SELECT ?, 'active', ?, ? WHERE NOT EXISTS
+       (SELECT 1 FROM auth_identities WHERE kind = ? AND identifier = ?)`,
+  ).bind(userId,now,now,kind,addr.subject);
+  const identityInsert = db.prepare(
+    `INSERT INTO auth_identities (id,user_id,kind,identifier,verified_at)
+     SELECT ?, ?, ?, ?, ? WHERE EXISTS(SELECT 1 FROM users WHERE id = ?)`,
+  ).bind(crypto.randomUUID(),userId,kind,addr.subject,now,userId);
+  const linkInsert = db.prepare(
+    `INSERT INTO wallet_links (chain,address,user_id,verified_at,challenge_id)
+     SELECT ?, ?, ?, ?, ? WHERE EXISTS
+       (SELECT 1 FROM auth_identities WHERE kind = ? AND identifier = ? AND user_id = ?)`,
+  ).bind(linkChainOf(chain),addr.display,userId,now,challengeId,kind,addr.subject,userId);
+  try { await batch.call(db,[userInsert,identityInsert,linkInsert]); }
+  catch(e) {
+    if(!isUniqueViolation(e)) throw e;
+    const winner=await db.prepare('SELECT user_id FROM auth_identities WHERE kind = ? AND identifier = ?')
+      .bind(kind,addr.subject).first<{user_id:string}>();
+    if(!winner) throw e;
+    return winner.user_id;
+  }
+  const winner=await db.prepare('SELECT user_id FROM auth_identities WHERE kind = ? AND identifier = ?')
+    .bind(kind,addr.subject).first<{user_id:string}>();
+  if(!winner) throw new Error('identity_insert_failed');
+  return winner.user_id;
 }
 
 /** Link challenges bind BOTH the authenticated user and the address: subject =
@@ -278,7 +288,7 @@ export async function handleWalletLinkChallenge(
   const requestId = crypto.randomUUID();
   if (req.method !== 'POST')
     return json(405, { error: 'method_not_allowed', requestId }, { allow: 'POST' });
-  const csrf = requireSameOrigin(req);
+  const csrf = walletOrigin(req);
   if (csrf) return csrf;
   if (env.NATIVE_AUTH_ENABLED !== 'true')
     return json(503, { error: 'disabled', message: 'Native sign-in is switched off.', requestId });
@@ -293,12 +303,10 @@ export async function handleWalletLinkChallenge(
   }
   const userId = authed.userId;
 
-  let body: Record<string, unknown>;
-  try {
-    body = (await req.json()) as Record<string, unknown>;
-  } catch {
-    return json(400, { error: 'invalid_request', requestId });
-  }
+  const aggregate = await walletAggregateLimit(req, env.PORTFOLIO_ACCOUNTS_DB);
+  if (aggregate) return aggregate;
+  const body = await readWalletBody(req);
+  if (body instanceof Response) return body;
   const addr = normalizeAddress(chain, body?.address);
   if (!addr) return json(400, { error: 'invalid_address', requestId });
 
@@ -329,7 +337,7 @@ export async function handleWalletLinkVerify(
   const requestId = crypto.randomUUID();
   if (req.method !== 'POST')
     return json(405, { error: 'method_not_allowed', requestId }, { allow: 'POST' });
-  const csrf = requireSameOrigin(req);
+  const csrf = walletOrigin(req);
   if (csrf) return csrf;
   if (env.NATIVE_AUTH_ENABLED !== 'true')
     return json(503, { error: 'disabled', message: 'Native sign-in is switched off.', requestId });
@@ -344,16 +352,14 @@ export async function handleWalletLinkVerify(
   }
   const userId = authed.userId;
 
-  let body: Record<string, unknown>;
-  try {
-    body = (await req.json()) as Record<string, unknown>;
-  } catch {
-    return json(400, { error: 'invalid_request', requestId });
-  }
+  const aggregate = await walletAggregateLimit(req, env.PORTFOLIO_ACCOUNTS_DB);
+  if (aggregate) return aggregate;
+  const body = await readWalletBody(req);
+  if (body instanceof Response) return body;
   const addr = normalizeAddress(chain, body?.address);
   const message = typeof body?.message === 'string' ? body.message : '';
   const signature = typeof body?.signature === 'string' ? body.signature : '';
-  if (!addr || !message || !signature) return json(400, { error: 'invalid_request', requestId });
+  if (!addr || !message || message.length > 2048 || !signature || signature.length > 256) return json(400, { error: 'invalid_request', requestId });
 
   const subject = linkSubjectOf(userId, addr.subject);
   const limiter = createD1Limiter(db as never, VERIFY_WINDOWS, `auth_wallet_link_verify_${chain}`);
