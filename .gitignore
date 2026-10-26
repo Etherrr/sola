@@ -13,3 +13,4 @@ output/
 harness/node_modules/
 harness/fixture-native-worker.mjs
 harness/fixture-worker.mjs
+.vitest/

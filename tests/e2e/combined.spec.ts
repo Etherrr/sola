@@ -297,3 +297,32 @@ test('the /portfolio overview carries no demo fixture - the invented sample live
   await expect(page.locator('#main')).toContainText('$11,000.00');
   await expect(page.locator('#main .mode-marker')).toContainText('SIMULATED');
 });
+
+test('a native signed-in user on /portfolio gets a visible pointer to the account book', async ({
+  page,
+}) => {
+  await page.route('**/api/v1/auth/email/session', (r) =>
+    json(r, 200, { status: 'ok', email: 'jun@example.com', fresh: true }),
+  );
+  await page.goto('/portfolio');
+  const pointer = page.getByText(/your address book and its combined view live on/);
+  await expect(pointer).toBeVisible();
+  await expect(pointer.getByRole('link', { name: 'Account' })).toHaveAttribute('href', '/account/');
+});
+
+test('a signed-out visitor on /portfolio gets no account pointer and no account read', async ({
+  page,
+}) => {
+  await page.route('**/api/v1/auth/email/session', (r) =>
+    r.fulfill({ status: 401, json: { error: 'auth_required' } }),
+  );
+  let nativeBookReads = 0;
+  await page.route('**/api/v1/portfolio/addresses', (r) => {
+    nativeBookReads++;
+    return r.fulfill({ status: 401, json: { error: 'auth_required' } });
+  });
+  await page.goto('/portfolio');
+  await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
+  await expect(page.getByText(/your address book and its combined view live on/)).toHaveCount(0);
+  expect(nativeBookReads).toBe(0);
+});

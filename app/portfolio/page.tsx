@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { PageIntro } from '@/components/ui';
 import { CombinedWallets } from '@/features/portfolio/combined-wallets';
+import { AccountBookPointer } from '@/features/portfolio/account-book-pointer';
 export const metadata = { title: 'Overview' };
 
 /** The app overview: the legacy Track saved-address list, combined on request only.
@@ -17,6 +18,7 @@ export default function Page() {
           <Link href="/demo">Demo</Link>.
         </p>
       </PageIntro>
+      <AccountBookPointer />
       <CombinedWallets />
     </div>
   );
