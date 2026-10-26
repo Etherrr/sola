@@ -1,4 +1,3 @@
-/* global fetch, setTimeout, console */
 /* Capture new sign-in code states on the local static build, mocked APIs.
    Emulated-viewport evidence, not a live session. */
 import { chromium } from '@playwright/test';

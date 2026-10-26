@@ -1,4 +1,3 @@
-/* global fetch, setTimeout, console, window, document */
 // Synthetic-fixture capture of the populated v2 Overview (address manager +
 // lookup tool). NOT a live session: every API is mocked with fixture data,
 // served from the local static build. Output is emulated-viewport evidence.

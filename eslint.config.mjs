@@ -17,9 +17,14 @@ export default defineConfig([
   ]),
   {
     // Sandbox harness scripts run on plain Node, not in the app/browser environment.
-    files: ['harness/**/*.mjs', 'e2e/**/*.mjs'],
+    files: ['harness/**/*.mjs', 'e2e/**/*.mjs', 'scripts/**/*.mjs'],
     languageOptions: {
-      globals: { console: 'readonly', process: 'readonly', URL: 'readonly' },
+      globals: {
+        console: 'readonly', process: 'readonly', URL: 'readonly',
+        fetch: 'readonly', setTimeout: 'readonly',
+        // Used inside page.evaluate callbacks that execute in the browser.
+        window: 'readonly', document: 'readonly',
+      },
     },
   },
   js.configs.recommended,

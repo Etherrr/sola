@@ -3157,6 +3157,10 @@ html {
 .accounts .ab-scroll th:nth-child(5) { width: 27%; }
 .accounts .ab-scroll td {
   overflow-wrap: anywhere;
+  white-space: normal;
+}
+.accounts .ab-scroll td:nth-child(2) {
+  white-space: nowrap;
 }
 .accounts .ab-actions {
   white-space: normal;

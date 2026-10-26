@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process';
 const server = spawn('npm', ['run', 'start'], { stdio: 'ignore', cwd: '/tmp/sola-fresh' });
 const waitUp = async () => {
   for (let i = 0; i < 60; i++) {
-    try { const r = await fetch('http://127.0.0.1:3000/portfolio/'); if (r.ok) return; } catch {}
+    try { const r = await fetch('http://127.0.0.1:3000/portfolio/'); if (r.ok) return; } catch { /* best-effort warmup */ }
     await new Promise((r) => setTimeout(r, 500));
   }
   throw new Error('server did not start');
