@@ -4,7 +4,10 @@ import { fetchAssets, fetchPositions, fetchRisk } from '../features/portfolio-v2
 /** Recorded view client mapping (plan 6.2-6.4): fail-closed on malformed
  *  payloads; marker REQUIRED on ok, TOLERATED absent on empty (reviewer
  *  consumer note: no_recorded_observations carries no marker). */
-const NETS = [{ network: 'eip155:1', address: '0xabc', latestObservedAt: '2026-10-26T08:00:00Z' }];
+// REAL wire shape (position-history.ts): networks entries carry network +
+// latestObservedAt ONLY - no address. A mapper requiring address would fail
+// every real ok response (reviewer slice-2 early blocker 06:11).
+const NETS = [{ network: 'eip155:1', latestObservedAt: '2026-10-26T08:00:00Z' }];
 const BASE = {
   status: 'ok',
   scope: 'recorded_observations_only',
@@ -153,6 +156,21 @@ describe('recorded view client mapping', () => {
     expect(r.risk.partial).toBe(true);
     expect(r.risk.byChain[0]).toEqual({ label: 'eip155:1', valueUsd: '4500', sharePct: '100' });
     stubFetch(ok({ ...BASE, risk: { ...RISK, byChain: 'eth' } }));
+    expect((await fetchRisk()).kind).toBe('failed');
+  });
+
+  it('fails closed on malformed or missing honesty flags, never the reassuring default', async () => {
+    // Reviewer probe cases (slice-2 follow-up): priceStale missing / wrong
+    // type, partial missing / wrong type - every one must map to 'failed'.
+    const noStale = { ...ASSET } as Record<string, unknown>;
+    delete noStale.priceStale;
+    stubFetch(ok({ ...BASE, rows: [noStale] }));
+    expect((await fetchAssets()).kind).toBe('failed');
+    stubFetch(ok({ ...BASE, rows: [{ ...ASSET, priceStale: 'yes' }] }));
+    expect((await fetchAssets()).kind).toBe('failed');
+    stubFetch(ok({ ...BASE, risk: { ...RISK, partial: undefined } }));
+    expect((await fetchRisk()).kind).toBe('failed');
+    stubFetch(ok({ ...BASE, risk: { ...RISK, partial: 1 } }));
     expect((await fetchRisk()).kind).toBe('failed');
   });
 

@@ -136,7 +136,7 @@ export function AssetsView() {
             <tr>
               <th>Asset</th>
               <th>Network</th>
-              <th>Address</th>
+              <th>Wallet</th>
               <th className="num">Amount</th>
               <th className="num">Price</th>
               <th className="num">Value</th>
@@ -154,7 +154,7 @@ export function AssetsView() {
                   {r.kind === 'protocol_debt' && <span className="tag">debt</span>}
                 </td>
                 <td data-label="Network">{r.network}</td>
-                <td data-label="Address" title={r.address}>{short(r.address)}</td>
+                <td data-label="Wallet" title={r.address}>{short(r.address)}</td>
                 <td data-label="Amount" className="num" title={r.amount}>
                   {amount(r.amount)}
                 </td>

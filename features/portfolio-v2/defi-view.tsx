@@ -56,7 +56,7 @@ export function DefiView() {
               <tr>
                 <th>Protocol</th>
                 <th>Asset</th>
-                <th>Address</th>
+                <th>Wallet</th>
                 <th className="num">Supplied</th>
                 <th className="num">Debt</th>
                 <th className="num">Net</th>
@@ -72,7 +72,7 @@ export function DefiView() {
                     {r.protocol} <span className="tag">{r.network}</span>
                   </td>
                   <td data-label="Asset" title={r.assetId}>{r.symbol}</td>
-                  <td data-label="Address" title={r.address}>{short(r.address)}</td>
+                  <td data-label="Wallet" title={r.address}>{short(r.address)}</td>
                   <td data-label="Supplied" className="num" title={r.supplied}>
                     {amount(r.supplied)}
                   </td>
