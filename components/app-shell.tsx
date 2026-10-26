@@ -35,16 +35,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // The demo label is only honest when this deployment's health endpoint reports mock mode;
   // on live (or unknown) it must not claim the data is demo.
   const [mode, setMode] = useState<'mock' | 'live' | 'unknown'>('unknown');
+  // Reviewer edge (fe2a3e0): a mount-only fetch skipped on an initial /learn entry stayed
+  // skipped after a client-side return to the portfolio, leaving the demo-mode hint
+  // unknowable. Fetch once on the first non-learn render - path-keyed, ref-guarded.
+  const healthFetched = useRef(false);
   useEffect(() => {
     // The learning shell renders no mode line, so it does not need the health read.
     if (path.startsWith('/learn')) return;
+    if (healthFetched.current) return;
+    healthFetched.current = true;
     let live = true;
     fetchHealth().then((h) => live && setMode(h.mode)).catch(() => {});
     return () => {
       live = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [path]);
   // Mobile bottom bar: Education lives under More; the desktop sidebar shows it directly.
   const [moreOpen, setMoreOpen] = useState(false);
   const moreRef = useRef<HTMLDivElement>(null);

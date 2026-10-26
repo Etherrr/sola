@@ -68,4 +68,22 @@ describe('separate learning shell (plan §8)', () => {
     const effect = appShell.slice(Math.max(0, call - 400), call);
     expect(effect).toContain("path.startsWith('/learn')");
   });
+
+  it('the health read fires exactly once on the first non-learn render', () => {
+    // Reviewer edge on fe2a3e0: a mount-only fetch skipped on an initial /learn entry
+    // stayed skipped after a client-side return to the portfolio, leaving the global
+    // mode unknown and the demo data hint absent. The effect is path-keyed and
+    // ref-guarded so the first non-learn render fetches once and never again.
+    expect(appShell).toContain('const healthFetched = useRef(false);');
+    const guard = appShell.indexOf('if (healthFetched.current) return;');
+    expect(guard).toBeGreaterThan(-1);
+    const effect = appShell.slice(Math.max(0, guard - 400), guard + 400);
+    expect(effect).toContain("path.startsWith('/learn')");
+    expect(effect).toContain('healthFetched.current = true;');
+    expect(effect).toContain('}, [path]);');
+    // The /learn skip must run before the once-guard so lessons never trigger the fetch.
+    expect(effect.indexOf("path.startsWith('/learn')")).toBeLessThan(
+      effect.indexOf('if (healthFetched.current) return;'),
+    );
+  });
 });
