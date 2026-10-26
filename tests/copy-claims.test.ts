@@ -168,7 +168,9 @@ describe('the DeFi app carries no education traces beyond one button to the sepa
   it('the sidebar keeps a single Education link and drops Learn, Start and Explore', () => {
     expect(shell).toContain("href: '/education'");
     expect(shell).not.toMatch(/href: '\/(learn|start|explore)'/);
-    expect((shell.match(/\/education/g) || []).length).toBe(1);
+    // One Education destination total: the desktop sidebar link and the mobile More
+    // menu both point at the same single educationLink entry.
+    expect((shell.match(/href: '\/education'/g) || []).length).toBe(1);
   });
   it('the app footer no longer frames the whole app as a learning preview', () => {
     expect(shell).not.toMatch(/Learning preview/);

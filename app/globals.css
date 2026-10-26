@@ -1686,6 +1686,10 @@ code {
   width: 28px;
   height: 31px;
 }
+.more-wrap {
+  display: none;
+}
+
 .side-nav {
   display: flex;
   flex-direction: column;
@@ -1896,6 +1900,66 @@ code {
   }
   .side-nav a[aria-current] {
     box-shadow: inset 0 3px 0 var(--gold);
+  }
+  .side-nav a.edu-desktop {
+    display: none;
+  }
+  .more-wrap {
+    display: flex;
+    position: relative;
+  }
+  .side-nav .nav-more {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    font-size: 0.65rem;
+    padding: 6px 4px;
+    min-width: 56px;
+    min-height: 44px;
+    border: 0;
+    border-radius: 8px;
+    background: none;
+    color: var(--muted);
+    font-family: inherit;
+    cursor: pointer;
+  }
+  .side-nav .nav-more span {
+    width: 20px;
+    text-align: center;
+    color: var(--gold);
+  }
+  .side-nav .nav-more:hover {
+    background: var(--panel);
+    color: var(--text);
+  }
+  .side-nav .nav-more[aria-current] {
+    background: var(--panel-light);
+    color: var(--gold-light);
+    box-shadow: inset 0 3px 0 var(--gold);
+  }
+  .more-menu {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    min-width: 150px;
+    padding: 6px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    z-index: 40;
+  }
+  .side-nav .more-menu a {
+    flex-direction: row;
+    justify-content: flex-start;
+    width: 100%;
+    min-width: 0;
+    gap: 10px;
+    padding: 10px 12px;
+    font-size: 0.8rem;
   }
   /* Six tabs need 352px (6 x 56px min-width + 16px padding). Below that the orientation tab
      hides; the orientation stays reachable from the account menu on narrow screens. */

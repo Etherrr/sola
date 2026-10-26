@@ -1996,15 +1996,28 @@ test('v2 address lookup: Solana SOL-only footer; empty incomplete answer says un
   await expect(tool.getByText(/No balances found/)).toHaveCount(0);
 });
 
-test('shell nav is keyboard-reachable in DOM order', async ({ page }) => {
+test('shell nav is keyboard-reachable in DOM order', async ({ page, isMobile }) => {
   await page.goto('/portfolio');
   const nav = page.locator('nav[aria-label="Main"]');
-  const names = ['Overview', 'Markets', 'Education', 'Settings'];
-  await nav.getByRole('link', { name: 'Overview' }).focus();
-  await expect(nav.getByRole('link', { name: 'Overview' })).toBeFocused();
-  for (const name of names.slice(1)) {
+  // Desktop sidebar lists Education directly; the mobile bottom bar reaches it through More.
+  const tabs: Array<{ role: 'link' | 'button'; name: string }> = isMobile
+    ? [
+        { role: 'link', name: 'Portfolio' },
+        { role: 'link', name: 'Markets' },
+        { role: 'button', name: 'More' },
+        { role: 'link', name: 'Settings' },
+      ]
+    : [
+        { role: 'link', name: 'Portfolio' },
+        { role: 'link', name: 'Markets' },
+        { role: 'link', name: 'Education' },
+        { role: 'link', name: 'Settings' },
+      ];
+  await nav.getByRole(tabs[0].role, { name: tabs[0].name }).focus();
+  await expect(nav.getByRole(tabs[0].role, { name: tabs[0].name })).toBeFocused();
+  for (const tab of tabs.slice(1)) {
     await page.keyboard.press('Tab');
-    await expect(nav.getByRole('link', { name })).toBeFocused();
+    await expect(nav.getByRole(tab.role, { name: tab.name })).toBeFocused();
   }
 });
 
@@ -2106,13 +2119,28 @@ test('at 320px the tab bar shows four fitting tabs and the account menu stays on
   const nav = page.locator('nav[aria-label="Main"]');
   // The bar is position:fixed, so document scrollWidth cannot catch a cutoff; measure each
   // tab's box against the viewport instead.
-  const visible = ['Overview', 'Markets', 'Education', 'Settings'];
-  for (const name of visible) {
-    const box = await nav.getByRole('link', { name }).boundingBox();
+  // Mobile bar: Portfolio / Markets / More (a menu button) / Settings; Education sits under More.
+  const tabs: Array<{ role: 'link' | 'button'; name: string }> = [
+    { role: 'link', name: 'Portfolio' },
+    { role: 'link', name: 'Markets' },
+    { role: 'button', name: 'More' },
+    { role: 'link', name: 'Settings' },
+  ];
+  for (const tab of tabs) {
+    const box = await nav.getByRole(tab.role, { name: tab.name }).boundingBox();
     expect(box).not.toBeNull();
     expect(box!.x).toBeGreaterThanOrEqual(0);
     expect(box!.x + box!.width).toBeLessThanOrEqual(320);
   }
+  // More opens to Education, and the popover stays inside the viewport.
+  await nav.getByRole('button', { name: 'More' }).click();
+  const edu = page.getByRole('menuitem', { name: 'Education' });
+  await expect(edu).toBeVisible();
+  const eduBox = (await edu.boundingBox())!;
+  expect(eduBox.x).toBeGreaterThanOrEqual(0);
+  expect(eduBox.x + eduBox.width).toBeLessThanOrEqual(320);
+  await page.keyboard.press('Escape');
+  await expect(edu).toHaveCount(0);
   // The open account menu must not clip past the viewport either.
   await page.getByRole('button', { name: /^Account/ }).click();
   const menu = page.getByRole('group', { name: 'Account' });

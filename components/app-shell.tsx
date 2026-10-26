@@ -16,13 +16,13 @@ const sections = [
     // /track route still answers directly until its lookup is refactored
     // into the address manager (plan line 218.2).
     items: [
-      { href: '/portfolio', label: 'Overview', icon: '◧' },
+      { href: '/portfolio', label: 'Portfolio', icon: '◧' },
       { href: '/markets', label: 'Markets', icon: '◷' },
     ],
   },
 ];
 // The only education trace in the app: one button leading to the separate Education area.
-const educationLink = { href: '/education', label: 'Education', icon: '◎', cls: 'nav-settings' };
+const educationLink = { href: '/education', label: 'Education', icon: '◎', cls: 'nav-settings edu-desktop' };
 const settingsLink = { href: '/settings', label: 'Settings', icon: '⚙', cls: 'nav-settings' };
 export function AppShell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
@@ -37,6 +37,30 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       live = false;
     };
   }, []);
+  // Mobile bottom bar: Education lives under More; the desktop sidebar shows it directly.
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreRef = useRef<HTMLDivElement>(null);
+  // Close on route change: adjust state during render (no effect needed).
+  const [prevPath, setPrevPath] = useState(path);
+  if (prevPath !== path) {
+    setPrevPath(path);
+    setMoreOpen(false);
+  }
+  useEffect(() => {
+    if (!moreOpen) return;
+    const onDown = (e: PointerEvent) => {
+      if (moreRef.current && !moreRef.current.contains(e.target as Node)) setMoreOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMoreOpen(false);
+    };
+    document.addEventListener('pointerdown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [moreOpen]);
   // Publish the real sticky-bar height so focus and scroll offsets follow it when the bar wraps
   // to two rows on narrow screens.
   useEffect(() => {
@@ -91,17 +115,47 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 ))}
               </div>
             ))}
-            {[educationLink, settingsLink].map((t) => (
-              <Link
-                key={t.href}
-                href={t.href}
-                className={t.cls}
-                aria-current={path.startsWith(t.href) ? 'page' : undefined}
+            <Link
+              href={educationLink.href}
+              className={educationLink.cls}
+              aria-current={path.startsWith(educationLink.href) ? 'page' : undefined}
+            >
+              <span aria-hidden="true">{educationLink.icon}</span>
+              {educationLink.label}
+            </Link>
+            <div className="more-wrap" ref={moreRef}>
+              <button
+                type="button"
+                className="nav-more"
+                aria-haspopup="menu"
+                aria-expanded={moreOpen}
+                aria-current={path.startsWith('/education') ? 'page' : undefined}
+                onClick={() => setMoreOpen((o) => !o)}
               >
-                <span aria-hidden="true">{t.icon}</span>
-                {t.label}
-              </Link>
-            ))}
+                <span aria-hidden="true">⋯</span>
+                More
+              </button>
+              {moreOpen ? (
+                <div role="menu" aria-label="More" className="more-menu">
+                  <Link
+                    role="menuitem"
+                    href={educationLink.href}
+                    aria-current={path.startsWith(educationLink.href) ? 'page' : undefined}
+                  >
+                    <span aria-hidden="true">{educationLink.icon}</span>
+                    {educationLink.label}
+                  </Link>
+                </div>
+              ) : null}
+            </div>
+            <Link
+              href={settingsLink.href}
+              className={settingsLink.cls}
+              aria-current={path.startsWith(settingsLink.href) ? 'page' : undefined}
+            >
+              <span aria-hidden="true">{settingsLink.icon}</span>
+              {settingsLink.label}
+            </Link>
           </nav>
           <p className="side-foot">
             v0.1 · PREVIEW
