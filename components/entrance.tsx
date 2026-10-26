@@ -68,6 +68,14 @@ export function Entrance() {
             Signed in as {email} · read-only access
           </p>
         )}
+        <p className="actions entrance-auth-actions">
+          <Link className="button primary" href="/sign-in">
+            Sign in
+          </Link>{' '}
+          <Link className="button secondary" href="/create-account">
+            Create account
+          </Link>
+        </p>
         <div className="entrance-split">
           <Link href="/education" className="entrance-card edu">
             <span className="entrance-h">Education</span>

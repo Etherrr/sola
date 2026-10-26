@@ -20,12 +20,24 @@ type Gate =
   | { kind: 'loading' }
   | { kind: 'error' }
   | { kind: 'not-invited' }
+  | { kind: 'reauth' }
   | { kind: 'ready' };
 
 export function AccountGate() {
   const native = useNativeSession();
   const router = useRouter();
   const [gate, setGate] = useState<Gate>({ kind: 'loading' });
+  const [signOutFailed, setSignOutFailed] = useState(false);
+  // Sign out only navigates on a confirmed end - failure keeps the truth visible.
+  const signOut = () => {
+    setSignOutFailed(false);
+    nativeLogoutRequest()
+      .then((r) => {
+        if (r.ok) window.location.assign('/');
+        else setSignOutFailed(true);
+      })
+      .catch(() => setSignOutFailed(true));
+  };
 
   useEffect(() => {
     if (native.kind === 'none') {
@@ -35,11 +47,18 @@ export function AccountGate() {
     if (native.kind !== 'ok') return;
     let live = true;
     addressBookRequest('GET', undefined)
-      .then((r) => {
+      .then(async (r) => {
         if (!live) return;
-        if (r.status === 403) setGate({ kind: 'not-invited' });
-        else if (r.status === 401) router.replace('/sign-in/?next=%2Faccount');
-        else if (r.ok) setGate({ kind: 'ready' });
+        if (r.status === 403) {
+          // Only the explicit not_entitled body means "not invited"; any other
+          // 403 (a future guard, origin check, ...) is an honest error.
+          const b = (await r.clone().json().catch(() => null)) as { error?: string } | null;
+          setGate(b?.error === 'not_entitled' ? { kind: 'not-invited' } : { kind: 'error' });
+        } else if (r.status === 401) {
+          // Session endpoint said ok but the data route refused: the session went
+          // stale between the two reads. Ask for a fresh sign-in, never loop.
+          setGate({ kind: 'reauth' });
+        } else if (r.ok) setGate({ kind: 'ready' });
         else setGate({ kind: 'error' });
       })
       .catch(() => live && setGate({ kind: 'error' }));
@@ -72,13 +91,21 @@ export function AccountGate() {
           here because there is nothing invited to show - not because your account is empty.
         </p>
         <p className="actions">
-          <button
-            type="button"
-            className="button secondary"
-            onClick={() => void nativeLogoutRequest().finally(() => window.location.assign('/'))}
-          >
+          <button type="button" className="button secondary" onClick={signOut}>
             Sign out
           </button>
+        </p>
+        {signOutFailed && <p role="alert"><em>Could not sign out just now - try again.</em></p>}
+      </div>
+    );
+  if (gate.kind === 'reauth')
+    return (
+      <div className="panel">
+        <p><em>Your sign-in needs a refresh.</em></p>
+        <p className="actions">
+          <a className="button primary" href="/sign-in/?next=%2Faccount">
+            Sign in again
+          </a>
         </p>
       </div>
     );
@@ -92,14 +119,11 @@ export function AccountGate() {
       </div>
       <AddressBook />
       <p className="actions">
-        <button
-          type="button"
-          className="button secondary"
-          onClick={() => void nativeLogoutRequest().finally(() => window.location.assign('/'))}
-        >
+        <button type="button" className="button secondary" onClick={signOut}>
           Sign out
         </button>
       </p>
+      {signOutFailed && <p role="alert"><em>Could not sign out just now - try again.</em></p>}
     </>
   );
 }

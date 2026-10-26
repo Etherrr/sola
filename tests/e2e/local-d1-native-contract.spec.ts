@@ -218,7 +218,7 @@ test('native session required: no valid cookie means 401 and an honest signed-ou
   await expect(
     main.getByText('Sign in to see your holdings, addresses and recorded history.'),
   ).toBeVisible();
-  await expect(main.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/dev/sign-in');
+  await expect(main.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/sign-in');
   // The data route itself still refuses the bogus session with a real 401.
   const res = await api('/api/v1/portfolio/addresses');
   expect(res.status).toBe(401);

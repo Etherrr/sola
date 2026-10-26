@@ -63,3 +63,50 @@ test('full path: sign-in ceremony resumes into the gated account', async ({ page
   await cont.click();
   await expect(page.getByText('Signed in as jun@example.com.')).toBeVisible();
 });
+
+test('failed sign-out keeps the truth visible - no fake signed-out navigation', async ({ page }) => {
+  await mockSession(page, 'ok');
+  await page.route(ADDR, (r) => r.fulfill({ status: 200, json: { status: 'ok', addresses: [] } }));
+  await page.route('**/api/v1/auth/email/logout', (r) => r.fulfill({ status: 500, json: { error: 'x' } }));
+  await page.goto('/account/');
+  await page.getByRole('button', { name: 'Sign out' }).click();
+  await expect(page.locator('p[role=alert]')).toContainText('Could not sign out');
+  await expect(page).toHaveURL(/\/account\//);
+});
+
+test('a 403 that is not not_entitled shows the honest error, not "not invited"', async ({ page }) => {
+  await mockSession(page, 'ok');
+  await page.route(ADDR, (r) => r.fulfill({ status: 403, json: { error: 'forbidden_origin' } }));
+  await page.goto('/account/');
+  await expect(page.getByText('could not be read just now')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Not invited yet' })).toHaveCount(0);
+});
+
+test('stale session (data 401 after session ok) asks for a fresh sign-in, no redirect loop', async ({ page }) => {
+  await mockSession(page, 'ok');
+  await page.route(ADDR, (r) => r.fulfill({ status: 401, json: { error: 'auth_required' } }));
+  await page.goto('/account/');
+  await expect(page.getByText('Your sign-in needs a refresh.')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Sign in again' })).toHaveAttribute('href', '/sign-in/?next=%2Faccount');
+});
+
+test('sign-out with a dead network keeps you signed in and honest - no fake navigation', async ({ page }) => {
+  await mockSession(page, 'ok');
+  await page.route(ADDR, (r) => r.fulfill({ status: 200, json: { status: 'ok', addresses: [] } }));
+  await page.goto('/account/');
+  await page.route('**/api/v1/auth/email/logout', (r) => r.abort('timedout'));
+  await page.getByRole('button', { name: 'Sign out' }).click();
+  await expect(page.locator('p[role=alert]')).toContainText('Could not sign out');
+  await expect(page).toHaveURL(/\/account\//);
+});
+
+test('header menu sign-out failure alerts and keeps you signed in - no fake reload', async ({ page }) => {
+  await mockSession(page, 'ok');
+  await page.route(ADDR, (r) => r.fulfill({ status: 200, json: { status: 'ok', addresses: [] } }));
+  await page.route('**/api/v1/auth/email/logout', (r) => r.fulfill({ status: 500, json: { error: 'x' } }));
+  await page.goto('/account/');
+  await page.getByRole('button', { name: 'Account: jun@example.com' }).click();
+  await page.getByRole('group', { name: 'Account' }).getByRole('button', { name: 'Sign out' }).click();
+  await expect(page.getByRole('group', { name: 'Account' }).locator('p[role=alert]')).toContainText('Could not sign out');
+  await expect(page).toHaveURL(/\/account\//);
+});

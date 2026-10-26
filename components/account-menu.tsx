@@ -31,9 +31,17 @@ export function AccountMenu() {
     window.location.assign('/cdn-cgi/access/logout');
   };
   // Native sign-out: end the native session, then reload so every client-side
-  // identity (including the Access one) is re-derived from the servers.
+  // identity (including the Access one) is re-derived from the servers. Only
+  // reload on a confirmed end - a failed request must never LOOK signed out.
+  const [nativeSignOutFailed, setNativeSignOutFailed] = useState(false);
   const nativeSignOut = () => {
-    nativeLogoutRequest().finally(() => window.location.reload());
+    setNativeSignOutFailed(false);
+    nativeLogoutRequest()
+      .then((r) => {
+        if (r.ok) window.location.reload();
+        else setNativeSignOutFailed(true);
+      })
+      .catch(() => setNativeSignOutFailed(true));
   };
   const btn = useRef<HTMLButtonElement>(null);
   const root = useRef<HTMLDivElement>(null);
@@ -150,7 +158,13 @@ export function AccountMenu() {
                 <button type="button" className="acct-signout-btn" onClick={nativeSignOut}>
                   Sign out
                 </button>
-                <p className="acct-signout-note">Ends this Sola sign-in on this device.</p>
+                {nativeSignOutFailed ? (
+                  <p className="acct-signout-note" role="alert">
+                    Could not sign out just now - try again.
+                  </p>
+                ) : (
+                  <p className="acct-signout-note">Ends this Sola sign-in on this device.</p>
+                )}
               </>
             ) : native.kind === 'none' ? null : (
               <>

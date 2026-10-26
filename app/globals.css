@@ -2330,6 +2330,12 @@ html {
   color: var(--muted);
   margin: 0 0 clamp(20px, 4vw, 40px);
 }
+/* Entrance composition owns the door layout; align the auth actions with the split grid. */
+.entrance-auth-actions {
+  width: min(1200px, 100%);
+  margin: 0 auto clamp(20px, 4vw, 32px);
+  padding-inline: 16px;
+}
 .entrance-split {
   display: grid;
   grid-template-columns: 1fr 1fr;
