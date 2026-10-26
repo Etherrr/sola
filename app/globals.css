@@ -3143,8 +3143,26 @@ html {
   overflow-x: auto;
   max-width: 100%;
 }
+/* The saved-address table must FIT its container at every width: no cut-off
+   actions and no horizontal hunting on desktop (visual review 2026-10-25).
+   Fixed layout + wrapping cells; the <=720px card rules still take over below. */
+.accounts .ab-scroll table {
+  width: 100%;
+  table-layout: fixed;
+}
+.accounts .ab-scroll th:nth-child(1) { width: 20%; }
+.accounts .ab-scroll th:nth-child(2) { width: 9%; }
+.accounts .ab-scroll th:nth-child(3) { width: 20%; }
+.accounts .ab-scroll th:nth-child(4) { width: 24%; }
+.accounts .ab-scroll th:nth-child(5) { width: 27%; }
+.accounts .ab-scroll td {
+  overflow-wrap: anywhere;
+}
 .accounts .ab-actions {
-  white-space: nowrap;
+  white-space: normal;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
 }
 .accounts .ab-details {
   background: rgba(127, 127, 127, 0.06);
