@@ -289,7 +289,7 @@ test('the /portfolio overview carries no demo fixture - the invented sample live
 }) => {
   await stubSession(page);
   await page.goto('/portfolio');
-  await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Portfolio' })).toBeVisible();
   await expect(page.locator('#main')).not.toContainText('$12,000');
   await expect(page.locator('#main')).not.toContainText('SIMULATED');
   await expect(page.getByText(/legacy Track address list/)).toBeVisible();
@@ -322,7 +322,7 @@ test('a signed-out visitor on /portfolio gets no account pointer and no account 
     return r.fulfill({ status: 401, json: { error: 'auth_required' } });
   });
   await page.goto('/portfolio');
-  await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Portfolio' })).toBeVisible();
   await expect(page.getByText(/your address book and its combined view live on/)).toHaveCount(0);
   expect(nativeBookReads).toBe(0);
 });

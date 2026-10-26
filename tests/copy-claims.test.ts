@@ -204,7 +204,7 @@ describe('the entrance is truthful about live lookups and welcomes the verified 
   });
 });
 
-describe('the Overview carries no education traces either', () => {
+describe('the Portfolio page carries no education traces either', () => {
   const dash = readFileSync('features/portfolio/dashboard.tsx', 'utf8');
   const marker = readFileSync('components/mode-marker.tsx', 'utf8');
   const fixtureSrc = readFileSync('features/portfolio/fixture.ts', 'utf8');
