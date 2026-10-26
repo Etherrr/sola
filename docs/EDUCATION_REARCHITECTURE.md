@@ -65,7 +65,12 @@ auth - a later phase, not this one.
 - **E3 - retire `/education` + repoint.** Redirect `/education` -> `/learn`; entrance card
   and app-shell button repointed; remove the duplicate landing page; update the
   copy-claims shell pin and journeys nav assertions in the same commit.
-- **E4 (later, with native auth)** - server-side progress persistence for signed-in
+- **E4 - separate learning shell (this head).** /learn/* renders in its own LearnShell:
+  a learning nav built from the registry in the pinned section order (practice last,
+  labeled SIMULATED), a return-to-portfolio action, shared branding and account control -
+  and no Portfolio sidebar, network picker or metrics chrome. The app-shell health read
+  no longer runs on /learn. Access, guest policy and persistence are unchanged.
+- **E5 (later, with native auth)** - server-side progress persistence for signed-in
   users; guest behavior unchanged.
 
 ## Explicitly unchanged in every phase

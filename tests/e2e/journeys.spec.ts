@@ -2507,10 +2507,73 @@ test('old lesson routes land on their canonical /learn/* destinations', async ({
     ['/start/defi', '/learn/defi-strategies'],
     ['/start/networks', '/learn/networks'],
     ['/learn/risks', '/learn/lending-and-risk'],
+    // E3 retirement: the old /education landing permanently moved to the ONE library.
+    ['/education', '/learn'],
   ];
   for (const [from, to] of moved) {
     await page.goto(from);
     await expect(page, from).toHaveURL(new RegExp(`${to}/?$`));
     await expect(page.locator('#main h1'), from).toBeVisible();
   }
+});
+
+// Plan §8 learning shell: /learn/* runs its own navigation - the portfolio sidebar,
+// network picker and metrics chrome never appear inside the learning area.
+test('learning shell replaces the portfolio chrome on /learn', async ({ page, isMobile }) => {
+  await page.goto('/learn');
+  const learnNav = page.locator('nav[aria-label="Learning"]');
+  await expect(learnNav).toBeVisible();
+  await expect(page.locator('nav[aria-label="Main"]')).toHaveCount(0);
+  await expect(
+    learnNav.getByRole('link', { name: 'Back to the portfolio', exact: true }),
+  ).toBeVisible();
+  await expect(learnNav.getByRole('link', { name: 'Markets', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Legacy Track list' })).toHaveCount(0);
+  await expect(page.getByRole('combobox', { name: /network/i })).toHaveCount(0);
+  if (isMobile) {
+    // Mobile bottom bar: Library home, the Lessons disclosure, Back to the portfolio.
+    const nav = page.locator('nav[aria-label="Learning"]');
+    await expect(nav.getByRole('link', { name: 'Library home' })).toBeVisible();
+    await expect(nav.getByRole('button', { name: 'Lessons' })).toBeVisible();
+    await nav.getByRole('button', { name: 'Lessons' }).click();
+    await expect(
+      nav.getByRole('group', { name: 'Lessons' }).getByRole('link', { name: /Wallet guide/ }),
+    ).toBeVisible();
+    // The popover stays inside the phone viewport.
+    const box = await nav.getByRole('group', { name: 'Lessons' }).boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(390);
+    // The popover link really receives the pointer (not clipped behind content)...
+    await nav
+      .getByRole('group', { name: 'Lessons' })
+      .getByRole('link', { name: /Wallet guide/ })
+      .click();
+    await expect(page).toHaveURL(/\/learn\/wallets\/?$/);
+    // ...and the return action leads back to the portfolio account page.
+    await page.getByRole('link', { name: 'Back to the portfolio', exact: true }).first().click();
+    await expect(page).toHaveURL(/\/account\/?$/);
+  } else {
+    // Desktop sidebar lists the five plan sections and practice, labeled SIMULATED.
+    const nav = page.locator('nav[aria-label="Learning"]');
+    for (const section of [
+      'Start Here',
+      'Fundamentals',
+      'Wallets & Networks',
+      'DeFi Strategies',
+      'Risk & Security',
+      'Practice exercises',
+    ]) {
+      await expect(nav.getByText(section, { exact: true })).toBeVisible();
+    }
+    await expect(nav.getByText('SIMULATED').first()).toBeVisible();
+    await expect(
+      nav.getByRole('link', { name: 'Security decision lab SIMULATED' }),
+    ).toHaveAttribute('href', '/learn/security-lab/');
+  }
+  // Lesson pages run in the learning shell too.
+  await page.goto('/learn/wallets');
+  await expect(page.locator('nav[aria-label="Learning"]')).toBeVisible();
+  await expect(page.locator('nav[aria-label="Main"]')).toHaveCount(0);
+  await expect(page.locator('#main h1')).toBeVisible();
 });

@@ -1690,6 +1690,61 @@ code {
   display: none;
 }
 
+/* Learning shell (/learn/*, plan §8): own navigation, no portfolio chrome. */
+.learn-shell-tag {
+  margin: 4px 0 0;
+  font-size: 0.65rem;
+  letter-spacing: 0.18em;
+  color: var(--gold);
+}
+.learn-app .side-nav a span.learn-practice-label {
+  width: auto;
+  text-align: left;
+  color: inherit;
+}
+.learn-app .side-nav a span.sim-tag {
+  width: auto;
+  text-align: left;
+  color: var(--muted);
+}
+.sim-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 0.58rem;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  vertical-align: middle;
+}
+.learn-return {
+  border-top: 1px solid var(--line);
+  margin-top: 8px;
+  padding-top: 10px;
+}
+/* Desktop-only: the tall learning nav scrolls inside the sidebar. Must NOT apply on
+   mobile - overflow on the bottom bar would clip the Lessons disclosure popup. */
+@media (min-width: 821px) {
+  .learn-app .side {
+    overflow-y: auto;
+  }
+}
+/* The return action stays first-fold on the desktop sidebar: Library home, then Back to
+   the portfolio, then the section groups. */
+.learn-app .side-nav a.learn-home {
+  order: -2;
+}
+.learn-app .side-nav a.learn-return {
+  order: -1;
+  border-top: 0;
+  margin-top: 0;
+  padding-top: 6px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 8px;
+  padding-bottom: 10px;
+}
+
 .side-nav {
   display: flex;
   flex-direction: column;
@@ -1904,6 +1959,26 @@ code {
   .side-nav a.edu-desktop,
   .side-nav a.legacy-desktop {
     display: none;
+  }
+  .side .learn-shell-tag {
+    display: none;
+  }
+  .side-nav .nav-group.learn-desktop {
+    display: none;
+  }
+  .side-nav a.learn-return {
+    border-top: 0;
+    margin-top: 0;
+    padding-top: 6px;
+  }
+  /* The Lessons disclosure anchors to its button's bar slot, not the bar center, so the
+     menu stays inside the phone viewport; long lists scroll instead of covering content. */
+  .learn-app .more-menu {
+    left: auto;
+    right: 0;
+    transform: none;
+    max-height: min(60vh, 480px);
+    overflow-y: auto;
   }
   .more-wrap {
     display: flex;

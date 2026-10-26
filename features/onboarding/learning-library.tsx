@@ -6,7 +6,7 @@ import { useProgress } from './progress-provider';
 // Plan §8 learning shell: the library groups its modules by the plan's five sections, in
 // this fixed order; practice exercises stay last and labeled as simulations. Lesson copy,
 // order within a section, progress persistence and guest access are unchanged.
-const SECTION_ORDER: LessonSection[] = [
+export const SECTION_ORDER: LessonSection[] = [
   'Start Here',
   'Fundamentals',
   'Wallets & Networks',

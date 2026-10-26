@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ChainSelector } from './chain-selector';
+import { LearnShell } from './learn-shell';
 import { AccountMenu } from './account-menu';
 import { fetchHealth } from '@/features/portfolio/api-client';
 import { SessionProvider } from '@/features/portfolio/session-context';
@@ -35,11 +36,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // on live (or unknown) it must not claim the data is demo.
   const [mode, setMode] = useState<'mock' | 'live' | 'unknown'>('unknown');
   useEffect(() => {
+    // The learning shell renders no mode line, so it does not need the health read.
+    if (path.startsWith('/learn')) return;
     let live = true;
     fetchHealth().then((h) => live && setMode(h.mode)).catch(() => {});
     return () => {
       live = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   // Mobile bottom bar: Education lives under More; the desktop sidebar shows it directly.
   const [moreOpen, setMoreOpen] = useState(false);
@@ -84,6 +88,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return () => ro.disconnect();
   }, [path]);
   if (path === '/' || path === '') return <SessionProvider>{children}</SessionProvider>;
+  // Plan §8: /learn/* runs in its own learning shell - no Portfolio sidebar, no network
+  // picker, no balances or metrics chrome. Account identity (SessionProvider) is shared.
+  if (path.startsWith('/learn'))
+    return (
+      <SessionProvider>
+        <LearnShell>{children}</LearnShell>
+      </SessionProvider>
+    );
   return (
     <SessionProvider>
       <TrackNetworkProvider>
