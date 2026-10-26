@@ -2577,3 +2577,28 @@ test('learning shell replaces the portfolio chrome on /learn', async ({ page, is
   await expect(page.locator('nav[aria-label="Main"]')).toHaveCount(0);
   await expect(page.locator('#main h1')).toBeVisible();
 });
+
+test('entering on /learn still fetches health exactly once on return to the portfolio', async ({
+  page,
+}) => {
+  // Reviewer edge on fe2a3e0: a mount-only health fetch skipped on an initial /learn
+  // entry stayed skipped after a client-side return, leaving the global mode unknown.
+  let healthCalls = 0;
+  await page.route('**/api/v1/health**', async (route) => {
+    healthCalls++;
+    await route.continue();
+  });
+  await page.goto('/learn/');
+  await expect(page.locator('nav[aria-label="Learning"]')).toBeVisible();
+  expect(healthCalls, 'the learning shell never triggers the health read').toBe(0);
+  await page
+    .getByRole('link', { name: 'Back to the portfolio' })
+    .first()
+    .click();
+  await page.waitForURL('**/account**');
+  await expect
+    .poll(() => healthCalls, {
+      message: 'the first non-learn render fetches health exactly once',
+    })
+    .toBe(1);
+});
