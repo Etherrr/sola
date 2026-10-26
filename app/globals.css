@@ -3736,3 +3736,11 @@ html {
 .addr-network { flex: 0 1 240px; }
 .addr-hint, .passkey-note { font-size: 0.85rem; color: var(--muted); }
 .passkey-note { display: inline-block; max-width: 220px; }
+
+/* Failure alerts: upright and bordered, never the passive italic-gold note style. */
+.form-alert {
+  font-style: normal;
+  color: var(--gold-light);
+  border-left: 2px solid var(--gold);
+  padding-left: 10px;
+}

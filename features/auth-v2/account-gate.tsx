@@ -95,13 +95,13 @@ export function AccountGate() {
             Sign out
           </button>
         </p>
-        {signOutFailed && <p role="alert"><em>Could not sign out just now - try again.</em></p>}
+        {signOutFailed && <p role="alert" className="form-alert">Could not sign out just now - try again.</p>}
       </div>
     );
   if (gate.kind === 'reauth')
     return (
       <div className="panel">
-        <p><em>Your sign-in needs a refresh.</em></p>
+        <p><em>This session went stale. Sign in again to continue.</em></p>
         <p className="actions">
           <a className="button primary" href="/sign-in/?next=%2Faccount">
             Sign in again
@@ -122,7 +122,7 @@ export function AccountGate() {
           Sign out
         </button>
       </p>
-      {signOutFailed && <p role="alert"><em>Could not sign out just now - try again.</em></p>}
+      {signOutFailed && <p role="alert" className="form-alert">Could not sign out just now - try again.</p>}
     </>
   );
 }

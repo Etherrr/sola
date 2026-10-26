@@ -17,7 +17,7 @@ async function mockAuth(page: Page) {
     const body = route.request().postDataJSON() as { email?: string };
     if (!body.email || !body.email.includes('@'))
       return route.fulfill({ status: 400, json: { error: 'invalid_email' } });
-    return route.fulfill({ status: 200, json: { status: 'ok', expiresAt: '2026-10-25T20:00:00Z' } });
+    return route.fulfill({ status: 200, json: { status: 'ok', expiresAt: new Date(Date.now() + 600_000).toISOString() } });
   });
   await page.route(VE, async (route) => {
     const body = route.request().postDataJSON() as { email?: string; code?: string };
@@ -37,7 +37,7 @@ test('full email-code ceremony signs in and Continue honors a valid next', async
   await page.goto('/dev/sign-in/?next=/portfolio?tab=assets'); // trailing slash: serve 308 strips the query otherwise
   await page.getByLabel(/email you were invited with/i).fill('jun@example.com');
   await page.getByRole('button', { name: 'Send sign-in code' }).click();
-  await page.getByLabel(/code sent to jun@example.com/i).fill('123456');
+  await page.getByLabel(/email code/i).fill('123456');
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await expect(page.getByText('Signed in as jun@example.com.')).toBeVisible();
   await expect(page.getByRole('link', { name: 'Continue' })).toHaveAttribute('href', '/portfolio?tab=assets');
@@ -49,7 +49,7 @@ test('open-redirect next values fall back to the default destination', async ({ 
     await page.goto(`/dev/sign-in/?next=${encodeURIComponent(bad)}`);
     await page.getByLabel(/email you were invited with/i).fill('jun@example.com');
     await page.getByRole('button', { name: 'Send sign-in code' }).click();
-    await page.getByLabel(/code sent to/i).fill('123456');
+    await page.getByLabel(/email code/i).fill('123456');
     await page.getByRole('button', { name: 'Sign in', exact: true }).click();
     await expect(page.getByRole('link', { name: 'Continue' })).toHaveAttribute('href', '/account');
   }
@@ -60,13 +60,33 @@ test('wrong code and lockout render honest errors, no fake success', async ({ pa
   await page.goto('/dev/sign-in/');
   await page.getByLabel(/email you were invited with/i).fill('jun@example.com');
   await page.getByRole('button', { name: 'Send sign-in code' }).click();
-  await page.getByLabel(/code sent to/i).fill('000000');
+  await page.getByLabel(/email code/i).fill('000000');
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await expect(page.locator('p[role=alert]')).toContainText('That code is not right');
   await page.goto('/dev/sign-in/');
   await page.getByLabel(/email you were invited with/i).fill('locked@example.com');
   await page.getByRole('button', { name: 'Send sign-in code' }).click();
-  await page.getByLabel(/code sent to/i).fill('123456');
+  await page.getByLabel(/email code/i).fill('123456');
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await expect(page.locator('p[role=alert]')).toContainText('Too many wrong codes');
+});
+
+test('same-email recovery: Send a new code re-issues for the same address, human expiry', async ({ page }) => {
+  let challenges = 0;
+  await mockAuth(page);
+  await page.unroute(CH);
+  await page.route(CH, async (route) => {
+    const body = route.request().postDataJSON() as { email?: string };
+    if (!body.email || !body.email.includes('@'))
+      return route.fulfill({ status: 400, json: { error: 'invalid_email' } });
+    challenges += 1;
+    return route.fulfill({ status: 200, json: { status: 'ok', expiresAt: new Date(Date.now() + 600_000).toISOString() } });
+  });
+  await page.goto('/dev/sign-in/');
+  await page.getByLabel(/email you were invited with/i).fill('jun@example.com');
+  await page.getByRole('button', { name: 'Send sign-in code' }).click();
+  await expect(page.getByText(/Code sent to jun@example.com\. It expires in about 10 minutes\./)).toBeVisible();
+  await page.getByRole('button', { name: 'Send a new code' }).click();
+  await expect(page.getByText('New code sent.')).toBeVisible();
+  expect(challenges).toBe(2);
 });

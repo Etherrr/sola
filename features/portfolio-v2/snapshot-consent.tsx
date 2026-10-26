@@ -120,7 +120,7 @@ export function SnapshotConsent() {
       <p>
         <em>Refresh reads your saved addresses through public chain nodes.</em>
       </p>
-      {note && <p role="alert"><em>{note}</em></p>}
+      {note && <p role="alert" className="form-alert">{note}</p>}
     </div>
   );
 }

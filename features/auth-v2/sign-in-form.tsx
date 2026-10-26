@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { authEmailChallenge, authEmailVerify } from '../portfolio/api-client';
 import { loginWithPasskey, passkeysSupported } from './passkey-client';
 import { safeNextPath, DEFAULT_NEXT } from './next-path';
@@ -13,7 +13,7 @@ import { safeNextPath, DEFAULT_NEXT } from './next-path';
 
 type Step =
   | { kind: 'email' }
-  | { kind: 'code'; email: string; expiresAt: string }
+  | { kind: 'code'; email: string; expiresAt: string; expiresInMin: number }
   | { kind: 'done'; email: string | null };
 
 export function SignInForm({ context = 'sign-in' }: { context?: 'sign-in' | 'create-account' }) {
@@ -22,6 +22,19 @@ export function SignInForm({ context = 'sign-in' }: { context?: 'sign-in' | 'cre
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Passive status line (e.g. after a same-email resend); failures stay in error.
+  const [note, setNote] = useState<string | null>(null);
+  // Flipped by a timer at the server's expiresAt so a lingering page stops
+  // claiming a live code; never computed during render.
+  const [expired, setExpired] = useState(false);
+
+  useEffect(() => {
+    if (step.kind !== 'code') return;
+    const ms = Date.parse(step.expiresAt) - Date.now();
+    // Async even when already past: no synchronous setState in the effect body.
+    const t = setTimeout(() => setExpired(true), Number.isFinite(ms) ? Math.max(0, ms) : 0);
+    return () => clearTimeout(t);
+  }, [step]);
   // Resume destination: validated once on mount; never trust the raw query value.
   const [next] = useState(() =>
     typeof window === 'undefined'
@@ -45,14 +58,19 @@ export function SignInForm({ context = 'sign-in' }: { context?: 'sign-in' | 'cre
     }
   };
 
-  const sendCode = async () => {
+  const sendCode = async (target?: string) => {
+    const em = target ?? email;
     setBusy(true); setError(null);
     try {
-      const r = await authEmailChallenge(email);
+      const r = await authEmailChallenge(em);
       const body = (await r.json().catch(() => null)) as { error?: string; retryAfterSec?: number; expiresAt?: string } | null;
       if (r.ok && body?.expiresAt) {
-        setStep({ kind: 'code', email, expiresAt: body.expiresAt });
+        // Human expiry from the server's actual expiresAt: whole minutes at issue.
+        const mins = Math.max(1, Math.round((Date.parse(body.expiresAt) - Date.now()) / 60000));
+        setStep({ kind: 'code', email: em, expiresAt: body.expiresAt, expiresInMin: mins });
+        setExpired(false);
         setCode('');
+        setNote(target ? 'New code sent.' : null);
       } else setError(explain(r.status, body));
     } catch { setError('Network error. Try again.'); }
     setBusy(false);
@@ -108,9 +126,7 @@ export function SignInForm({ context = 'sign-in' }: { context?: 'sign-in' | 'cre
         </p>
       ) : (
         <p>
-          <label htmlFor="signin-code">
-            Code sent to {step.email} (expires {step.expiresAt})
-          </label>
+          <label htmlFor="signin-code">Email code</label>
           <br />
           <input
             id="signin-code"
@@ -120,22 +136,40 @@ export function SignInForm({ context = 'sign-in' }: { context?: 'sign-in' | 'cre
             value={code}
             onChange={(e) => setCode(e.target.value)}
           />
+          <br />
+          <small>
+            Code sent to {step.email}.{' '}
+            {expired
+              ? 'That code has expired - send a new one.'
+              : `It expires in about ${step.expiresInMin} minute${step.expiresInMin === 1 ? '' : 's'}.`}
+          </small>
         </p>
       )}
-      {error && <p role="alert"><em>{error}</em></p>}
+      {error && <p role="alert" className="form-alert">{error}</p>}
+      {note && !error && <p><em>{note}</em></p>}
       <p className="actions">
         <button type="submit" className="button primary" disabled={busy}>
           {busy ? 'Working…' : step.kind === 'email' ? 'Send sign-in code' : 'Sign in'}
         </button>{' '}
         {step.kind === 'code' && (
-          <button
-            type="button"
-            className="button secondary"
-            disabled={busy}
-            onClick={() => { setStep({ kind: 'email' }); setError(null); }}
-          >
-            Use a different email
-          </button>
+          <>
+            <button
+              type="button"
+              className="button secondary"
+              disabled={busy}
+              onClick={() => void sendCode(step.kind === 'code' ? step.email : undefined)}
+            >
+              Send a new code
+            </button>{' '}
+            <button
+              type="button"
+              className="button secondary"
+              disabled={busy}
+              onClick={() => { setStep({ kind: 'email' }); setError(null); setNote(null); }}
+            >
+              Use a different email
+            </button>
+          </>
         )}
         {step.kind === 'email' && passkeysSupported() && (
           <>

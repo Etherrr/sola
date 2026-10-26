@@ -122,6 +122,14 @@ export function AddressBook() {
               ? `Too many changes just now - retry in about ${b.retryAfterSec}s.`
               : 'Too many changes just now - wait a moment and retry.',
           ).catch(() => 'Too many changes just now - wait a moment and retry.')
+        : res.status === 409
+          ? res.json().then((b) =>
+              b?.error === 'address_exists'
+                ? 'That address is already in your list.'
+                : b?.error === 'too_many_addresses'
+                  ? 'You already have the most addresses for this network - remove one first.'
+                  : `Could not ${action}.`,
+            ).catch(() => `Could not ${action}.`)
         : res.status === 400
           ? res.json().then((b) =>
               b?.error === 'invalid_address'
@@ -132,11 +140,18 @@ export function AddressBook() {
             ).catch(() => `Could not ${action}.`)
           : Promise.resolve(`Could not ${action}.`);
 
+  // Same (network, address) the server keys on: EVM is canonicalized lowercase.
+  const sameEntry = (e: Entry, net: 'ethereum' | 'solana', addr: string): boolean =>
+    e.network === net &&
+    (net === 'ethereum' ? e.address.toLowerCase() === addr.toLowerCase() : e.address === addr);
+
   const add = async () => {
     if (busy || !address.trim() || !label.trim()) return;
     setBusy(true); setNote(null);
+    const net = network;
+    const addr = address.trim();
     try {
-      const res = await addressBookRequest('POST', { network, address: address.trim(), label: label.trim() });
+      const res = await addressBookRequest('POST', { network: net, address: addr, label: label.trim() });
       if (res.ok) {
         setAddress(''); setLabel('');
         announceAddressesChanged();
@@ -145,7 +160,28 @@ export function AddressBook() {
         setNote(await failNote(res, 'add this address'));
       }
     } catch {
-      setNote('Could not add this address.');
+      // Timed out or the connection dropped: the server may still commit the
+      // write late (cold first write). Reconcile by one read against the
+      // server's natural key - never silently retry the write.
+      try {
+        const res2 = await addressBookRequest('GET', undefined);
+        const body = res2.ok ? ((await res2.json()) as { addresses?: Entry[] }) : null;
+        const landed = body?.addresses?.some((e) => sameEntry(e, net, addr)) ?? false;
+        if (landed) {
+          setAddress(''); setLabel('');
+          announceAddressesChanged();
+          await refresh();
+        } else {
+          setNote(
+            'That took too long - it may still have been added. Check your list, then try again if it is missing.',
+          );
+          await refresh();
+        }
+      } catch {
+        setNote(
+          'That took too long - it may still have been added. Check your list, then try again if it is missing.',
+        );
+      }
     } finally {
       setBusy(false);
     }
@@ -415,7 +451,7 @@ export function AddressBook() {
         </>
       )}
 
-      {note && <p role="alert"><em>{note}</em></p>}
+      {note && <p role="alert" className="form-alert">{note}</p>}
     </div>
   );
 }

@@ -56,7 +56,7 @@ test('full path: sign-in ceremony resumes into the gated account', async ({ page
   await page.goto('/sign-in/?next=%2Faccount');
   await page.getByLabel(/email you were invited with/i).fill('jun@example.com');
   await page.getByRole('button', { name: 'Send sign-in code' }).click();
-  await page.getByLabel(/code sent to/i).fill('123456');
+  await page.getByLabel(/email code/i).fill('123456');
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   const cont = page.getByRole('link', { name: 'Continue' });
   await expect(cont).toHaveAttribute('href', '/account');
@@ -86,7 +86,7 @@ test('stale session (data 401 after session ok) asks for a fresh sign-in, no red
   await mockSession(page, 'ok');
   await page.route(ADDR, (r) => r.fulfill({ status: 401, json: { error: 'auth_required' } }));
   await page.goto('/account/');
-  await expect(page.getByText('Your sign-in needs a refresh.')).toBeVisible();
+  await expect(page.getByText('This session went stale. Sign in again to continue.')).toBeVisible();
   await expect(page.getByRole('link', { name: 'Sign in again' })).toHaveAttribute('href', '/sign-in/?next=%2Faccount');
 });
 
