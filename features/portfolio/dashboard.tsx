@@ -2,17 +2,16 @@ import Link from 'next/link';
 import { Allocation } from './allocation';
 import { PositionTable } from './position-table';
 import { PageIntro, SimulatedNotice } from '@/components/ui';
-import { CombinedWallets } from './combined-wallets';
 import { fixture } from './fixture';
 import { money, summarize, uniqueExposures } from './model';
 type View = 'overview' | 'assets' | 'positions' | 'risk';
-const views: { id: View; label: string; href: string }[] = [
-  { id: 'overview', label: 'Overview', href: '/portfolio' },
-  { id: 'assets', label: 'Assets', href: '/portfolio/assets' },
-  { id: 'positions', label: 'Positions', href: '/portfolio/positions' },
-  { id: 'risk', label: 'Risk insights', href: '/portfolio/risk' },
-];
 export function Dashboard({ view = 'overview' }: { view?: View }) {
+  const views: { id: View; label: string; href: string }[] = [
+    { id: 'overview', label: 'Overview', href: '/demo' },
+    { id: 'assets', label: 'Assets', href: '/demo/assets' },
+    { id: 'positions', label: 'Positions', href: '/demo/positions' },
+    { id: 'risk', label: 'Risk insights', href: '/demo/risk' },
+  ];
   const totals = summarize(fixture.positions);
   const positions = uniqueExposures(fixture.positions);
   const assets = positions.filter((item) => item.kind === 'Wallet');
@@ -20,7 +19,7 @@ export function Dashboard({ view = 'overview' }: { view?: View }) {
   return (
     <div className="page-container">
       <PageIntro
-        eyebrow={view === 'overview' ? 'PORTFOLIO · ALL NETWORKS' : 'DEMO · ALL NETWORKS'}
+        eyebrow="DEMO · ALL NETWORKS"
         title={
           view === 'risk'
             ? 'Risk insights'
@@ -31,17 +30,9 @@ export function Dashboard({ view = 'overview' }: { view?: View }) {
                 : 'Overview'
         }
       >
-        {view === 'overview' ? (
-          <p>
-            Combine the public addresses saved on your account, loaded only when you ask - each
-            section shows its own data mode. Below the combined view is a separate invented demo
-            fixture.
-          </p>
-        ) : (
-          <p>Invented Ethereum and Solana holdings, not your wallet.</p>
-        )}
+        <p>Invented Ethereum and Solana holdings, not your wallet.</p>
       </PageIntro>
-      {view === 'overview' ? null : <SimulatedNotice />}
+      <SimulatedNotice />
       <nav className="tabs" aria-label="Portfolio views">
         {views.map((item) => (
           <Link key={item.id} href={item.href} aria-current={view === item.id ? 'page' : undefined}>
@@ -49,15 +40,6 @@ export function Dashboard({ view = 'overview' }: { view?: View }) {
           </Link>
         ))}
       </nav>
-      {view === 'overview' ? <CombinedWallets /> : null}
-      {view === 'overview' ? (
-        <p className="notice demo-divider">
-          Below is the original standalone demo fixture (basis $12,000). It is a separate
-          invented example: it is not an input to, and does not reconcile with, the combined
-          view above.
-        </p>
-      ) : null}
-      {view === 'overview' ? <SimulatedNotice /> : null}
       <div className="metric-grid">
         <div className="metric main-metric">
           <p>Priced net sample value</p>

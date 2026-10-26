@@ -11,9 +11,10 @@ const routes = [
   '/start/defi',
   '/connect',
   '/portfolio',
-  '/portfolio/assets',
-  '/portfolio/positions',
-  '/portfolio/risk',
+  '/demo',
+  '/demo/assets',
+  '/demo/positions',
+  '/demo/risk',
   '/explore',
   '/learn',
   '/learn/addresses',
@@ -64,7 +65,8 @@ test('beginner, experienced and demo entry points work', async ({ page, isMobile
   await expect(page.locator('#main').getByRole('status')).toContainText('Research hardware');
   await page.goto('/connect');
   await expect(page.locator('input')).toHaveCount(0);
-  await page.getByRole('link', { name: 'Open portfolio' }).click();
+  await page.getByRole('link', { name: 'Explore the demo' }).click();
+  await expect(page).toHaveURL(/\/demo\/?$/);
   await expect(page.locator('#main').getByText('$11,000.00', { exact: true })).toBeVisible();
   // Phones show the holdings as a list; larger screens show the table. Same data either way.
   await expect(
@@ -429,7 +431,7 @@ test.describe('entrance', () => {
     page,
     isMobile,
   }) => {
-    await page.goto('/portfolio');
+    await page.goto('/demo');
     // Scope to #main: Next streams a hidden duplicate segment (#S:0) for ~170-190ms
     // after navigation; unscoped locators can transiently resolve to both copies.
     const vis = (sel: string) =>

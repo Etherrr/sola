@@ -4,6 +4,8 @@ import { useRouter } from 'next/navigation';
 import { useNativeSession } from './native-session';
 import { addressBookRequest } from '../portfolio/api-client';
 import { AddressBook } from '../portfolio-v2/address-book';
+import { CombinedProvider } from '../portfolio-v2/combined-context';
+import { CombinedBalances } from '../portfolio-v2/combined-balances';
 import { nativeLogoutRequest } from '../portfolio/api-client';
 
 /**
@@ -116,7 +118,10 @@ export function AccountGate() {
           <em>Signed in{native.kind === 'ok' ? ` as ${native.email}` : ''}.</em>
         </p>
       </div>
-      <AddressBook />
+      <CombinedProvider>
+        <AddressBook />
+        <CombinedBalances />
+      </CombinedProvider>
       <p className="actions">
         <button type="button" className="button secondary" onClick={signOut}>
           Sign out

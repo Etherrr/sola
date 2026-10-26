@@ -29,7 +29,7 @@ export default function Connect() {
         <span className="badge">SAVED PER ACCOUNT</span>
       </div>
       <div className="actions">
-        <ActionLink href="/portfolio">Open portfolio →</ActionLink>
+        <ActionLink href="/demo">Explore the demo →</ActionLink>
         <ActionLink href="/onboarding" secondary>
           Preview the future sign-in (prototype)
         </ActionLink>

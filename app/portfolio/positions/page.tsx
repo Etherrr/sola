@@ -1,5 +1,6 @@
-import { Dashboard } from '@/features/portfolio/dashboard';
-export const metadata = { title: 'Simulated portfolio — positions' };
+import { redirect } from 'next/navigation';
+
+/** The invented sample portfolio moved to /demo - keep old links working. */
 export default function Page() {
-  return <Dashboard view="positions" />;
+  redirect('/demo/positions');
 }

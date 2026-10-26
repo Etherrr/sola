@@ -140,10 +140,14 @@ export function CombinedWallets() {
             : 'COMBINED VIEW · READ-ONLY'}
       </span>
       <h2 id="combined-h">Saved addresses, combined</h2>
+      <p className="fine muted">
+        The legacy Track address list - separate from the address book on your Account page.
+        Wallet balances only, not net worth.
+      </p>
       {phase.kind === 'idle' ? (
         <>
           <p>
-            On your request only, reads the public addresses saved on your account through the
+            On your request only, reads the public addresses saved in your Track list through the
             read-only API and combines them: one total, per-address status, and each
             source&apos;s own observation time. Nothing loads automatically. Watched addresses
             are observed, not proven to be yours.
@@ -188,6 +192,7 @@ export function CombinedWallets() {
               {/* n/a, never $0.00, when no address contributed: zero would read as empty wallets. */}
               <strong>{contributing === 0 ? 'n/a' : money(totals.net)}</strong>
               <small>Priced holdings across all saved addresses</small>
+              <small>Wallet balances only - not net worth.</small>
               {ready.result.incomplete ? (
                 <small className="warn-text">
                   Incomplete: {totalUnpriced} unpriced {totalUnpriced === 1 ? 'asset' : 'assets'},{' '}

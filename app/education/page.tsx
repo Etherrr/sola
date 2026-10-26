@@ -22,7 +22,7 @@ export default function EducationHome() {
             <ActionLink href="/start">
               Begin your journey <span aria-hidden="true">↗</span>
             </ActionLink>
-            <ActionLink href="/portfolio" secondary>
+            <ActionLink href="/demo" secondary>
               Explore the demo <span aria-hidden="true">→</span>
             </ActionLink>
           </div>
@@ -95,7 +95,7 @@ export default function EducationHome() {
               Enter the portal <span aria-hidden="true">→</span>
             </span>
           </Link>
-          <Link href="/portfolio" className="journey-card featured">
+          <Link href="/demo" className="journey-card featured">
             <span className="card-number">
               03 <span aria-hidden="true">↗</span>
             </span>

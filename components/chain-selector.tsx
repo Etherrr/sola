@@ -13,10 +13,10 @@ export function ChainSelector() {
   const id = useId();
   const path = usePathname();
   const { network, setNetwork } = useTrackNetwork();
-  // The portfolio page mixes the all-networks combined view with the demo fixture, and neither
-  // takes a network selection: any chip there would read as page scope it does not have. The
+  // The portfolio overview and the demo pages are all-networks views: neither takes a
+  // network selection, and any chip there would read as page scope it does not have. The
   // selector only appears where a network actually applies.
-  if (path.startsWith('/portfolio')) return null;
+  if (path.startsWith('/portfolio') || path.startsWith('/demo')) return null;
   if (!path.startsWith('/track')) return <span className="scope-chip">Sola Lens preview</span>;
   return (
     <div className="chain-select">

@@ -104,23 +104,13 @@ test('loads nothing until asked, then renders the real combined view with per-ad
   // hidden sibling container (#S:0) outside #main; scoping removes that transient.
   const section = page.locator('#main .combined');
   await expect(section.getByRole('heading', { name: 'Saved addresses, combined' })).toBeVisible();
-  // Page-level framing is honest about mixed modes: no page-wide simulated claim over a live
-  // section; the fixture keeps its own SIMULATED marker below.
+  // Page-level framing is honest: no page-wide simulated claim over a live
+  // section, and no demo fixture on this page at all - it moved to /demo.
   await expect(page.locator('.sim-pill')).toContainText('MODE SHOWN PER SECTION');
   await expect(
-    page.locator('#main').getByText(/Combine the public addresses saved on your account/),
+    page.locator('#main').getByText(/Combine the public addresses saved in your Track list/),
   ).toBeVisible();
-  const marker = page.locator('#main .mode-marker');
-  await expect(marker).toContainText('SIMULATED');
-  // The fixture's marker sits BELOW the combined section, scoping the claim to the fixture.
-  const markerAfterCombined = await page.evaluate(
-    () =>
-      document
-        .querySelector('#main .combined')!
-        .compareDocumentPosition(document.querySelector('#main .mode-marker')!) &
-      Node.DOCUMENT_POSITION_FOLLOWING,
-  );
-  expect(markerAfterCombined).toBeTruthy();
+  await expect(page.locator('#main .mode-marker')).toHaveCount(0);
   // Idle: honest read-only framing, explicit action, and no automatic fetch.
   await expect(section.getByText('COMBINED VIEW · READ-ONLY')).toBeVisible();
   await expect(section.getByText(/Nothing loads automatically/)).toBeVisible();
@@ -292,4 +282,18 @@ test('an unverified session never fetches and says so', async ({ page }) => {
   await expect(section.getByText(/Your sign-in could not be verified/)).toBeVisible();
   await expect(section.getByRole('button', { name: 'Load saved addresses, combined' })).toHaveCount(0);
   expect(calls).toEqual([]);
+});
+
+test('the /portfolio overview carries no demo fixture - the invented sample lives under /demo', async ({
+  page,
+}) => {
+  await stubSession(page);
+  await page.goto('/portfolio');
+  await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
+  await expect(page.locator('#main')).not.toContainText('$12,000');
+  await expect(page.locator('#main')).not.toContainText('SIMULATED');
+  await expect(page.getByText(/legacy Track address list/)).toBeVisible();
+  await page.goto('/demo');
+  await expect(page.locator('#main')).toContainText('$11,000.00');
+  await expect(page.locator('#main .mode-marker')).toContainText('SIMULATED');
 });

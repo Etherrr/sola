@@ -110,3 +110,29 @@ test('header menu sign-out failure alerts and keeps you signed in - no fake relo
   await expect(page.getByRole('group', { name: 'Account' }).locator('p[role=alert]')).toContainText('Could not sign out');
   await expect(page).toHaveURL(/\/account\//);
 });
+
+test('the native combined view reads the native book only: empty book, zero provider resolve', async ({
+  page,
+}) => {
+  await mockSession(page, 'ok');
+  await page.route(ADDR, (r) => r.fulfill({ status: 200, json: { status: 'ok', addresses: [] } }));
+  let legacy = 0;
+  let resolve = 0;
+  await page.route('**/api/v1/portfolio/accounts', (r) => {
+    legacy++;
+    return r.fulfill({ status: 500, json: {} });
+  });
+  await page.route('**/api/v1/portfolio/resolve', (r) => {
+    resolve++;
+    return r.fulfill({ status: 500, json: {} });
+  });
+  await page.goto('/account/');
+  await expect(page.getByRole('heading', { name: 'All saved addresses' })).toBeVisible();
+  await expect(page.getByText(/wallet balances only/i).first()).toBeVisible();
+  await page.getByRole('button', { name: 'Load combined balances' }).click();
+  await expect(page.getByText(/No saved addresses yet/)).toBeVisible();
+  // An empty native book never touches a provider, and the legacy Access store
+  // is never read on this page.
+  expect(resolve).toBe(0);
+  expect(legacy).toBe(0);
+});

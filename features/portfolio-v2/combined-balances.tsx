@@ -47,7 +47,8 @@ export function CombinedBalances() {
         <>
           <p className="ov2-quiet">
             On your request only. Loading sends your saved addresses to third-party blockchain
-            data providers; your balances are not saved by this action.
+            data providers; your balances are not saved by this action. These are wallet balances
+            only - not net worth.
           </p>
           {phase.notice ? <p className="ov2-quiet">{phase.notice}</p> : null}
           <button type="button" className="button primary" onClick={load}>
@@ -81,6 +82,7 @@ export function CombinedBalances() {
               <p>Combined priced value{ready.mode === 'mock' ? ' · Demo' : ''}</p>
               {/* n/a, never $0.00, when no address contributed: zero would read as empty wallets. */}
               <strong>{contributing === 0 ? 'n/a' : money(totals.net)}</strong>
+              <small>Wallet balances only - not net worth.</small>
               {ready.result.incomplete ? (
                 <small className="warn-text">
                   Incomplete: {totalUnpriced} unpriced {totalUnpriced === 1 ? 'asset' : 'assets'},{' '}
