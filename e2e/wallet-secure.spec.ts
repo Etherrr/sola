@@ -1,3 +1,11 @@
+import { onRequest as evmChallenge } from '../functions/api/v1/auth/wallet/evm/challenge';
+import { onRequest as evmVerify } from '../functions/api/v1/auth/wallet/evm/verify';
+import { onRequest as evmLinkChallenge } from '../functions/api/v1/auth/wallet/evm/link/challenge';
+import { onRequest as evmLinkVerify } from '../functions/api/v1/auth/wallet/evm/link/verify';
+import { onRequest as solanaChallenge } from '../functions/api/v1/auth/wallet/solana/challenge';
+import { onRequest as solanaVerify } from '../functions/api/v1/auth/wallet/solana/verify';
+import { onRequest as solanaLinkChallenge } from '../functions/api/v1/auth/wallet/solana/link/challenge';
+import { onRequest as solanaLinkVerify } from '../functions/api/v1/auth/wallet/solana/link/verify';
 /** Local actual customer export + actual handlers/SQLite, injected synthetic wallet.
  * No browser extension, production account or provider is exercised. */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
@@ -10,12 +18,6 @@ import { onRequest as middleware } from '../functions/_middleware';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { chromium, type Browser } from 'playwright';
 import { createSqliteD1 } from '../tests/helpers/d1-sqlite';
-import {
-  handleWalletChallenge,
-  handleWalletVerify,
-  handleWalletLinkChallenge,
-  handleWalletLinkVerify,
-} from '../server/auth/wallet';
 import { handleAddressesList } from '../server/portfolio/addresses';
 import { handleNativeLogout, handleNativeSessionInfo } from '../server/auth/session-info';
 import { createSession } from '../server/auth/sessions';
@@ -25,6 +27,16 @@ import { ed25519 } from '@noble/curves/ed25519';
 import { secp256k1 } from '@noble/curves/secp256k1';
 import { keccak_256 } from '@noble/hashes/sha3';
 import { personalSignDigest, toEip55 } from '../server/auth/siwe';
+const walletMounts = {
+  'evm/challenge': evmChallenge,
+  'evm/verify': evmVerify,
+  'evm/link/challenge': evmLinkChallenge,
+  'evm/link/verify': evmLinkVerify,
+  'solana/challenge': solanaChallenge,
+  'solana/verify': solanaVerify,
+  'solana/link/challenge': solanaLinkChallenge,
+  'solana/link/verify': solanaLinkVerify,
+};
 const B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
 const base58Encode = (bytes: Uint8Array): string => {
   let n = 0n;
@@ -180,17 +192,13 @@ for (const mobile of [false, true])
                           response = await handleNativeSessionInfo(req, env);
                         else if (path.startsWith('/api/v1/auth/wallet/')) {
                           authCalls.push(path);
-                          const linking = path.includes('/link/');
-                          const challenge = path.endsWith('/challenge');
-                          response = await (
-                            linking
-                              ? challenge
-                                ? handleWalletLinkChallenge
-                                : handleWalletLinkVerify
-                              : challenge
-                                ? handleWalletChallenge
-                                : handleWalletVerify
-                          )(req, env, network);
+                          const key = path.slice(
+                            '/api/v1/auth/wallet/'.length,
+                          ) as keyof typeof walletMounts;
+                          const mount = walletMounts[key];
+                          response = mount
+                            ? await mount({ request: req, env })
+                            : new Response(null, { status: 404 });
                         } else if (path === '/api/v1/portfolio/addresses')
                           response = await handleAddressesList(req, env);
                         else if (path.startsWith('/api/'))
