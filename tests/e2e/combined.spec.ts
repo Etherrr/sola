@@ -108,12 +108,12 @@ test('loads nothing until asked, then renders the real combined view with per-ad
   // section, and no demo fixture on this page at all - it moved to /demo.
   await expect(page.locator('.sim-pill')).toContainText('MODE SHOWN PER SECTION');
   await expect(
-    page.locator('#main').getByText(/Combine the public addresses saved in your Track list/),
+    page.locator('#main').getByText(/Combine the public addresses saved in your legacy Track list/),
   ).toBeVisible();
   await expect(page.locator('#main .mode-marker')).toHaveCount(0);
   // Idle: honest read-only framing, explicit action, and no automatic fetch.
   await expect(section.getByText('COMBINED VIEW · READ-ONLY')).toBeVisible();
-  await expect(section.getByText(/Nothing loads automatically/)).toBeVisible();
+  await expect(section.getByText(/loaded only when you ask/)).toBeVisible();
   expect(calls).toEqual([]);
   await page.screenshot({ path: `test-results/combined-idle-${info.project.name}.png` });
   // Viewport-true header frame (no scroll): the pill and account control must fit with no
@@ -149,7 +149,6 @@ test('loads nothing until asked, then renders the real combined view with per-ad
   await section.locator('.cov-details summary').click();
   await expect(section.getByText(covRe)).toBeVisible();
   await expect(section.getByText(/not a zero balance/)).toBeVisible();
-  await expect(section.getByText(/observed, not proven to be yours/)).toBeVisible();
   await expect(section.getByText(/Refreshes only when you ask/)).toBeVisible();
   await expect(section.getByText(/Sources: test-live via the read-only API/)).toBeVisible();
   await expect(section.getByText(/Prices Oct 25, 2026 · 05:55 UTC/)).toBeVisible();
@@ -289,7 +288,7 @@ test('the /portfolio overview carries no demo fixture - the invented sample live
 }) => {
   await stubSession(page);
   await page.goto('/portfolio');
-  await expect(page.getByRole('heading', { name: 'Portfolio' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Legacy Track list' })).toBeVisible();
   await expect(page.locator('#main')).not.toContainText('$12,000');
   await expect(page.locator('#main')).not.toContainText('SIMULATED');
   await expect(page.getByText(/legacy Track address list/)).toBeVisible();
@@ -322,7 +321,7 @@ test('a signed-out visitor on /portfolio gets no account pointer and no account 
     return r.fulfill({ status: 401, json: { error: 'auth_required' } });
   });
   await page.goto('/portfolio');
-  await expect(page.getByRole('heading', { name: 'Portfolio' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Legacy Track list' })).toBeVisible();
   await expect(page.getByText(/your address book and its combined view live on/)).toHaveCount(0);
   expect(nativeBookReads).toBe(0);
 });

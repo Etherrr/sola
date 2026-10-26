@@ -2010,6 +2010,7 @@ test('shell nav is keyboard-reachable in DOM order', async ({ page, isMobile }) 
     : [
         { role: 'link', name: 'Portfolio' },
         { role: 'link', name: 'Markets' },
+        { role: 'link', name: 'Legacy Track list' },
         { role: 'link', name: 'Education' },
         { role: 'link', name: 'Settings' },
       ];
@@ -2132,15 +2133,20 @@ test('at 320px the tab bar shows four fitting tabs and the account menu stays on
     expect(box!.x).toBeGreaterThanOrEqual(0);
     expect(box!.x + box!.width).toBeLessThanOrEqual(320);
   }
-  // More opens to Education, and the popover stays inside the viewport.
-  await nav.getByRole('button', { name: 'More' }).click();
-  const edu = page.getByRole('menuitem', { name: 'Education' });
-  await expect(edu).toBeVisible();
-  const eduBox = (await edu.boundingBox())!;
-  expect(eduBox.x).toBeGreaterThanOrEqual(0);
-  expect(eduBox.x + eduBox.width).toBeLessThanOrEqual(320);
+  // More opens to Education and the Legacy Track list, and the popover stays inside the viewport.
+  const more = nav.getByRole('button', { name: 'More' });
+  await more.click();
+  const moreGroup = page.getByRole('group', { name: 'More' });
+  for (const name of ['Education', 'Legacy Track list']) {
+    const link = moreGroup.getByRole('link', { name });
+    await expect(link).toBeVisible();
+    const box = (await link.boundingBox())!;
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(320);
+  }
   await page.keyboard.press('Escape');
-  await expect(edu).toHaveCount(0);
+  await expect(moreGroup).toHaveCount(0);
+  await expect(more).toBeFocused();
   // The open account menu must not clip past the viewport either.
   await page.getByRole('button', { name: /^Account/ }).click();
   const menu = page.getByRole('group', { name: 'Account' });

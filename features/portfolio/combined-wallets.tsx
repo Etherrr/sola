@@ -147,10 +147,8 @@ export function CombinedWallets() {
       {phase.kind === 'idle' ? (
         <>
           <p>
-            On your request only, reads the public addresses saved in your Track list through the
-            read-only API and combines them: one total, per-address status, and each
-            source&apos;s own observation time. Nothing loads automatically. Watched addresses
-            are observed, not proven to be yours.
+            One combined total from your saved public addresses, loaded only when you ask. What
+            this app keeps is under <Link href="/settings">Privacy &amp; local data</Link>.
           </p>
           {session.kind === 'checking' ? (
             <p className="fine muted">Verifying your sign-in…</p>
@@ -301,7 +299,6 @@ export function CombinedWallets() {
               Coverage: Ethereum {evmCoverageLabel()}; Solana SOL balance only. A missing token
               is not a zero balance.
             </li>
-            <li>Watched addresses are observed, not proven to be yours.</li>
             <li>
               Only values read at each source&apos;s own observation time are included; nothing
               is back-filled from older or last-known snapshots.

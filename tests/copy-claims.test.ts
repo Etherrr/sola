@@ -165,12 +165,16 @@ describe('the top-bar network selector never contradicts the track selection', (
 describe('the DeFi app carries no education traces beyond one button to the separate area', () => {
   const shell = readFileSync('components/app-shell.tsx', 'utf8');
   const track = readFileSync('app/track/page.tsx', 'utf8');
-  it('the sidebar keeps a single Education link and drops Learn, Start and Explore', () => {
+  it('the shell keeps single Education and legacy destinations and drops Learn, Start and Explore', () => {
     expect(shell).toContain("href: '/education'");
     expect(shell).not.toMatch(/href: '\/(learn|start|explore)'/);
     // One Education destination total: the desktop sidebar link and the mobile More
-    // menu both point at the same single educationLink entry.
+    // disclosure both point at the same single educationLink entry.
     expect((shell.match(/href: '\/education'/g) || []).length).toBe(1);
+    // The Portfolio tab leads to the native account book; the legacy Track list keeps
+    // exactly one destination entry, shared by the sidebar and the More disclosure.
+    expect(shell).toContain("href: '/account'");
+    expect((shell.match(/href: '\/portfolio'/g) || []).length).toBe(1);
   });
   it('the app footer no longer frames the whole app as a learning preview', () => {
     expect(shell).not.toMatch(/Learning preview/);

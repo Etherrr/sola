@@ -7,6 +7,9 @@ import { AccountMenu } from './account-menu';
 import { fetchHealth } from '@/features/portfolio/api-client';
 import { SessionProvider } from '@/features/portfolio/session-context';
 import { TrackNetworkProvider } from '@/features/portfolio/track-network-context';
+// The legacy Track saved-address list stays reachable without any account: in the desktop
+// sidebar (below) and in the mobile More disclosure. Its store is untouched.
+const legacyLink = { href: '/portfolio', label: 'Legacy Track list', icon: '⧉', cls: 'legacy-desktop' };
 const sections = [
   {
     id: 'defi',
@@ -16,8 +19,9 @@ const sections = [
     // /track route still answers directly until its lookup is refactored
     // into the address manager (plan line 218.2).
     items: [
-      { href: '/portfolio', label: 'Portfolio', icon: '◧' },
+      { href: '/account', label: 'Portfolio', icon: '◧' },
       { href: '/markets', label: 'Markets', icon: '◷' },
+      legacyLink,
     ],
   },
 ];
@@ -40,6 +44,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // Mobile bottom bar: Education lives under More; the desktop sidebar shows it directly.
   const [moreOpen, setMoreOpen] = useState(false);
   const moreRef = useRef<HTMLDivElement>(null);
+  const moreBtnRef = useRef<HTMLButtonElement>(null);
   // Close on route change: adjust state during render (no effect needed).
   const [prevPath, setPrevPath] = useState(path);
   if (prevPath !== path) {
@@ -52,7 +57,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       if (moreRef.current && !moreRef.current.contains(e.target as Node)) setMoreOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setMoreOpen(false);
+      if (e.key === 'Escape') {
+        setMoreOpen(false);
+        moreBtnRef.current?.focus();
+      }
     };
     document.addEventListener('pointerdown', onDown);
     document.addEventListener('keydown', onKey);
@@ -106,7 +114,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     key={i.href}
                     href={i.href}
                     data-section={sec.id}
-                    className={sec.id === 'defi' ? 'nav-defi' : 'nav-edu'}
+                    className={(sec.id === 'defi' ? 'nav-defi' : 'nav-edu') + ('cls' in i && i.cls ? ` ${i.cls}` : '')}
                     aria-current={path.startsWith(i.href) ? 'page' : undefined}
                   >
                     <span aria-hidden="true">{i.icon}</span>
@@ -127,24 +135,30 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <button
                 type="button"
                 className="nav-more"
-                aria-haspopup="menu"
+                ref={moreBtnRef}
                 aria-expanded={moreOpen}
-                aria-current={path.startsWith('/education') ? 'page' : undefined}
+                aria-current={
+                  path.startsWith('/education') || path.startsWith('/portfolio')
+                    ? 'page'
+                    : undefined
+                }
                 onClick={() => setMoreOpen((o) => !o)}
               >
                 <span aria-hidden="true">⋯</span>
                 More
               </button>
               {moreOpen ? (
-                <div role="menu" aria-label="More" className="more-menu">
-                  <Link
-                    role="menuitem"
-                    href={educationLink.href}
-                    aria-current={path.startsWith(educationLink.href) ? 'page' : undefined}
-                  >
-                    <span aria-hidden="true">{educationLink.icon}</span>
-                    {educationLink.label}
-                  </Link>
+                <div role="group" aria-label="More" className="more-menu">
+                  {[educationLink, legacyLink].map((t) => (
+                    <Link
+                      key={t.href}
+                      href={t.href}
+                      aria-current={path.startsWith(t.href) ? 'page' : undefined}
+                    >
+                      <span aria-hidden="true">{t.icon}</span>
+                      {t.label}
+                    </Link>
+                  ))}
                 </div>
               ) : null}
             </div>

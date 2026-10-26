@@ -1901,7 +1901,8 @@ code {
   .side-nav a[aria-current] {
     box-shadow: inset 0 3px 0 var(--gold);
   }
-  .side-nav a.edu-desktop {
+  .side-nav a.edu-desktop,
+  .side-nav a.legacy-desktop {
     display: none;
   }
   .more-wrap {

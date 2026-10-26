@@ -25,6 +25,18 @@ type Gate =
   | { kind: 'reauth' }
   | { kind: 'ready' };
 
+
+/** The legacy Track saved-address list stays reachable from every rendered gate
+ *  state, with no account and no redirect. */
+function LegacyTrackLink() {
+  return (
+    <p className="notice">
+      Looking for the legacy Track address list? It stays on the{' '}
+      <a href="/portfolio">Legacy Track list</a> page - no sign-in needed.
+    </p>
+  );
+}
+
 export function AccountGate() {
   const native = useNativeSession();
   const router = useRouter();
@@ -74,6 +86,7 @@ export function AccountGate() {
     return (
       <div className="panel">
         <p><em>Native accounts are not enabled on this host yet.</em></p>
+        <LegacyTrackLink />
       </div>
     );
   if (gate.kind === 'loading') return <p><em>Checking your sign-in…</em></p>;
@@ -81,6 +94,7 @@ export function AccountGate() {
     return (
       <div className="panel">
         <p><em>Your account could not be read just now. Try again in a moment.</em></p>
+        <LegacyTrackLink />
       </div>
     );
   if (gate.kind === 'not-invited')
@@ -98,6 +112,7 @@ export function AccountGate() {
           </button>
         </p>
         {signOutFailed && <p role="alert" className="form-alert">Could not sign out just now - try again.</p>}
+        <LegacyTrackLink />
       </div>
     );
   if (gate.kind === 'reauth')
@@ -109,6 +124,7 @@ export function AccountGate() {
             Sign in again
           </a>
         </p>
+        <LegacyTrackLink />
       </div>
     );
   return (
@@ -128,6 +144,7 @@ export function AccountGate() {
         </button>
       </p>
       {signOutFailed && <p role="alert" className="form-alert">Could not sign out just now - try again.</p>}
+      <LegacyTrackLink />
     </>
   );
 }

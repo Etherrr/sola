@@ -11,6 +11,9 @@ export default function SignIn() {
       <section className="panel">
         <SignInForm />
       </section>
+      <p className="notice">
+        No account? The <a href="/portfolio">Legacy Track list</a> stays open without one.
+      </p>
     </div>
   );
 }
