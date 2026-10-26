@@ -1,5 +1,5 @@
 import { stat, readFile, readdir } from 'node:fs/promises';
-const routes=['/','/start/','/start/wallets/','/start/security/','/start/networks/','/start/defi/','/connect/','/portfolio/','/portfolio/assets/','/portfolio/positions/','/portfolio/risk/','/explore/','/track/','/markets/','/learn/network-journey/','/learn/security-lab/','/learn/','/learn/addresses/','/learn/risks/','/settings/','/education/'];
+const routes=['/','/start/','/start/wallets/','/start/security/','/start/networks/','/start/defi/','/connect/','/account/','/portfolio/','/portfolio/assets/','/portfolio/positions/','/portfolio/risk/','/explore/','/track/','/markets/','/learn/network-journey/','/learn/security-lab/','/learn/','/learn/addresses/','/learn/risks/','/settings/','/education/','/sign-in/','/create-account/','/onboarding/','/demo/','/demo/assets/','/demo/positions/','/demo/risk/','/dev/create-account/','/dev/overview-v2/','/dev/sign-in/','/dev/wallet-test/','/dev/welcome/'];
 // Every exported page must be in the list above, so a new route cannot ship unchecked.
 async function pages(dir, base) {
   const out = [];
